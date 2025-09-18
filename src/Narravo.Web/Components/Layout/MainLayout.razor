@@ -1,0 +1,67 @@
+@using Microsoft.AspNetCore.Components
+@inherits LayoutComponentBase
+
+<div style="display: flex; min-height: 100vh;">
+    <nav style="width: 250px; background-color: #f8f9fa; border-right: 1px solid #dee2e6; padding: 1rem;">
+        <div style="margin-bottom: 2rem;">
+            <h3 style="color: #495057; margin: 0;">Narravo Admin</h3>
+        </div>
+        <ul style="list-style: none; padding: 0; margin: 0;">
+            <li style="margin-bottom: 0.5rem;">
+                <a href="/admin/dashboard" style="display: block; padding: 0.5rem 1rem; text-decoration: none; color: #495057; border-radius: 0.25rem; background-color: #e9ecef;">
+                    📊 Dashboard
+                </a>
+            </li>
+            <li style="margin-bottom: 0.5rem;">
+                <a href="/admin/posts" style="display: block; padding: 0.5rem 1rem; text-decoration: none; color: #495057; border-radius: 0.25rem;">
+                    📝 Posts
+                </a>
+            </li>
+            <li style="margin-bottom: 0.5rem;">
+                <a href="/admin/media" style="display: block; padding: 0.5rem 1rem; text-decoration: none; color: #495057; border-radius: 0.25rem;">
+                    🖼️ Media
+                </a>
+            </li>
+            <li style="margin-bottom: 0.5rem;">
+                <a href="/admin/comments" style="display: block; padding: 0.5rem 1rem; text-decoration: none; color: #495057; border-radius: 0.25rem;">
+                    💬 Comments
+                </a>
+            </li>
+            <li style="margin-bottom: 0.5rem;">
+                <a href="/admin/reactions" style="display: block; padding: 0.5rem 1rem; text-decoration: none; color: #495057; border-radius: 0.25rem;">
+                    ❤️ Reactions
+                </a>
+            </li>
+            <li style="margin-bottom: 0.5rem;">
+                <a href="/admin/import" style="display: block; padding: 0.5rem 1rem; text-decoration: none; color: #495057; border-radius: 0.25rem;">
+                    📥 Import
+                </a>
+            </li>
+            <li style="margin-bottom: 0.5rem;">
+                <a href="/admin/backup" style="display: block; padding: 0.5rem 1rem; text-decoration: none; color: #495057; border-radius: 0.25rem;">
+                    💾 Backup
+                </a>
+            </li>
+            <li style="margin-bottom: 0.5rem;">
+                <a href="/admin/settings" style="display: block; padding: 0.5rem 1rem; text-decoration: none; color: #495057; border-radius: 0.25rem;">
+                    ⚙️ Settings
+                </a>
+            </li>
+        </ul>
+        <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
+            <a href="/" style="display: inline-block; padding: 0.5rem 1rem; background-color: #007bff; color: white; text-decoration: none; border-radius: 0.25rem;">
+                🌐 View Site
+            </a>
+        </div>
+    </nav>
+    
+    <main style="flex: 1; padding: 2rem;">
+        <header style="margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #dee2e6;">
+            <h1 style="margin: 0; color: #212529;">Admin Dashboard</h1>
+        </header>
+        
+        <div>
+            @Body
+        </div>
+    </main>
+</div>

@@ -1,0 +1,41 @@
+@page
+@using Narravo.Web.Pages
+@model IndexModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="container">
+    <section class="hero">
+        <h1>Welcome to Narravo</h1>
+        <p>A lightweight, modern blog platform</p>
+    </section>
+    
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Latest Posts</h2>
+        </div>
+        
+        @if (Model.RecentPosts.Any())
+        {
+            <div class="post-list">
+                @foreach (var post in Model.RecentPosts)
+                {
+                    <article class="post-item fade-in">
+                        <h3 class="post-title">
+                            <a href="/posts/@post.Slug">@post.Title</a>
+                        </h3>
+                        <p class="post-excerpt">@post.Excerpt</p>
+                        <div class="post-meta">
+                            By @post.Author.DisplayName on @post.PublishedUtc?.ToString("MMMM dd, yyyy")
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="text-center" style="color: var(--text-muted);">No posts yet. Check back soon!</p>
+        }
+    </div>
+</div>

@@ -1,0 +1,83 @@
+@page "/admin"
+@page "/admin/dashboard"
+@using Narravo.Web.Services
+@inject IPostService PostService
+
+<PageTitle>Dashboard - Narravo Admin</PageTitle>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+    <div style="background: white; border: 1px solid #dee2e6; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <h3 style="margin: 0 0 0.5rem 0; color: #495057;">Posts</h3>
+                <p style="margin: 0; font-size: 2rem; font-weight: bold; color: #007bff;">@postStats</p>
+            </div>
+            <div style="font-size: 2rem;">📝</div>
+        </div>
+    </div>
+    
+    <div style="background: white; border: 1px solid #dee2e6; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <h3 style="margin: 0 0 0.5rem 0; color: #495057;">Comments</h3>
+                <p style="margin: 0; font-size: 2rem; font-weight: bold; color: #28a745;">@commentStats</p>
+            </div>
+            <div style="font-size: 2rem;">💬</div>
+        </div>
+    </div>
+    
+    <div style="background: white; border: 1px solid #dee2e6; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <h3 style="margin: 0 0 0.5rem 0; color: #495057;">Users</h3>
+                <p style="margin: 0; font-size: 2rem; font-weight: bold; color: #ffc107;">@userStats</p>
+            </div>
+            <div style="font-size: 2rem;">👤</div>
+        </div>
+    </div>
+    
+    <div style="background: white; border: 1px solid #dee2e6; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <h3 style="margin: 0 0 0.5rem 0; color: #495057;">Media</h3>
+                <p style="margin: 0; font-size: 2rem; font-weight: bold; color: #e83e8c;">@mediaStats</p>
+            </div>
+            <div style="font-size: 2rem;">🖼️</div>
+        </div>
+    </div>
+</div>
+
+<div style="background: white; border: 1px solid #dee2e6; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h2 style="margin: 0 0 1rem 0; color: #495057;">Recent Activity</h2>
+    <p style="margin-bottom: 1rem; color: #6c757d;">Welcome to Narravo Admin! Your blog platform is ready to use.</p>
+    <ul style="margin: 0; padding-left: 1.5rem; color: #6c757d;">
+        <li style="margin-bottom: 0.5rem;">Create your first post</li>
+        <li style="margin-bottom: 0.5rem;">Configure site settings</li>
+        <li style="margin-bottom: 0.5rem;">Set up authentication providers</li>
+        <li style="margin-bottom: 0.5rem;">Import content from WordPress</li>
+    </ul>
+</div>
+
+@code {
+    private string postStats = "0";
+    private string commentStats = "0";
+    private string userStats = "0";
+    private string mediaStats = "0";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var postCount = await PostService.GetPostCountAsync();
+            postStats = postCount.ToString();
+        }
+        catch
+        {
+            // Log error but don't crash the dashboard
+            postStats = "Error";
+        }
+        
+        // TODO: Load actual statistics from database for other entities
+        await Task.CompletedTask;
+    }
+}
