@@ -1,0 +1,52 @@
+@page "/admin"
+@page "/admin/dashboard"
+
+<PageTitle>Dashboard - Narravo Admin</PageTitle>
+
+<Row Gutter="16">
+    <Col Span="6">
+        <Card Title="Posts" Extra=@((RenderFragment)(builder => builder.AddContent(0, postStats)))>
+            <Icon Type="file-text" Style="font-size: 24px; color: #1890ff;" />
+        </Card>
+    </Col>
+    <Col Span="6">
+        <Card Title="Comments" Extra=@((RenderFragment)(builder => builder.AddContent(0, commentStats)))>
+            <Icon Type="message" Style="font-size: 24px; color: #52c41a;" />
+        </Card>
+    </Col>
+    <Col Span="6">
+        <Card Title="Users" Extra=@((RenderFragment)(builder => builder.AddContent(0, userStats)))>
+            <Icon Type="user" Style="font-size: 24px; color: #fa8c16;" />
+        </Card>
+    </Col>
+    <Col Span="6">
+        <Card Title="Media" Extra=@((RenderFragment)(builder => builder.AddContent(0, mediaStats)))>
+            <Icon Type="picture" Style="font-size: 24px; color: #eb2f96;" />
+        </Card>
+    </Col>
+</Row>
+
+<div style="margin-top: 24px;">
+    <Card Title="Recent Activity">
+        <p>Welcome to Narravo Admin! Your blog platform is ready to use.</p>
+        <ul>
+            <li>Create your first post</li>
+            <li>Configure site settings</li>
+            <li>Set up authentication providers</li>
+            <li>Import content from WordPress</li>
+        </ul>
+    </Card>
+</div>
+
+@code {
+    private string postStats = "0";
+    private string commentStats = "0";
+    private string userStats = "0";
+    private string mediaStats = "0";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Load actual statistics from database
+        await Task.CompletedTask;
+    }
+}

@@ -1,0 +1,50 @@
+@using AntDesign
+@using Microsoft.AspNetCore.Components
+@inherits LayoutComponentBase
+
+<AntContainer>
+    <Layout>
+        <Sider Width="256" Style="min-height: 100vh; background-color: #fff;">
+            <div style="height: 32px; margin: 16px; background: rgba(255,255,255,.2);"></div>
+            <Menu Theme="MenuTheme.Light" Mode="MenuMode.Inline" DefaultSelectedKeys=@(new[]{"1"})>
+                <MenuItem Key="1" Icon="dashboard">
+                    <a href="/admin/dashboard">Dashboard</a>
+                </MenuItem>
+                <MenuItem Key="2" Icon="file-text">
+                    <a href="/admin/posts">Posts</a>
+                </MenuItem>
+                <MenuItem Key="3" Icon="picture">
+                    <a href="/admin/media">Media</a>
+                </MenuItem>
+                <MenuItem Key="4" Icon="message">
+                    <a href="/admin/comments">Comments</a>
+                </MenuItem>
+                <MenuItem Key="5" Icon="heart">
+                    <a href="/admin/reactions">Reactions</a>
+                </MenuItem>
+                <MenuItem Key="6" Icon="import">
+                    <a href="/admin/import">Import</a>
+                </MenuItem>
+                <MenuItem Key="7" Icon="save">
+                    <a href="/admin/backup">Backup</a>
+                </MenuItem>
+                <MenuItem Key="8" Icon="setting">
+                    <a href="/admin/settings">Settings</a>
+                </MenuItem>
+            </Menu>
+        </Sider>
+        <Layout>
+            <Header Style="background: #fff; padding: 0 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>Narravo Admin</h2>
+                    <div>
+                        <Button Type="primary" Href="/">View Site</Button>
+                    </div>
+                </div>
+            </Header>
+            <Content Style="margin: 24px 16px; padding: 24px; background: #fff; min-height: 280px;">
+                @Body
+            </Content>
+        </Layout>
+    </Layout>
+</AntContainer>
