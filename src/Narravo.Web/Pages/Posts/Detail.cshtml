@@ -1,0 +1,87 @@
+@page "/posts/{slug}"
+@using Narravo.Web.Pages
+@model PostDetailModel
+@{
+    ViewData["Title"] = Model.Post?.Title ?? "Post Not Found";
+}
+
+@if (Model.Post != null)
+{
+    <article class="container mx-auto px-4 py-8 max-w-4xl">
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">@Model.Post.Title</h1>
+            <div class="text-gray-600 mb-4">
+                <span>By @Model.Post.Author.DisplayName</span>
+                <span class="mx-2">•</span>
+                <time datetime="@Model.Post.PublishedUtc?.ToString("yyyy-MM-dd")">
+                    @Model.Post.PublishedUtc?.ToString("MMMM dd, yyyy")
+                </time>
+            </div>
+            
+            @if (Model.Post.PostTerms.Any())
+            {
+                <div class="flex flex-wrap gap-2 mb-4">
+                    @foreach (var postTerm in Model.Post.PostTerms)
+                    {
+                        <span class="bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded">
+                            @postTerm.Term.Name
+                        </span>
+                    }
+                </div>
+            }
+        </header>
+
+        <div class="prose prose-lg max-w-none">
+            @Html.Raw(Model.Post.ContentHtml)
+        </div>
+
+        @if (Model.Post.Comments.Any())
+        {
+            <section class="mt-12">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Comments</h2>
+                @foreach (var comment in Model.Post.Comments.Where(c => c.ParentId == null))
+                {
+                    <div class="bg-gray-50 rounded-lg p-6 mb-4">
+                        <div class="flex items-center mb-3">
+                            <strong class="text-gray-800">@comment.AuthorDisplay</strong>
+                            <span class="text-gray-500 text-sm ml-2">
+                                @comment.CreatedUtc.ToString("MMM dd, yyyy 'at' h:mm tt")
+                            </span>
+                        </div>
+                        <div class="text-gray-700">
+                            @Html.Raw(comment.BodyHtml)
+                        </div>
+                        
+                        @if (comment.Replies.Any())
+                        {
+                            <div class="ml-6 mt-4 space-y-3">
+                                @foreach (var reply in comment.Replies)
+                                {
+                                    <div class="bg-white rounded p-4">
+                                        <div class="flex items-center mb-2">
+                                            <strong class="text-gray-800">@reply.AuthorDisplay</strong>
+                                            <span class="text-gray-500 text-sm ml-2">
+                                                @reply.CreatedUtc.ToString("MMM dd, yyyy 'at' h:mm tt")
+                                            </span>
+                                        </div>
+                                        <div class="text-gray-700">
+                                            @Html.Raw(reply.BodyHtml)
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+        }
+    </article>
+}
+else
+{
+    <div class="container mx-auto px-4 py-8 text-center">
+        <h1 class="text-4xl font-bold text-gray-800 mb-4">Post Not Found</h1>
+        <p class="text-gray-600 mb-8">The post you're looking for doesn't exist.</p>
+        <a href="/" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg">Go Home</a>
+    </div>
+}

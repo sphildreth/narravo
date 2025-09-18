@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Narravo.Data;
+using Narravo.Core.Interfaces;
+using Narravo.Web.Services;
 using Serilog;
 
 namespace Narravo.Web;
@@ -36,7 +38,7 @@ public class Program
         
         services.AddDbContext<NarravoDbContext>(options =>
         {
-            options.UseSqlite(connectionString);
+            options.UseSqlite(connectionString, b => b.MigrationsAssembly("Narravo.Web"));
         });
 
         // Add Razor Pages for public site
@@ -44,7 +46,6 @@ public class Program
 
         // Add Blazor Server for admin
         services.AddServerSideBlazor();
-        services.AddAntDesign();
 
         // Add authentication
         services.AddAuthentication("Cookies")
@@ -65,6 +66,11 @@ public class Program
         // Add health checks
         services.AddHealthChecks()
             .AddDbContextCheck<NarravoDbContext>();
+
+        // Add application services
+        services.AddScoped<IPostService, PostService>();
+        services.AddSingleton<IFileStore, LocalFileStore>();
+        services.AddScoped<IDataSeeder, DataSeeder>();
     }
 
     private static void ConfigurePipeline(WebApplication app)
@@ -95,14 +101,15 @@ public class Program
         // Map Blazor hub for admin
         app.MapBlazorHub("/admin/_blazor");
 
-        // Map fallback page for admin area
+        // Map fallback page for admin area only
         app.MapFallbackToPage("/admin/{*path:nonfile}", "/Admin/Index");
 
-        // Map root redirect
-        app.MapGet("/", () => Results.Redirect("/Home"));
-        app.MapGet("/Home", () => Results.Redirect("/"));
-
-        // Map fallback for admin
-        app.MapFallbackToPage("/Admin/Index");
+        // Seed the database in development
+        if (app.Environment.IsDevelopment())
+        {
+            using var scope = app.Services.CreateScope();
+            var seeder = scope.ServiceProvider.GetRequiredService<IDataSeeder>();
+            seeder.SeedAsync().GetAwaiter().GetResult();
+        }
     }
 }

@@ -12,7 +12,28 @@
         
         <div class="bg-white rounded-lg shadow-lg p-6">
             <h2 class="text-2xl font-semibold mb-4">Latest Posts</h2>
-            <p class="text-gray-500">No posts yet. Check back soon!</p>
+            
+            @if (Model.RecentPosts.Any())
+            {
+                <div class="space-y-4">
+                    @foreach (var post in Model.RecentPosts)
+                    {
+                        <div class="border-b pb-4 last:border-b-0">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                                <a href="/posts/@post.Slug" class="hover:text-blue-600">@post.Title</a>
+                            </h3>
+                            <p class="text-gray-600 mb-2">@post.Excerpt</p>
+                            <div class="text-sm text-gray-500">
+                                By @post.Author.DisplayName on @post.PublishedUtc?.ToString("MMMM dd, yyyy")
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="text-gray-500">No posts yet. Check back soon!</p>
+            }
         </div>
     </div>
 </div>
