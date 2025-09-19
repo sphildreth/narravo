@@ -20,13 +20,20 @@
     "types": [
       "vitest/globals",
       "@testing-library/jest-dom"
+    ],
+    "allowJs": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
     ]
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "drizzle.config.ts"
+    "drizzle.config.ts",
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
