@@ -1,8 +1,6 @@
-
 import { listPosts } from "@/lib/posts";
 import PostCard from "./PostCard";
 import MorePosts from "./MorePosts";
-
 export default async function PostList({ initialCursor = null, pageSize = 10 }: { initialCursor?: any, pageSize?: number }) {
   const { items, nextCursor } = await listPosts({ cursor: initialCursor, limit: pageSize });
   return (

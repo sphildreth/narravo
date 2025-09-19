@@ -1,12 +1,15 @@
-export default function ProseExample() {
+
+/**
+ * components/Prose.tsx
+ * Lightweight HTML renderer with a consistent typographic wrapper.
+ */
+import React from "react";
+
+export default function Prose({ html, className = "" }: { html: string; className?: string }) {
   return (
-    <article className="border border-border rounded-xl bg-card shadow-soft">
-      <div className="p-6 prose">
-        <h1>Example article</h1>
-        <p>This is what a long-form article looks like using the <em>prose</em> styles. Keep the line-length comfortable and contrast solid.</p>
-        <blockquote>Quote blocks highlight important thoughts without overwhelming the reading flow.</blockquote>
-        <p>Links <a href="#">stand out</a>, images and videos are responsive, and spacing is consistent.</p>
-      </div>
-    </article>
+    <div
+      className={["prose prose-neutral dark:prose-invert max-w-none", className].filter(Boolean).join(" ")}
+      dangerouslySetInnerHTML={{ __html: html || "" }}
+    />
   );
 }

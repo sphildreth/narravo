@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { Client } from "pg";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import slugify from "slugify";
 
@@ -73,10 +74,19 @@ async function main() {
     const inserted = await db
       .insert(posts)
       .values(postsData)
-      .onConflictDoNothing({ target: posts.slug })
+      .onConflictDoUpdate({
+        target: posts.slug,
+        set: {
+          title: sql`excluded.title`,
+          html: sql`excluded.html`,
+          excerpt: sql`excluded.excerpt`,
+          publishedAt: sql`excluded.published_at`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      })
       .returning({ id: posts.id });
 
-    console.log(`Seeded ${inserted.length} posts (total staged: ${postsData.length}).`);
+    console.log(`Upserted ${inserted.length} posts (total staged: ${postsData.length}).`);
   } finally {
     await client.end();
   }
