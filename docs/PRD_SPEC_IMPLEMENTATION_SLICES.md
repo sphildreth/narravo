@@ -1,11 +1,15 @@
 # Narravo — Implementation Guide (Agent Slices)
+
 **Stack:** Next.js (App Router, RSC, Server Actions) + TypeScript + Tailwind + Auth.js + Drizzle ORM (Postgres) + S3/R2 + optional Redis  
+
 **Goal:** Deliver MVP features from the PRD in small, parallelizable tasks with clear acceptance criteria and verification commands.
+
+**Slice Status:** When completed set the slice checkbox to [x] to indicate done.
 
 ---
 
 Prompt
-> Implement [slice name] exactly per @docs/PRD_SPEC_IMPLEMENTATION_SLICES.md; deliver code + tests + minimal docs; no scope beyond described endpoints/models; verify with pnpm build && pnpm test. 
+> Implement [slice name] exactly per @docs/PRD_SPEC_IMPLEMENTATION_SLICES.md; deliver code + tests + minimal docs; no scope beyond described endpoints/models; verify with pnpm build && pnpm test. Mark slice completed when done.
 
 ---
 
@@ -41,8 +45,10 @@ Prompt
 
 ---
 
-## Slice A — Auth & Session Gate
+##  Slice A — Auth & Session Gate
 **Summary:** Configure Auth.js (GitHub, Google); require auth for comment/reaction actions; seed first admin or email allowlist.
+
+- [x] Completed
 
 **Deliverables**
 - `/app/api/auth/[...nextauth]/route.ts` with GitHub + Google providers and JWT session
@@ -64,6 +70,8 @@ Prompt
 ## Slice B — Post Model & Static Rendering (ISR)
 **Summary:** Render post pages statically with ISR; list posts on home; revalidate on changes.
 
+- [x] Completed
+
 **Deliverables**
 - Drizzle queries for posts (`getPostBySlug`, `listPosts`)
 - Static post page `/[slug]` using RSC; `revalidateTag("post:{id}")` support
@@ -83,6 +91,8 @@ Prompt
 
 ## Slice C — Nested Comments (Materialized Path)
 **Summary:** Server actions to create/read comments, with materialized path and bounded depth (e.g., 4).
+
+- [ ] Completed
 
 **Deliverables**
 - Server action: `createComment(postId, parentId|null, bodyMd)` → sanitize → insert
@@ -109,6 +119,8 @@ Prompt
 ## Slice D — Reactions (Post & Comment)
 **Summary:** Toggle reactions with unique constraint per (targetType, targetId, userId, kind).
 
+- [ ] Completed
+
 **Deliverables**
 - Server action: `toggleReaction(targetType, targetId, kind)`
 - Reaction counts surfaced with comments/posts
@@ -128,6 +140,8 @@ Prompt
 
 ## Slice E — Media Uploads for Comments (Images + Videos)
 **Summary:** Direct-to-S3/R2 uploads via presigned URLs; server validates and records attachments; ffmpeg poster generation (async).
+
+- [ ] Completed
 
 **Deliverables**
 - API route `/api/r2/sign` validates mime/size; returns presigned fields
@@ -150,6 +164,8 @@ Prompt
 ## Slice F — Moderation Queue (Admin)
 **Summary:** Admin page to review `pending`/`spam`, approve/deny/spam/delete; bulk actions.
 
+- [ ] Completed
+
 **Deliverables**
 - Admin route: `/admin/moderation`
 - Server actions: `moderateComment(id, action)`
@@ -170,6 +186,8 @@ Prompt
 
 ## Slice G — WXR Importer (Posts + Media + Redirects)
 **Summary:** CLI to import WXR with idempotency by GUID; downloads media; creates redirects.
+
+- [ ] Completed
 
 **Deliverables**
 - `scripts/import-wxr.ts` (expand from stub)
@@ -192,6 +210,8 @@ Prompt
 ## Slice H — Rate Limiting & Anti-Abuse
 **Summary:** Enforce limits and basic anti-spam on writes.
 
+- [ ] Completed
+
 **Deliverables**
 - Rate limits: comments `5/min`, reactions `20/min` (by user+IP)
 - Honeypot field & ≥2s minimum submit time
@@ -209,6 +229,8 @@ Prompt
 
 ## Slice I — Banner & Monthly Archives
 **Summary:** Admin controls for banner + public rendering; archive pages & sidebar; monthly RSS; sitemap entries.
+
+- [ ] Completed
 
 **Deliverables**
 - Admin “Appearance” (can be simple page) to set banner (image, alt, credit, overlay, focal point)
@@ -235,6 +257,8 @@ Prompt
 ## Slice J — SEO, Feeds & Redirects
 **Summary:** Global SEO helpers; site-wide RSS; redirects middleware.
 
+- [ ] Completed
+
 **Deliverables**
 - `/feed.xml` (latest 20)
 - `sitemap.xml` including posts & month archives
@@ -255,6 +279,8 @@ Prompt
 ## Slice K — Backup & Restore
 **Summary:** Export/import site content.
 
+- [ ] Completed
+
 **Deliverables**
 - `scripts/backup.ts` creates `zip` with DB dump (or select tables), media manifest, `manifest.json`
 - `scripts/restore.ts` dry-run + selective restore by slug or time window
@@ -267,6 +293,8 @@ Prompt
 
 ## Slice L — Theming (Tokens + Toggle)
 **Summary:** CSS variable tokens + Tailwind mapping; SSR cookie theme; toggle component.
+
+- [ ] Completed
 
 **Deliverables**
 - Tokens in `globals.css` (`--bg`, `--fg`, `--brand`, etc.) for light/dark
@@ -282,6 +310,8 @@ Prompt
 ## Slice M — Security Headers & Health
 **Summary:** Add CSP/HSTS/etc; health endpoints.
 
+- [ ] Completed
+
 **Deliverables**
 - `next.config.mjs` headers function or `middleware.ts` to set:
     - CSP (start restrictive; allow images/video via S3 domain)
@@ -296,6 +326,8 @@ Prompt
 ## Slice N — Testing & CI
 **Summary:** Expand unit/integration tests and wire a basic CI.
 
+- [ ] Completed
+
 **Deliverables**
 - Tests:
     - Unit: sanitization, path utils, RSS date formatting
@@ -309,6 +341,8 @@ Prompt
 
 ## Slice O — Deployment Recipes
 **Summary:** Ship simple deploy paths.
+
+- [ ] Completed
 
 **Deliverables**
 - Vercel guide (env vars, Postgres/Neon, R2 credentials)
