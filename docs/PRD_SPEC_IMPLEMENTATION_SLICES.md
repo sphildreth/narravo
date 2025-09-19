@@ -92,7 +92,7 @@ Prompt
 ## Slice C — Nested Comments (Materialized Path)
 **Summary:** Server actions to create/read comments, with materialized path and bounded depth (e.g., 4).
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - Server action: `createComment(postId, parentId|null, bodyMd)` → sanitize → insert
