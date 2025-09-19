@@ -40,6 +40,16 @@ DATABASE_URL=postgres://narravo:changeme@localhost:5432/narravo
 
 (Also set your `NEXTAUTH_SECRET` and GitHub/Google OAuth keys when ready.)
 
+### Admin access
+
+Narravo grants admin capabilities to emails defined in the `ADMIN_EMAILS` env var. Provide a comma-separated list (case-insensitive):
+
+```
+ADMIN_EMAILS=admin@example.com,editor@example.com
+```
+
+Only allowlisted accounts can reach admin-only server actions once those slices land.
+
 ### 3) Install deps & create tables
 ```bash
 pnpm i

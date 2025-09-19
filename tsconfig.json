@@ -22,6 +22,10 @@
       "@testing-library/jest-dom"
     ],
     "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    },
     "plugins": [
       {
         "name": "next"

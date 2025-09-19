@@ -4,6 +4,11 @@
 
 ---
 
+Prompt
+> Implement [slice name] exactly per @docs/PRD_SPEC_IMPLEMENTATION_SLICES.md; deliver code + tests + minimal docs; no scope beyond described endpoints/models; verify with pnpm build && pnpm test. 
+
+---
+
 ## 0) Baseline Setup (all slices assume this)
 - Repo structure (from skeleton):
   ```
@@ -337,29 +342,6 @@
 ## Logging & metrics
 - Log JSON with request id; include actor id on moderation events
 - Basic metrics: counts for comments/reactions; durations for importer
-
----
-
-# Agent Issue Templates (copy to GitHub)
-
-## Template: Feature Slice
-**Branch:** `feat/<slice-name>`  
-**Summary:** <1-2 lines>  
-**Files:** <key files>  
-**Acceptance Criteria:**
-- [ ] <AC 1>
-- [ ] <AC 2>  
-  **Verify:**
-```bash
-pnpm build
-pnpm test
-pnpm dev
-```
-
-## Template: Integration Test
-**Branch:** `test/<area>`  
-**Summary:** Add tests for <area>  
-**Acceptance:** tests green, cover edge cases.
 
 ---
 

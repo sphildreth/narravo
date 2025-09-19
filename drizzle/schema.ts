@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, integer, foreignKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const posts = pgTable("posts", {
@@ -19,18 +19,28 @@ export const users = pgTable("users", {
   image: text("image"),
 });
 
-export const comments = pgTable("comments", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
-  parentId: uuid("parent_id").references(() => comments.id, { onDelete: "cascade" }),
-  path: text("path").notNull(),
-  depth: integer("depth").notNull().default(0),
-  bodyHtml: text("body_html").notNull(),
-  bodyMd: text("body_md"),
-  status: text("status").notNull().default("pending"),
-  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
-});
+export const comments = pgTable(
+  "comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    parentId: uuid("parent_id"),
+    path: text("path").notNull(),
+    depth: integer("depth").notNull().default(0),
+    bodyHtml: text("body_html").notNull(),
+    bodyMd: text("body_md"),
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  },
+  (table) => ({
+    parentReference: foreignKey({
+      columns: [table.parentId],
+      foreignColumns: [table.id],
+      onDelete: "cascade",
+    }),
+  })
+);
 
 export const commentAttachments = pgTable("comment_attachments", {
   id: uuid("id").primaryKey().defaultRandom(),
