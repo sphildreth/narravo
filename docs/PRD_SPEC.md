@@ -1,6 +1,6 @@
 # Project: Lightweight FOSS Blog Platform — Narravo
 
-**Stack**: ASP.NET Core 9, Blazor Server (Admin), Razor Pages (Public) with prerender & OutputCache, EF Core (SQLite primary; optional PostgreSQL), Ant Design Blazor (Admin UI), Caddy/Nginx, MIT License.
+**Stack**: ASP.NET Core 9, Blazor Server (Admin), Razor Pages (Public) with prerender & OutputCache, EF Core (SQLite), Ant Design Blazor (Admin UI), Caddy/Nginx, MIT License.
 
 **Goal**: Import from WordPress WXR reliably, provide a fast public site and a delightful admin, with tiny footprint and clear extensibility.
 
@@ -63,7 +63,7 @@ v1.0 → comments+moderation, backup/restore, SSG export, e2e tests.
 - Admin: Blazor Server (Ant Design Blazor) under `/admin`.
 - Data: EF Core code-first; `UseSqlite` default; optional `UseNpgsql`.
 - Storage: `IFileStore` (LocalFileStore default; S3/MinIO future).
-- Search: `ISearchIndex` (SQLite FTS5; Postgres tsvector alt).
+- Search: `ISearchIndex` (SQLite FTS5~~~~).
 - Background: `IHostedService` for import, media posters, backups.
 
 ### Data Model (initial)
@@ -123,8 +123,73 @@ SQLite WAL; DB at `./data/blog.db` in container. Upload caps: images 10MB; comme
 
 ---
 
-## 3) Milestones
-M1: Core + SSR + import basics + backup dump.  
-M2: Media, taxonomy, RSS/sitemap, reactions.  
-M3: Comments + moderation + anti-spam.  
-M4: Backup/restore selective + SSG export + e2e.
+## 3) Public Site — Banner & Monthly Archive (New Requirements)
+
+### Top Banner (Hometown Image)
+- **R1. Placement & Layout**
+    - A full-width banner renders at the top of all public pages (home, post, tag, category, archives).
+    - Default height: 240–320px desktop, 160–200px mobile; responsive, with **focal-point cropping**.
+
+- **R2. Admin Controls**
+    - Settings → Appearance: upload/manage banner images.
+    - Configure: active image, **focal point** (x/y), alt text, credit/link, overlay color & opacity (0–60%).
+    - Per-post override field; falls back to global banner when unset.
+
+- **R3. Performance & Delivery**
+    - Generate responsive renditions (`srcset` 640/1024/1600/2400) plus a tiny blur-placeholder.
+    - Lazy-load when off-viewport; include explicit width/height; cache aggressively and include in SSG export.
+
+- **R4. Accessibility**
+    - Alt text required; optional caption/credit visible on banner.
+    - Text placed over the banner (title/breadcrumbs) must meet **WCAG 2.1 AA** contrast via overlay.
+
+- **R5. Theming & SEO**
+    - Headline and breadcrumb layers supported; auto text color for contrast.
+    - Option to hide banner per template.
+    - Assets live under `/media/banner/...` with cache-busting hashes.
+
+**Acceptance Criteria**
+- Switching the active banner updates across all pages on next render/export.
+- Focal point remains visible on mobile aspect ratios.
+- Headline over banner passes AA contrast checks in light and dark themes.
+
+---
+
+### Monthly Archive (Left-Side List)
+- **A1. Sidebar Navigation**
+    - A **Monthly Archive** block appears in the left sidebar on ≥1024px; collapsible on smaller screens.
+    - Shows the last **24 months** (configurable), grouped by year; each month displays a **post count** badge.
+
+- **A2. Archive Pages & URLs**
+    - Routes: `/{yyyy}/` (year) and `/{yyyy}/{MM}/` (month).
+    - Archive pages list published posts chronologically with pagination (page size configurable).
+
+- **A3. Data & Generation**
+    - Computed from `PublishedUtc`; drafts/private excluded.
+    - SSG export generates static year/month pages that have posts.
+    - Sitemap includes archive pages; optional **monthly RSS** at `/{yyyy}/{MM}/feed.xml`.
+
+- **A4. Admin Controls**
+    - Settings: toggle “Show archive in sidebar,” “Months to show” (6–60), and “Show counts.”
+    - Option to collapse previous years by default.
+
+- **A5. Performance**
+    - Archive list cached as a small JSON or server fragment; **invalidated** on publish/unpublish or date changes.
+    - Sidebar renders instantly without blocking calls.
+
+- **A6. Accessibility & UX**
+    - List uses standard links with visible focus states; keyboard-expandable year groups.
+    - The current archive page highlights its corresponding month in the sidebar.
+
+**Acceptance Criteria**
+- Visiting `/2024/05/` shows only May 2024 published posts with correct counts and pagination.
+- Sidebar shows only months that actually contain posts and updates within one refresh after publish/unpublish/date changes.
+- Monthly RSS (if enabled) validates and includes only that month’s posts.
+
+---
+
+## 4) Milestones
+- **M1**: Core + SSR + import basics + backup dump.
+- **M2**: Media, taxonomy, RSS/sitemap, reactions.
+- **M3**: Comments + moderation + anti-spam.
+- **M4**: Backup/restore selective + SSG export + e2e.
