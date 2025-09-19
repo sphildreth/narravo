@@ -1,17 +1,18 @@
+/* app/layout.tsx — SSR theme cookie reader */
 import "./globals.css";
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
-export const metadata = { title: "Narravo" };
+export const metadata: Metadata = {
+    title: "Narravo",
+    description: "Simple, modern blog",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const themeCookie = cookies().get("theme")?.value;
-  const theme = themeCookie === "dark" ? "dark" : "light";
-
-  return (
-    <html lang="en" data-theme={theme}>
-      <body className="min-h-screen bg-bg text-fg antialiased transition-colors duration-300">
-        {children}
-      </body>
-    </html>
-  );
+    const theme = cookies().get("theme")?.value ?? "light";
+    return (
+        <html lang="en" data-theme={theme} suppressHydrationWarning>
+        <body>{children}</body>
+        </html>
+    );
 }
