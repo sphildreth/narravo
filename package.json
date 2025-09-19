@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:push": "drizzle-kit push",
-    "wxr:import": "tsx scripts/import-wxr.ts"
+    "wxr:import": "tsx scripts/import-wxr.ts",
+    "seed:posts": "tsx scripts/seed-posts.ts"
   },
   "dependencies": {
     "@auth/core": "0.32.0",
