@@ -165,7 +165,7 @@ Prompt
 ## Slice D — Reactions (Post & Comment)
 **Summary:** Toggle reactions with unique constraint per (targetType, targetId, userId, kind).
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - Server action: `toggleReaction(targetType, targetId, kind)`
