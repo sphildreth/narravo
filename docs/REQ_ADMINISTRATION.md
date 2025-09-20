@@ -2,6 +2,8 @@
 
 Version: 1.0
 
+See also: [Admin Wireframes (MVP)](REQ_ADMIN_WIREFRAMES.md)
+
 This document defines the minimum, robust requirements for the Administration area that will be used to operate the site. It aligns to the current data model and utilities:
 - DB schema: `drizzle/schema.ts` (posts, comments, users, configuration, reactions, redirects)
 - Config service: `lib/config.ts` (typed config, allowed values, overrides, caching)
@@ -29,13 +31,13 @@ Navigation (top-level): Dashboard, Posts, Moderation, Users, System (Appearance,
 Data model mapping: `posts(id, slug, title, html, excerpt, publishedAt, createdAt, updatedAt)`.
 
 2.1 List View
-- Table columns: Title, Slug, Published, Updated, CommentsCount, ReactionsCount (counts optional for MVP; may be lazy/approx). 
+- Table columns: Title, Slug, Published, Updated, CommentsCount, ReactionsCount (counts optional for MVP; may be lazy/approx).
 - Actions per row: Edit, View (new tab), Unpublish/Publish, Delete.
 - Bulk actions: Publish, Unpublish, Delete (with confirmation; show count and any failures).
 - Search/filter/sort:
-  - Search: by title or slug substring.
-  - Filters: Status (Published vs Draft/Unpublished), Date range (created/published), Has comments (optional).
-  - Sort: Updated desc (default), Published desc, Title asc.
+    - Search: by title or slug substring.
+    - Filters: Status (Published vs Draft/Unpublished), Date range (created/published), Has comments (optional).
+    - Sort: Updated desc (default), Published desc, Title asc.
 - Pagination: 20 per page.
 
 2.2 Create/Edit
@@ -43,13 +45,13 @@ Data model mapping: `posts(id, slug, title, html, excerpt, publishedAt, createdA
 - Slug rules: auto-generate from Title on first entry; can edit; enforce uniqueness; show immediate validation.
 - Content editing: WYSIWYG/HTML or Markdown-to-HTML pipeline (MVP uses HTML field already sanitized on save with the same allowlist as frontend rendering).
 - Preview: open read-only preview using draft data without persisting publish (temporary draft save allowed).
-- Save states: 
-  - Save draft (no PublishedAt)
-  - Publish now (sets PublishedAt=now)
-  - Schedule (set a future PublishedAt; publish job not required—frontend treats future date as not published; a background job is out-of-scope for MVP—manual publish is acceptable.)
+- Save states:
+    - Save draft (no PublishedAt)
+    - Publish now (sets PublishedAt=now)
+    - Schedule (set a future PublishedAt; publish job not required—frontend treats future date as not published; a background job is out-of-scope for MVP—manual publish is acceptable.)
 - Validation:
-  - Title non-empty; HTML non-empty; slug matches `^[a-z0-9-]+$`.
-  - Sanitization: DOMPurify allowlist server-side; strip inline event handlers and disallowed tags.
+    - Title non-empty; HTML non-empty; slug matches `^[a-z0-9-]+$`.
+    - Sanitization: DOMPurify allowlist server-side; strip inline event handlers and disallowed tags.
 - Concurrency safety: optimistic update using `updatedAt`; if stale, prompt to reload/merge.
 
 2.3 Delete/Unpublish
@@ -79,9 +81,9 @@ States: `pending | approved | spam | deleted` (default pending).
 - Approve → status=approved; Spam → status=spam; Delete → status=deleted (soft delete hides content in UI); Hard delete option for admins (removes row and attachments).
 - Edit: Allow admin to edit comment body (Markdown and/or HTML). Re-sanitize on save.
 - Reply as admin: allowed; replies inherit threading rules (bounded depth as per PRD core; depth ≤ 4).
-- Attachments: 
-  - Show thumbnails (images) and poster for videos (if available). 
-  - Admin can remove attachments individually.
+- Attachments:
+    - Show thumbnails (images) and poster for videos (if available).
+    - Admin can remove attachments individually.
 - Abuse controls (enforced by APIs): rate limits are already in the product; admin UI should display when limits are hit.
 
 3.3 Filters & Search
@@ -105,8 +107,8 @@ Data model mapping: `users(id, email, name, image)`.
 - Detail panel shows basic profile info, recent comments (last 10) and reactions (optional).
 - Admin flag: surfaced read-only from allowlist; show why a user is admin and which email matched.
 - Privacy/GDPR basics:
-  - Anonymize user: sets their comments to userId=null (schema already `onDelete: set null`) by deleting the user row after a safety prompt.
-  - Export user data (optional post-MVP): JSON of comments/reactions.
+    - Anonymize user: sets their comments to userId=null (schema already `onDelete: set null`) by deleting the user row after a safety prompt.
+    - Export user data (optional post-MVP): JSON of comments/reactions.
 - Blocklist (post-MVP): simple boolean to prevent commenting. Not in current schema; document as a next step.
 
 Acceptance
@@ -124,9 +126,9 @@ Purpose: control theme and brand visuals.
 
 5.2 Banner (Hero)
 - Manage site-wide banner per PRD core:
-  - Fields: image (upload via R2 presigned), alt, (optional) credit text + URL, overlay color (hex) + opacity (0–60%), focal point x/y (0..1).
-  - Responsive renditions generated or referenced; ensure alt text present.
-  - Preview within the admin before saving.
+    - Fields: image (upload via R2 presigned), alt, (optional) credit text + URL, overlay color (hex) + opacity (0–60%), focal point x/y (0..1).
+    - Responsive renditions generated or referenced; ensure alt text present.
+    - Preview within the admin before saving.
 
 5.3 Icons/Branding (MVP-lite)
 - Upload favicon and logo (optional; if not present, defaults from `/public`).
@@ -150,9 +152,9 @@ Backed by `configuration` table and `ConfigService`.
 6.2 UI
 - List: table of keys with columns Key, Type, Scope (Global/User), Required, UpdatedAt.
 - Detail/Edit:
-  - Global editor: set value, `allowedValues` (array), and `required` flag. On first insert, type is mandatory and immutable thereafter.
-  - Per-user override: set or delete override for a chosen user.
-  - Validation: enforce type and allowedValues; show inline errors from service.
+    - Global editor: set value, `allowedValues` (array), and `required` flag. On first insert, type is mandatory and immutable thereafter.
+    - Per-user override: set or delete override for a chosen user.
+    - Validation: enforce type and allowedValues; show inline errors from service.
 - Search by key prefix and filter by type.
 
 6.3 Caching & Invalidation
@@ -201,4 +203,3 @@ Acceptance
 - Redirects management UI — recommended next: CRUD for `redirects(fromPath, toPath, status)`.
 - Backups/Restore UI — future (present in core PRD).
 - User blocklist/suspension flag — future (requires schema change).
-
