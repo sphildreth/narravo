@@ -190,7 +190,7 @@ Prompt
 ## Slice E — Media Uploads for Comments (Images + Videos)
 **Summary:** Direct-to-S3/R2 uploads via presigned URLs; server validates and records attachments; ffmpeg poster generation (async).
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - API route `/api/r2/sign` validates mime/size; returns presigned fields

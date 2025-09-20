@@ -24,6 +24,10 @@ async function main() {
   await service.setGlobal("UPLOADS.IMAGE-MAX-BYTES", 5_000_000, { type: "integer", required: true });
   await service.setGlobal("UPLOADS.VIDEO-MAX-BYTES", 50_000_000, { type: "integer", required: true });
   await service.setGlobal("UPLOADS.VIDEO-MAX-DURATION-SECONDS", 90, { type: "integer", required: true });
+  
+  // Optional MIME type allowlists (JSON arrays)
+  await service.setGlobal("UPLOADS.ALLOWED-MIME-IMAGE", ["image/jpeg", "image/png", "image/gif", "image/webp"], { type: "json", required: false });
+  await service.setGlobal("UPLOADS.ALLOWED-MIME-VIDEO", ["video/mp4", "video/webm"], { type: "json", required: false });
 
   // Feeds & archives
   await service.setGlobal("FEED.LATEST-COUNT", 20, { type: "integer", required: true });
