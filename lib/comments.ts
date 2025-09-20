@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { sanitizeHtml } from "./sanitize";
+import { getMultipleReactionCounts, getUserReactions, type ReactionCounts, type UserReactions } from "./reactions";
 
 export const MAX_COMMENT_DEPTH = 5;
 
@@ -56,16 +57,32 @@ export async function createCommentCore(
 
 export const __testables__ = { createCommentCore, CommentError, sanitizeMarkdown };
 
-export type CommentDTO = { id: string; postId: string; userId: string | null; path: string; depth: number; bodyHtml: string; createdAt: string; author: { name: string | null; image: string | null }; childrenCount?: number | null; };
+export type CommentDTO = { 
+  id: string; 
+  postId: string; 
+  userId: string | null; 
+  path: string; 
+  depth: number; 
+  bodyHtml: string; 
+  createdAt: string; 
+  author: { name: string | null; image: string | null }; 
+  childrenCount?: number | null;
+  reactions?: {
+    counts: ReactionCounts;
+    userReactions: UserReactions;
+  };
+};
 export async function countApprovedComments(postId: string): Promise<number> {
   const rows = await db.execute(sql`select count(*)::int as c from comments where post_id = ${postId} and status = 'approved'`);
   const first = Array.isArray(rows) ? rows[0] : (rows as any).rows?.[0];
   return Number(first?.c ?? 0);
 }
-export async function getCommentTreeForPost(postId: string, opts: { cursor?: string | null; limitTop?: number; limitReplies?: number } = {}) {
+export async function getCommentTreeForPost(postId: string, opts: { cursor?: string | null; limitTop?: number; limitReplies?: number; userId?: string | undefined } = {}) {
   const limitTop = opts.limitTop ?? 10;
   const limitReplies = opts.limitReplies ?? 3;
   const cursor = opts.cursor ?? null;
+  const userId = opts.userId;
+  
   const topSql = sql`
     select c.id, c.post_id as "postId", c.user_id as "userId", c.path, c.depth, c.body_html as "bodyHtml",
            c.created_at as "createdAt",
@@ -91,6 +108,8 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
   }));
   const parents = topSlice.map((t) => t.path);
   const childrenMap: Record<string, any[]> = {};
+  let allComments = [...topSlice];
+  
   if (parents.length > 0) {
     const likeClauses = parents.map((p) => sql`c.path like ${p + ".%"} `);
     const childSql = sql`
@@ -113,13 +132,58 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
         id: row.id, postId: row.postId, userId: row.userId ?? null, path: row.path, depth: Number(row.depth),
         bodyHtml: String(row.bodyHtml ?? ""), createdAt: new Date(row.createdAt).toISOString(),
         author: { name: row.authorName ?? null, image: row.authorImage ?? null },
+        childrenCount: null, // Child comments don't have childrenCount
       };
       const parentPath = dto.path.slice(0, dto.path.lastIndexOf("."));
       const arr = (childrenMap[parentPath] ||= []);
-      if (arr.length < limitReplies) arr.push(dto);
+      if (arr.length < limitReplies) {
+        arr.push(dto);
+        allComments.push(dto);
+      }
     }
   }
-  const lastTop = topSlice.length > 0 ? topSlice[topSlice.length - 1] : undefined;
+
+  // Get reaction data for all comments if userId is provided
+  let reactionData: Record<string, { counts: ReactionCounts; userReactions: UserReactions }> = {};
+  if (allComments.length > 0) {
+    const targets = allComments.map(comment => ({ targetType: "comment" as const, targetId: comment.id }));
+    const allCounts = await getMultipleReactionCounts(targets);
+    
+    if (userId) {
+      // Get user reactions for all comments
+      for (const comment of allComments) {
+        const userReactions = await getUserReactions("comment", comment.id, userId);
+        reactionData[comment.id] = {
+          counts: allCounts[`comment:${comment.id}`] || {},
+          userReactions,
+        };
+      }
+    } else {
+      // Just counts, no user reactions
+      for (const comment of allComments) {
+        reactionData[comment.id] = {
+          counts: allCounts[`comment:${comment.id}`] || {},
+          userReactions: {},
+        };
+      }
+    }
+  }
+
+  // Add reaction data to comments
+  const topSliceWithReactions = topSlice.map(comment => ({
+    ...comment,
+    reactions: reactionData[comment.id],
+  }));
+
+  const childrenMapWithReactions: Record<string, any[]> = {};
+  for (const [parentPath, children] of Object.entries(childrenMap)) {
+    childrenMapWithReactions[parentPath] = children.map(comment => ({
+      ...comment,
+      reactions: reactionData[comment.id],
+    }));
+  }
+
+  const lastTop = topSliceWithReactions.length > 0 ? topSliceWithReactions[topSliceWithReactions.length - 1] : undefined;
   const nextCursor = hasMoreTop && lastTop ? lastTop.path : null;
-  return { top: topSlice, children: childrenMap, nextCursor };
+  return { top: topSliceWithReactions, children: childrenMapWithReactions, nextCursor };
 }

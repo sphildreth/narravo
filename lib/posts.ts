@@ -4,6 +4,7 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import type { PostDTO } from "@/src/types/content";
+import { getReactionCounts, getUserReactions, type ReactionCounts, type UserReactions } from "./reactions";
 
 function normalizePagination(input?: { page?: number; pageSize?: number }) {
   const pageRaw = input?.page ?? 1;
@@ -52,4 +53,23 @@ export async function getPostBySlug(slug: string) {
         bodyHtml: row.bodyHtml ?? null,
         publishedAt: row.publishedAt ? new Date(row.publishedAt).toISOString() : null
     } : null;
+}
+
+/**
+ * Get post with reaction data for a specific user
+ */
+export async function getPostBySlugWithReactions(slug: string, userId?: string) {
+    const post = await getPostBySlug(slug);
+    if (!post) return null;
+
+    const reactionCounts = await getReactionCounts("post", post.id);
+    const userReactions = userId ? await getUserReactions("post", post.id, userId) : {};
+
+    return {
+        ...post,
+        reactions: {
+            counts: reactionCounts,
+            userReactions,
+        },
+    };
 }
