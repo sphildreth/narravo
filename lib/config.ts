@@ -104,17 +104,17 @@ class DrizzleRepo implements Repo {
     // UPDATE then INSERT to respect partial unique index
     const updated = await this.db.execute(sql`
       with upsert as (
-        update ${configuration}
-           set ${configuration.type} = ${type},
-               ${configuration.value} = ${JSON.stringify(value)}::jsonb,
-               ${configuration.allowedValues} = ${allowedValues ? JSON.stringify(allowedValues) : null}::jsonb,
-               ${configuration.required} = ${required},
-               ${configuration.updatedAt} = now()
-         where ${configuration.key} = ${key}
-           and ${configuration.userId} is null
+        update "configuration"
+           set "type" = ${type},
+               "value" = ${JSON.stringify(value)}::jsonb,
+               "allowed_values" = ${allowedValues ? JSON.stringify(allowedValues) : null}::jsonb,
+               "required" = ${required},
+               "updated_at" = now()
+         where "key" = ${key}
+           and "user_id" is null
        returning 1
       )
-      insert into ${configuration} (${configuration.key}, ${configuration.userId}, ${configuration.type}, ${configuration.value}, ${configuration.allowedValues}, ${configuration.required})
+      insert into "configuration" ("key","user_id","type","value","allowed_values","required")
       select ${key}, null, ${type}, ${JSON.stringify(value)}::jsonb, ${allowedValues ? JSON.stringify(allowedValues) : null}::jsonb, ${required}
       where not exists (select 1 from upsert);
     `);

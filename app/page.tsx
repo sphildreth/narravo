@@ -4,11 +4,23 @@ import Sidebar from "@/components/Sidebar";
 import ArticleCard from "@/components/ArticleCard";
 import ProseExample from "@/components/Prose";
 import { listPosts } from "@/lib/posts";
-
-export const revalidate = 60;
+import { ConfigServiceImpl } from "@/lib/config";
+import { db } from "@/lib/db";
+import { unstable_cache as cache } from "next/cache";
 
 export default async function Page() {
-  const { items: posts } = await listPosts({ limit: 12 });
+  const config = new ConfigServiceImpl({ db });
+  const revalidateSeconds = await config.getNumber("PUBLIC.HOME.REVALIDATE-SECONDS");
+  if (revalidateSeconds == null) throw new Error("Missing required config: PUBLIC.HOME.REVALIDATE-SECONDS");
+  const feedCount = await config.getNumber("FEED.LATEST-COUNT");
+  if (feedCount == null) throw new Error("Missing required config: FEED.LATEST-COUNT");
+
+  const getPosts = cache(
+    async () => listPosts({ limit: feedCount }),
+    ["home", `limit:${feedCount}`],
+    { revalidate: revalidateSeconds, tags: ["home"] }
+  );
+  const { items: posts } = await getPosts();
   return (
     <main className="min-h-screen bg-bg text-fg">
       <Navbar />

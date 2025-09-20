@@ -43,6 +43,43 @@ Prompt
   pnpm dev
   ```
 
+### Configuration service (no hard-coded tunables)
+- Use `lib/config.ts` ConfigServiceImpl to read all tunable values. Do not hardcode limits, counts, durations, or revalidate times in slice code.
+- Seed defaults before development/testing:
+  ```bash
+  pnpm seed:config
+  ```
+- Usage example (server action / RSC):
+  ```ts
+  import { ConfigServiceImpl } from '@/lib/config';
+  import { db } from '@/lib/db';
+  const config = new ConfigServiceImpl({ db });
+  const maxDepth = await config.getNumber('COMMENTS.MAX-DEPTH');
+  if (maxDepth == null) throw new Error('Missing required config: COMMENTS.MAX-DEPTH');
+  ```
+- Recommended keys (seed defaults; types in parentheses) — seed-required:
+  - SYSTEM.CACHE.DEFAULT-TTL (integer, minutes) = 5
+  - PUBLIC.HOME.REVALIDATE-SECONDS (integer) = 60
+  - COMMENTS.MAX-DEPTH (integer) = 5
+  - COMMENTS.TOP-PAGE-SIZE (integer) = 10
+  - COMMENTS.REPLIES-PAGE-SIZE (integer) = 3
+  - RATE.COMMENTS-PER-MINUTE (integer) = 5
+  - RATE.REACTIONS-PER-MINUTE (integer) = 20
+  - RATE.MIN-SUBMIT-SECS (integer) = 2
+  - UPLOADS.IMAGE-MAX-BYTES (integer) = 5000000
+  - UPLOADS.VIDEO-MAX-BYTES (integer) = 50000000
+  - UPLOADS.VIDEO-MAX-DURATION-SECONDS (integer) = 90
+  - FEED.LATEST-COUNT (integer) = 20
+  - ARCHIVE.MONTHS-SIDEBAR (integer) = 24
+  - MODERATION.PAGE-SIZE (integer) = 20
+  - APPEARANCE.BANNER.ENABLED (boolean) = false
+  - APPEARANCE.BANNER.IMAGE-URL (string) = ""
+  - APPEARANCE.BANNER.ALT (string) = ""
+  - APPEARANCE.BANNER.CREDIT (string) = ""
+  - APPEARANCE.BANNER.OVERLAY (number 0..1) = 0.45
+  - APPEARANCE.BANNER.FOCAL-X (number 0..1) = 0.5
+  - APPEARANCE.BANNER.FOCAL-Y (number 0..1) = 0.5
+
 ---
 
 ##  Slice A — Auth & Session Gate
@@ -77,6 +114,10 @@ Prompt
 - Static post page `/[slug]` using RSC; `revalidateTag("post:{id}")` support
 - Home list page with pagination (static, `revalidate = 60`)
 
++**Config (use ConfigService):**
++- PUBLIC.HOME.REVALIDATE-SECONDS (default 60) for home page ISR revalidate
++- FEED.LATEST-COUNT (default 20) for global feed slice (J)
++
 **Acceptance**
 - `/` shows latest posts; `/my-post` renders title/body
 - Editing DB then calling `revalidateTag("post:{id}")` updates output
@@ -99,6 +140,11 @@ Prompt
 - Read API: list a post’s comments ordered by `path`
 - UI: threaded rendering on post page; simple form per node
 
++**Config (use ConfigService):**
++- COMMENTS.MAX-DEPTH (default 5) for enforcing nesting depth
++- COMMENTS.TOP-PAGE-SIZE (default 10) and COMMENTS.REPLIES-PAGE-SIZE (default 3) for pagination
++- RATE.COMMENTS-PER-MINUTE, RATE.MIN-SUBMIT-SECS for server-action guards (see Slice H)
++
 **Acceptance**
 - Depth limit enforced; parent not found → 400
 - Sanitization strips inline handlers/scripts
@@ -125,6 +171,9 @@ Prompt
 - Server action: `toggleReaction(targetType, targetId, kind)`
 - Reaction counts surfaced with comments/posts
 
++**Config (use ConfigService):**
++- RATE.REACTIONS-PER-MINUTE (default 20) for server-action guard (see Slice H)
++
 **Acceptance**
 - Same user toggling same kind flips on/off
 - Unique constraint holds; counts correct after refresh
@@ -148,6 +197,12 @@ Prompt
 - Client upload component (comment form) for image/video
 - Server job to generate poster for videos (can be in-process for MVP)
 
++**Config (use ConfigService):**
++- UPLOADS.IMAGE-MAX-BYTES (default 5,000,000)
++- UPLOADS.VIDEO-MAX-BYTES (default 50,000,000)
++- UPLOADS.VIDEO-MAX-DURATION-SECONDS (default 90)
++- Optional: UPLOADS.ALLOWED-MIME-IMAGE / UPLOADS.ALLOWED-MIME-VIDEO (json arrays)
++
 **Acceptance**
 - Image ≤5MB, video ≤50MB/≤90s enforced
 - Uploaded media appears in comment after submit
@@ -171,6 +226,9 @@ Prompt
 - Server actions: `moderateComment(id, action)`
 - Filters, pagination; preview pane
 
++**Config (use ConfigService):**
++- MODERATION.PAGE-SIZE (integer) for pagination defaults
++
 **Acceptance**
 - Pending comments appear; actions change status
 - On approve/deny/spam/delete, post page is revalidated
@@ -216,6 +274,11 @@ Prompt
 - Rate limits: comments `5/min`, reactions `20/min` (by user+IP)
 - Honeypot field & ≥2s minimum submit time
 
++**Config (use ConfigService):**
++- RATE.COMMENTS-PER-MINUTE (default 5)
++- RATE.REACTIONS-PER-MINUTE (default 20)
++- RATE.MIN-SUBMIT-SECS (default 2)
++
 **Acceptance**
 - Exceeding limits returns 429; honeypot blocks bots
 - Legit submissions within limits succeed
@@ -241,6 +304,10 @@ Prompt
     - Add to sitemap
 - Revalidation tags: `archive:{ym}`, `home`
 
++**Config (use ConfigService):**
++- ARCHIVE.MONTHS-SIDEBAR (default 24) controls months listed in sidebar
++- APPEARANCE.BANNER.* (ENABLED, IMAGE-URL, ALT, CREDIT, OVERLAY, FOCAL-X, FOCAL-Y)
++
 **Acceptance**
 - Archive counts correct; changing publish dates changes counts and revalidates
 - Banner readable (WCAG AA) in light/dark
@@ -264,6 +331,9 @@ Prompt
 - Canonical, OG/Twitter, JSON-LD Article per post
 - Redirects middleware/route for legacy paths (301)
 
++**Config (use ConfigService):**
++- FEED.LATEST-COUNT (default 20) for `/feed.xml`
++
 **Acceptance**
 - Feed validates; sitemap includes expected URLs
 - Redirects from legacy paths hit new slugs
@@ -363,6 +433,12 @@ Prompt
 - After mutations (createComment, toggleReaction, moderateComment), call `revalidateTag("post:{id}")` and relevant archive/home tags
 - For monthly archives, compute `ym = yyyy-MM` and tag `archive:{ym}`
 
++## Configuration
++- All tunable values (limits, durations, counts, revalidate times) must be read from the configuration table via `ConfigServiceImpl`.
++- Do not provide in-code fallbacks. Treat these keys as required and seed them before running slices.
++- Seed defaults using `pnpm seed:config`; add more seeds as new keys are introduced.
++- Prefer minutes for human-facing durations (store in minutes) except where platform requires seconds (e.g., Next.js `revalidate`), in which case convert in code.
++
 ## Sanitization & safety
 - Use server-side DOMPurify allowlist
 - Disallow inline event handlers; enforce `rel="noopener noreferrer"` on external links
