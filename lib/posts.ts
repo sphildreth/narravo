@@ -3,15 +3,7 @@
  */
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-
-export type PostDTO = {
-    id: string;
-    slug: string;
-    title: string;
-    excerpt: string | null;
-    bodyHtml?: string | null;
-    publishedAt: string | null;
-};
+import type { PostDTO } from "@/src/types/content";
 
 function normalizePagination(input?: { page?: number; pageSize?: number }) {
   const pageRaw = input?.page ?? 1;
@@ -38,11 +30,12 @@ export async function listPosts(opts: { cursor?: { publishedAt: string; id: stri
   `);
     const rows: any[] = rowsRes.rows ?? (Array.isArray(rowsRes) ? rowsRes : []);
     const hasMore = rows.length > limit;
-    const slice = rows.slice(0, limit).map((r:any)=>({
-        id: r.id, slug: r.slug, title: r.title, excerpt: r.excerpt ?? null,
-        publishedAt: r.publishedAt ? new Date(r.publishedAt).toISOString() : null,
-    }));
-    const nextCursor = hasMore && slice.length > 0 ? { publishedAt: slice[slice.length-1].publishedAt!, id: slice[slice.length-1].id } : null;
+    const slice: PostDTO[] = rows.slice(0, limit).map((r:any)=>({
+          id: r.id, slug: r.slug, title: r.title, excerpt: r.excerpt ?? null,
+          publishedAt: r.publishedAt ? new Date(r.publishedAt).toISOString() : null,
+      }));
+    const last = slice.at(-1);
+    const nextCursor = hasMore && last && last.publishedAt ? { publishedAt: last.publishedAt, id: last.id } : null;
     return { items: slice, nextCursor };
 }
 

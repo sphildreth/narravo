@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getArchiveMonths, getRecentPosts } from "@/lib/sidebar";
+import { getArchiveMonths, getRecentPosts, type ArchiveMonth, type RecentPost } from "@/lib/sidebar";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 
@@ -15,7 +15,7 @@ export default async function Sidebar({ className = "" }: { className?: string }
       <section className="rounded-2xl border border-border bg-card p-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted mb-2">Archive</h3>
         <ul className="space-y-1.5">
-          {months.map((m: any) => (
+          {months.map((m: ArchiveMonth) => (
             <li key={m.key} className="flex items-center justify-between text-sm">
               <Link href={`/?m=${m.key}`} className="hover:underline text-fg">
                 {m.label}
@@ -28,7 +28,7 @@ export default async function Sidebar({ className = "" }: { className?: string }
       <section className="rounded-2xl border border-border bg-card p-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted mb-2">Recent</h3>
         <ul className="space-y-2">
-          {recent.map((p: any) => (
+          {recent.map((p: RecentPost) => (
             <li key={p.id} className="text-sm leading-snug">
               <Link href={`/${p.slug}`} className="hover:underline text-fg">
                 {p.title}

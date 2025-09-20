@@ -119,6 +119,7 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
       if (arr.length < limitReplies) arr.push(dto);
     }
   }
-  const nextCursor = hasMoreTop ? topSlice[topSlice.length - 1].path : null;
+  const lastTop = topSlice.length > 0 ? topSlice[topSlice.length - 1] : undefined;
+  const nextCursor = hasMoreTop && lastTop ? lastTop.path : null;
   return { top: topSlice, children: childrenMap, nextCursor };
 }

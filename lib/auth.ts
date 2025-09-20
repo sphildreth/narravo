@@ -13,7 +13,7 @@ type DbUser = {
   image: string | null;
 };
 
-const ensureUser = async (profile: { email: string; name?: string | null; image?: string | null }) => {
+const ensureUser = async (profile: { email: string; name?: string | null | undefined; image?: string | null | undefined }) => {
   const values = {
     email: profile.email,
     name: profile.name ?? null,
@@ -55,7 +55,7 @@ const config: NextAuthConfig = {
         Object.assign(user, { id: dbUser.id });
         token.sub = dbUser.id;
         token.userId = dbUser.id;
-        token.email = dbUser.email ?? undefined;
+        token.email = dbUser.email;
         token.isAdmin = isEmailAdmin(dbUser.email);
       } else if (token?.email) {
         token.isAdmin = isEmailAdmin(token.email);
@@ -65,8 +65,8 @@ const config: NextAuthConfig = {
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.userId ?? token.sub ?? "";
-        session.user.isAdmin = Boolean(token.isAdmin);
+        (session.user as any).id = token.userId ?? token.sub ?? "";
+        (session.user as any).isAdmin = Boolean(token.isAdmin);
       }
 
       return session;

@@ -31,7 +31,7 @@ export default async function Page() {
           {posts.map((post) => (
             <ArticleCard key={post.id} post={post} />
           ))}
-          <ProseExample />
+          <ProseExample html="" />
         </div>
       </div>
         <footer className="mt-10 border-t border-border px-6 py-6 text-center text-muted">Proudly powered by <a href="https://github.com/sphildreth/narravo" target="_blank">Narravo</a>.</footer>

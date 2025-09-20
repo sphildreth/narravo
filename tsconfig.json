@@ -18,10 +18,14 @@
     "isolatedModules": true,
     "incremental": true,
     "types": [
+      "node",
       "vitest/globals",
       "@testing-library/jest-dom"
     ],
-    "allowJs": true,
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "allowJs": false,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
