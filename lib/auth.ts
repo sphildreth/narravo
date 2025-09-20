@@ -39,11 +39,28 @@ const ensureUser = async (profile: { email: string; name?: string | null | undef
   return upserted as DbUser;
 };
 
+// Build providers only if configured in env
+const configuredProviders: any[] = [];
+const enabledProvidersMeta: { id: string; label: string }[] = [];
+
+const githubId = process.env.GITHUB_ID?.trim();
+const githubSecret = process.env.GITHUB_SECRET?.trim();
+if (githubId && githubSecret) {
+  configuredProviders.push(GitHub({ clientId: githubId, clientSecret: githubSecret }));
+  enabledProvidersMeta.push({ id: "github", label: "GitHub" });
+}
+
+const googleId = process.env.GOOGLE_ID?.trim();
+const googleSecret = process.env.GOOGLE_SECRET?.trim();
+if (googleId && googleSecret) {
+  configuredProviders.push(Google({ clientId: googleId, clientSecret: googleSecret }));
+  enabledProvidersMeta.push({ id: "google", label: "Google" });
+}
+
+export const authEnabledProviders = enabledProvidersMeta;
+
 const config: NextAuthConfig = {
-  providers: [
-    GitHub({ clientId: process.env.GITHUB_ID!, clientSecret: process.env.GITHUB_SECRET! }),
-    Google({ clientId: process.env.GOOGLE_ID!, clientSecret: process.env.GOOGLE_SECRET! }),
-  ],
+  providers: configuredProviders,
   session: { strategy: "jwt" },
   callbacks: {
     async signIn({ user }) {
