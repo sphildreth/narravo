@@ -1,5 +1,7 @@
 "use client";
 import Image from "next/image";
+import ReactionButtons from "@/components/reactions/ReactionButtons";
+
 export default function CommentNode({ node }: { node: any }) {
   const created = new Date(node.createdAt).toLocaleString();
   return (
@@ -13,9 +15,20 @@ export default function CommentNode({ node }: { node: any }) {
         <time dateTime={node.createdAt}>{created}</time>
       </header>
       <div className="prose" dangerouslySetInnerHTML={{ __html: node.bodyHtml }} />
-      <div className="mt-2 flex items-center gap-3">
-        <button className="text-sm text-brand hover:underline">Reply</button>
-        <a className="text-sm text-muted hover:underline" href={`#comment-${node.id}`}>Link</a>
+      <div className="mt-2 flex items-center gap-3 justify-between">
+        <div className="flex items-center gap-3">
+          <button className="text-sm text-brand hover:underline">Reply</button>
+          <a className="text-sm text-muted hover:underline" href={`#comment-${node.id}`}>Link</a>
+        </div>
+        {node.reactions && (
+          <ReactionButtons
+            targetType="comment"
+            targetId={node.id}
+            counts={node.reactions.counts}
+            userReactions={node.reactions.userReactions}
+            kinds={["like", "heart"]}
+          />
+        )}
       </div>
     </article>
   );

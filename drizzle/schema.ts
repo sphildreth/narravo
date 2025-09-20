@@ -57,7 +57,11 @@ export const reactions = pgTable("reactions", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   kind: text("kind").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
-});
+}, (table) => ({
+  reactionsUniqueConstraint: uniqueIndex("reactions_unique_constraint").on(
+    table.targetType, table.targetId, table.userId, table.kind
+  ),
+}));
 
 export const redirects = pgTable("redirects", {
   id: uuid("id").primaryKey().defaultRandom(),
