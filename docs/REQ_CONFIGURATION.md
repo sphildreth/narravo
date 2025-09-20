@@ -97,9 +97,9 @@ These defaults provide a good balance: most requests read from cache; edits prop
 
 ## Invalidation
 
-- On update/delete of a key, invalidate both the global entry (key, null) and any known user-specific entries (key, user_id). If tracking all user entries is costly, invalidate by prefix in an external cache or maintain a small side index of affected user_ids.
-- Multi-instance deployments: publish an invalidation event to a shared bus (e.g., Redis Pub/Sub channel `config:invalidate`) with payload `{ key, userId: string | null | '*' }`, and have each instance evict locally.
-- For bulk changes (e.g., allowed_values or type change), you may emit `{ key, userId: '*' }` to invalidate all variants.
+- On update/delete of a key, invalidate both the global entry (key, null) and any known user-specific entries (key, user_id) in the local in-memory cache.
+- Multi-instance (MVP): there is no cross-process invalidation. Accept eventual consistency across instances and rely on short TTL/SWR. If stronger consistency is needed later, add a shared pub/sub to broadcast invalidations.
+- For bulk changes (e.g., allowed_values or type change), invalidate the global entry and allow overrides to age out via TTL/SWR.
 
 ## Stampede protection
 
@@ -119,11 +119,11 @@ These defaults provide a good balance: most requests read from cache; edits prop
   2) If stale but within SWR, return stale and trigger background refresh (single-flight).
   3) Otherwise, read from DB and set cache with new TTL (with jitter).
 - Write path:
-  - After a successful DB write, evict affected cache keys and publish an invalidation event if in a multi-instance setup.
+  - After a successful DB write, evict affected cache keys in the local cache.
 
 # Configuration service
 
-Encapsulate all configuration domain operations behind a single service that hides storage, validation, permissions, and cache/pub-sub details.
+Encapsulate all configuration domain operations behind a single service that hides storage, validation, permissions, and cache details.
 
 ## Responsibilities
 
@@ -133,8 +133,7 @@ Encapsulate all configuration domain operations behind a single service that hid
 - Create/update global values (admin), including type/allowed_values/required semantics.
 - Create/update/delete user overrides for allowed keys only.
 - Enforce validation (type match, allowed_values membership, required global keys non-deletable).
-- Integrate caching (TTL from SYSTEM.CACHE.DEFAULT-TTL in minutes, SWR 20m, jitter, single-flight) and publish/subscribe invalidations.
-- Optional: track updated_by for audit, and expose a minimal events hook.
+- Integrate caching (TTL from SYSTEM.CACHE.DEFAULT-TTL in minutes, SWR 20m, jitter, single-flight) and perform local invalidation on writes.
 
 ## Public API (TypeScript-ish)
 
@@ -186,62 +185,27 @@ export interface ConfigService {
 - Validation on writes: value JSON type matches declared type; if allowed_values exists, value must be a member; cannot delete required global.
 - Permissions: only admins can call setGlobal; users can only set/delete overrides for themselves and for allowlisted keys.
 
-## Cache and pub/sub integration
+## Cache integration (MVP)
 
 - Reads use cache with TTL from SYSTEM.CACHE.DEFAULT-TTL (integer minutes; default 5), SWR 20 minutes, jitter ±10%.
-- Writes: on success, invalidate affected keys locally and publish `{ key, userId }` on `config:invalidate`.
-- Subscribers: on receiving invalidation, evict matching local cache entries; if `userId='*'`, evict all variants for that key.
+- Writes: on success, invalidate affected keys in the local in-memory cache only (no cross-process invalidation).
 - Admin flows should call get() with `bypassCache: true` or force-refresh after writes.
 
 ## Minimal implementation sketch
 
 ```ts
 class ConfigServiceImpl implements ConfigService {
-  constructor(private db: Db, private cache: Cache, private bus: PubSub, private opts: { allowUserOverrides: Set<string> }) {}
+  constructor(private db: Db, private cache: Cache, private opts: { allowUserOverrides?: Set<string> } = {}) {}
 
   private normalizeKey(key: string) { /* uppercase, validate regex; throw if invalid */ }
   private async getTtlMinutes(): Promise<number> { /* read SYSTEM.CACHE.DEFAULT-TTL (minutes), bounds [1,1440], default 5 */ }
   private cacheKey(key: string, userId?: string | null) { return `config:${key}:${userId ?? 'global'}`; }
 
-  async get<T = unknown>(key: string, opts?: GetOptions): Promise<T | null> {
-    const k = this.normalizeKey(key);
-    const u = opts?.userId ?? null;
-    if (opts?.bypassCache) return this.readEffectiveFromDb<T>(k, u);
-    return readThroughCache<T>(this.cache, this.cacheKey(k, u), async () => this.readEffectiveFromDb<T>(k, u), await this.getTtlMinutes(), 20 /* SWR in minutes */);
-  }
-
-  async setGlobal(key: string, value: unknown, opts: SetGlobalOptions): Promise<void> {
-    const k = this.normalizeKey(key);
-    await this.validateWrite(k, value, opts?.type, opts?.allowedValues, /*isGlobal*/ true);
-    await this.db.upsertGlobal(k, opts?.type!, value, opts?.allowedValues ?? null, opts?.required ?? false, opts?.actorId);
-    await this.invalidate(k, null);
-  }
-
-  async setUserOverride(key: string, userId: string, value: unknown): Promise<void> {
-    const k = this.normalizeKey(key);
-    if (!this.opts.allowUserOverrides.has(k)) throw new Error('Key not user-overridable');
-    const globalType = await this.db.getGlobalType(k);
-    await this.validateWrite(k, value, globalType, null, /*isGlobal*/ false);
-    await this.db.upsertUser(k, userId, globalType, value);
-    await this.invalidate(k, userId);
-  }
-
-  async deleteUserOverride(key: string, userId: string): Promise<void> {
-    const k = this.normalizeKey(key);
-    await this.db.deleteUser(k, userId);
-    await this.invalidate(k, userId);
-  }
-
-  async invalidate(key: string, userId?: string | null | '*') {
-    const k = this.normalizeKey(key);
-    // local evict
-    this.cache.del(this.cacheKey(k, userId === '*' ? undefined : userId ?? null));
-    // publish for other instances
-    await this.bus.publish('config:invalidate', { key: k, userId: userId ?? null });
-  }
-
-  private async readEffectiveFromDb<T>(k: string, u: string | null): Promise<T | null> { /* use the SELECT with fallback, return parsed value */ }
-  private async validateWrite(k: string, value: unknown, type?: ConfigType, allowedValues?: unknown[] | null, isGlobal?: boolean) { /* type check + allowed_values membership + required constraints */ }
+  async get<T = unknown>(key: string, opts?: GetOptions): Promise<T | null> { /* read-through cache with TTL/SWR */ }
+  async setGlobal(key: string, value: unknown, opts: SetGlobalOptions): Promise<void> { /* validate + upsert + local invalidate */ }
+  async setUserOverride(key: string, userId: string, value: unknown): Promise<void> { /* validate + upsert + local invalidate */ }
+  async deleteUserOverride(key: string, userId: string): Promise<void> { /* delete + local invalidate */ }
+  async invalidate(key: string, userId?: string | null | '*') { /* local evict */ }
 }
 ```
 

@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
     title: "Narravo",
+    manifest: "/site.webmanifest",
     description: "Simple, modern blog",
 };
 

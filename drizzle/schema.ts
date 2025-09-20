@@ -1,5 +1,7 @@
 import { pgTable, text, uuid, timestamp, integer, foreignKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { pgEnum, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean } from "drizzle-orm/pg-core";
 
 export const posts = pgTable("posts", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -34,11 +36,7 @@ export const comments = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   },
   (table) => ({
-    parentReference: foreignKey({
-      columns: [table.parentId],
-      foreignColumns: [table.id],
-      onDelete: "cascade",
-    }),
+    parentReference: foreignKey({ columns: [table.parentId], foreignColumns: [table.id] }).onDelete("cascade"),
   })
 );
 
@@ -67,3 +65,34 @@ export const redirects = pgTable("redirects", {
   toPath: text("to_path").notNull(),
   status: integer("status").notNull().default(301),
 });
+
+// Configuration
+export const configValueType = pgEnum("config_value_type", [
+  "string",
+  "integer",
+  "number",
+  "boolean",
+  "date",
+  "datetime",
+  "json",
+]);
+
+export const configuration = pgTable(
+  "configuration",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    key: text("key").notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    type: configValueType("type").notNull(),
+    value: jsonb("value").notNull(),
+    allowedValues: jsonb("allowed_values"),
+    required: boolean("required").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+  },
+  (table) => ({
+    configurationKeyUserIdx: index("configuration_key_user_idx").on(table.key, table.userId),
+    configurationKeyUserUniq: uniqueIndex("configuration_key_user_uniq").on(table.key, table.userId),
+    configurationGlobalKeyUniq: uniqueIndex("configuration_global_key_uniq").on(table.key).where(sql`"user_id" is null`),
+  })
+);

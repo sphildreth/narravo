@@ -10,6 +10,7 @@
     "test:watch": "vitest",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:push": "drizzle-kit push",
+    "seed:config": "tsx scripts/seed-config.ts",
     "wxr:import": "tsx scripts/import-wxr.ts",
     "seed:posts": "tsx scripts/seed-posts.ts"
   },
@@ -22,7 +23,6 @@
     "date-fns": "3.6.0",
     "dotenv": "16.4.5",
     "drizzle-orm": "0.44.5",
-    "ioredis": "5.4.1",
     "isomorphic-dompurify": "2.13.0",
     "nanoid": "5.0.7",
     "next": "14.2.5",

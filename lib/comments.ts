@@ -1,5 +1,61 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { sanitizeHtml } from "./sanitize";
+
+export const MAX_COMMENT_DEPTH = 5;
+
+export class CommentError extends Error {}
+
+export function sanitizeMarkdown(input: string): string {
+  // For tests, we treat input as HTML and sanitize it.
+  return sanitizeHtml(input);
+}
+
+function pad4(n: number) {
+  return String(n).padStart(4, "0");
+}
+
+export async function createCommentCore(
+  deps: {
+    ensurePostExists: (postId: string) => Promise<void>;
+    getParentComment: (parentId: string) => Promise<{ id: string; postId: string; depth: number; path: string } | null>;
+    countSiblings: (postId: string, parentId: string | null) => Promise<number>;
+    insertComment: (data: any) => Promise<{ id: string }>;
+    sanitizeBody: (md: string) => string;
+  },
+  input: { postId: string; parentId: string | null; bodyMd: string; userId: string }
+) {
+  await deps.ensurePostExists(input.postId);
+
+  let depth = 0;
+  let pathPrefix = "";
+  if (input.parentId) {
+    const parent = await deps.getParentComment(input.parentId);
+    if (!parent) throw new CommentError("Parent comment not found");
+    depth = parent.depth + 1;
+    if (depth >= MAX_COMMENT_DEPTH) throw new CommentError("Max depth exceeded");
+    pathPrefix = parent.path + ".";
+  }
+
+  const siblingCount = await deps.countSiblings(input.postId, input.parentId);
+  const seq = siblingCount + 1;
+  const path = pathPrefix + pad4(seq);
+  const bodyHtml = deps.sanitizeBody(input.bodyMd);
+
+  const row = await deps.insertComment({
+    postId: input.postId,
+    parentId: input.parentId,
+    path,
+    depth,
+    bodyMd: input.bodyMd,
+    bodyHtml,
+    userId: input.userId,
+  });
+  return row;
+}
+
+export const __testables__ = { createCommentCore, CommentError, sanitizeMarkdown };
+
 export type CommentDTO = { id: string; postId: string; userId: string | null; path: string; depth: number; bodyHtml: string; createdAt: string; author: { name: string | null; image: string | null }; childrenCount?: number | null; };
 export async function countApprovedComments(postId: string): Promise<number> {
   const rows = await db.execute(sql`select count(*)::int as c from comments where post_id = ${postId} and status = 'approved'`);

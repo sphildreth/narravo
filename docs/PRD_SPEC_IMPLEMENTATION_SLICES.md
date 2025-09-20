@@ -1,6 +1,6 @@
 # Narravo — Implementation Guide (Agent Slices)
 
-**Stack:** Next.js (App Router, RSC, Server Actions) + TypeScript + Tailwind + Auth.js + Drizzle ORM (Postgres) + S3/R2 + optional Redis  
+**Stack:** Next.js (App Router, RSC, Server Actions) + TypeScript + Tailwind + Auth.js + Drizzle ORM (Postgres) + S3/R2  
 
 **Goal:** Deliver MVP features from the PRD in small, parallelizable tasks with clear acceptance criteria and verification commands.
 
@@ -215,7 +215,6 @@ Prompt
 **Deliverables**
 - Rate limits: comments `5/min`, reactions `20/min` (by user+IP)
 - Honeypot field & ≥2s minimum submit time
-- Central `rateLimit.ts` with Redis (or in-memory fallback for dev)
 
 **Acceptance**
 - Exceeding limits returns 429; honeypot blocks bots
@@ -346,7 +345,7 @@ Prompt
 
 **Deliverables**
 - Vercel guide (env vars, Postgres/Neon, R2 credentials)
-- Docker Compose for self-host: web, postgres, minio (S3), redis, caddy (optional)
+- Docker Compose for self-host: web, postgres, minio (S3), caddy (optional)
 
 **Acceptance**
 - Following the docs yields a working instance
@@ -370,7 +369,6 @@ Prompt
 - Validate MIME by both header and magic number for uploads
 
 ## Rate limiting
-- Strategy: Redis token bucket keyed by `userId+ip+action`
 - Fallback: in-memory limiter (dev only)
 
 ## Logging & metrics

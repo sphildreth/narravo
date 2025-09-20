@@ -1,4 +1,3 @@
-
 /**
  * lib/posts.ts — schema-aligned version (no `status`, uses `html` column)
  */
@@ -13,6 +12,18 @@ export type PostDTO = {
     bodyHtml?: string | null;
     publishedAt: string | null;
 };
+
+function normalizePagination(input?: { page?: number; pageSize?: number }) {
+  const pageRaw = input?.page ?? 1;
+  const sizeRaw = input?.pageSize ?? 10;
+  const page = Math.max(1, Math.trunc(pageRaw));
+  const pageSize = Math.min(50, Math.max(1, Math.trunc(sizeRaw)));
+  const limit = pageSize;
+  const offset = (page - 1) * pageSize;
+  return { page, pageSize, limit, offset };
+}
+
+export const __testables__ = { normalizePagination };
 
 export async function listPosts(opts: { cursor?: { publishedAt: string; id: string } | null; limit?: number } = {}) {
     const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);

@@ -100,7 +100,7 @@
 
 ### 3.11 Performance & Caching
 - **Posts:** Static/ISR; tags for revalidation on publish/update/moderate: `post:{id}`, `archive:{ym}`, `home`, `term:{id}`.
-- **Interactions:** Minimal server actions backed by Postgres; Redis (optional) for rate-limit tokens.
+- **Interactions:** Minimal server actions backed by Postgres.
 - **Media:** S3/R2; CDN cache headers; hashed filenames, long max‑age/immutable.
 
 ### 3.12 Security
@@ -123,7 +123,6 @@
 - **Frontend/App:** Next.js (App Router, RSC, Server Actions), TypeScript, Tailwind, Radix primitives.
 - **Auth:** Auth.js (GitHub/Google).
 - **DB:** PostgreSQL (Neon/Supabase/Compose local) via Drizzle ORM + migrations.
-- **Cache/Rate limit:** Redis (Upstash/self-host) — optional.
 - **Storage:** S3‑compatible (Cloudflare R2 / S3).
 - **Workers:** In‑process jobs (import, poster generation); future: queue if needed.
 - **Deployment:** Vercel (+ Neon + R2 + Upstash) or Docker Compose self‑host.
