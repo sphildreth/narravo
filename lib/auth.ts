@@ -74,6 +74,8 @@ const config: NextAuthConfig = {
         token.userId = dbUser.id;
         token.email = dbUser.email;
         token.isAdmin = isEmailAdmin(dbUser.email);
+        token.name = dbUser.name ?? user.name ?? null;
+        token.image = dbUser.image ?? user.image ?? null;
       } else if (token?.email) {
         token.isAdmin = isEmailAdmin(token.email);
       }
@@ -84,6 +86,8 @@ const config: NextAuthConfig = {
       if (session.user) {
         (session.user as any).id = token.userId ?? token.sub ?? "";
         (session.user as any).isAdmin = Boolean(token.isAdmin);
+        session.user.name = (token as any).name ?? session.user.name;
+        (session.user as any).image = (token as any).image ?? (session.user as any).image ?? null;
       }
 
       return session;

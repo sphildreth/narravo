@@ -23,7 +23,7 @@ export default async function Page() {
   const { items: posts } = await getPosts();
   return (
     <main className="min-h-screen bg-bg text-fg">
-      <Navbar />
+      <Navbar variant="hero" />
       <Header />
       <div className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
         <div className="order-2 md:order-1"><Sidebar /></div>
