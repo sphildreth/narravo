@@ -8,7 +8,6 @@ export default function Navbar() {
                 <Link href="/" className="font-extrabold tracking-wide text-xs uppercase opacity-85 text-fg">Narravo</Link>
                 <div className="flex items-center gap-3">
                     <ThemeToggle />
-                    <Link href="/archive" className="inline-block border border-border px-3 py-2 rounded-xl bg-white text-fg font-semibold">Archive</Link>
                     <Link href="/subscribe" className="inline-block border border-transparent px-3 py-2 rounded-xl bg-brand text-brand-contrast font-semibold">Subscribe</Link>
                 </div>
             </div>
