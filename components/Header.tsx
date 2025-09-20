@@ -21,7 +21,7 @@ export default async function Header() {
   const bgGradient = `linear-gradient(to bottom, rgba(0,0,0,${fromA}), rgba(0,0,0,${viaA}), rgba(0,0,0,${toA}))`;
 
   return (
-    <header className="relative -mt-px text-white min-h-[38vh] flex items-end overflow-hidden bg-[#111]">
+    <header className="relative -mt-px text-white flex items-end overflow-hidden bg-[#111]" style={{ height: "min(38vh, 300px)" }}>
       <div className="absolute inset-0 bg-center bg-cover scale-[1.02]" style={{ backgroundImage: `url(${imageUrl})`, filter: `brightness(${clampPct(brightness)}%)` }} />
       <div className="absolute inset-0" style={{ backgroundImage: bgGradient }} />
       <div className="relative z-10 w-full max-w-screen mx-auto px-6 py-12">
@@ -29,8 +29,8 @@ export default async function Header() {
           <Image src="/images/logo-60x57.png" alt={`${siteName} logo`} width={36} height={34} className="inline-block rounded-lg" />
           <span className="font-extrabold tracking-wide text-xs uppercase opacity-90">{siteName}</span>
         </div>
-        <h1 className="text-[clamp(28px,6vw,56px)] font-extrabold">{tagline}</h1>
-        <p className="text-[clamp(14px,2.5vw,18px)] opacity-90 max-w-[64ch]">{description}</p>
+        <h1 className="text-[clamp(28px,6vw,28px)] font-extrabold">{tagline}</h1>
+        <p className="text-[clamp(14px,2.5vw,16px)] opacity-90 max-w-[64ch]">{description}</p>
       </div>
     </header>
   );
