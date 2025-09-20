@@ -71,6 +71,13 @@ export type CommentDTO = {
     counts: ReactionCounts;
     userReactions: UserReactions;
   };
+  attachments?: Array<{
+    id: string;
+    kind: "image" | "video";
+    url: string;
+    posterUrl?: string | null;
+    mime?: string | null;
+  }>;
 };
 export async function countApprovedComments(postId: string): Promise<number> {
   const rows = await db.execute(sql`select count(*)::int as c from comments where post_id = ${postId} and status = 'approved'`);
@@ -169,10 +176,18 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
     }
   }
 
-  // Add reaction data to comments
+  // Get attachments for all comments
+  let attachmentData: Record<string, any[]> = {};
+  if (allComments.length > 0) {
+    const commentIds = allComments.map(c => c.id);
+    attachmentData = await getCommentAttachments(commentIds);
+  }
+
+  // Add reaction data and attachments to comments
   const topSliceWithReactions = topSlice.map(comment => ({
     ...comment,
     reactions: reactionData[comment.id],
+    attachments: attachmentData[comment.id] || [],
   }));
 
   const childrenMapWithReactions: Record<string, any[]> = {};
@@ -180,10 +195,46 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
     childrenMapWithReactions[parentPath] = children.map(comment => ({
       ...comment,
       reactions: reactionData[comment.id],
+      attachments: attachmentData[comment.id] || [],
     }));
   }
 
   const lastTop = topSliceWithReactions.length > 0 ? topSliceWithReactions[topSliceWithReactions.length - 1] : undefined;
   const nextCursor = hasMoreTop && lastTop ? lastTop.path : null;
   return { top: topSliceWithReactions, children: childrenMapWithReactions, nextCursor };
+}
+
+// Get attachments for comments
+export async function getCommentAttachments(commentIds: string[]): Promise<Record<string, Array<{
+  id: string;
+  kind: "image" | "video";
+  url: string;
+  posterUrl?: string | null;
+  mime?: string | null;
+}>>> {
+  if (commentIds.length === 0) return {};
+  
+  const attachments = await db.execute(sql`
+    select comment_id as "commentId", id, kind, url, poster_url as "posterUrl", mime
+    from comment_attachments
+    where comment_id = ANY(${JSON.stringify(commentIds)})
+    order by comment_id, id
+  `);
+  
+  const attachmentRows: any[] = (attachments as any).rows ?? (Array.isArray(attachments) ? attachments : []);
+  const result: Record<string, any[]> = {};
+  
+  for (const row of attachmentRows) {
+    const commentId = row.commentId;
+    if (!result[commentId]) result[commentId] = [];
+    result[commentId].push({
+      id: row.id,
+      kind: row.kind,
+      url: row.url,
+      posterUrl: row.posterUrl,
+      mime: row.mime,
+    });
+  }
+  
+  return result;
 }
