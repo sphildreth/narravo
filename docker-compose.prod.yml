@@ -1,0 +1,30 @@
+version: "3.9"
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: narravo-web:prod
+    env_file:
+      - deploy/.env.example
+      - deploy/.env
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: narravo
+      POSTGRES_USER: narravo
+      POSTGRES_PASSWORD: narravo
+    volumes:
+      - narravo_pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  narravo_pg_data:

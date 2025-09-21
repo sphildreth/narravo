@@ -319,6 +319,13 @@ Prompt
 - `components/Banner.tsx`, admin page under `/admin/appearance`
 - `lib/archives.ts`, `lib/rss.ts`, `lib/seo.ts` (new)
 
+**Tasks (merged from Narravo_Tasks.md — 2025-09-21)**
+- [ ] Admin: Appearance page to manage banner (enable, imageUrl, alt, credit, overlay [0..1], focalX, focalY) — files: `app/(admin)/admin/appearance/page.tsx`, `lib/config.ts` — 1.5h
+- [ ] Component: `Banner.tsx` rendering responsive image with overlay and focal point; read from ConfigService — files: `components/Banner.tsx`, `lib/config.ts` — 1h
+- [ ] Archives: Year and Month routes with pagination; tag revalidation — files: `app/(public)/[year]/page.tsx`, `app/(public)/[year]/[month]/page.tsx`, `lib/archives.ts` — 2h
+- [ ] Monthly RSS: route to emit feed for a specific month — files: `app/(public)/[year]/[month]/feed.xml/route.ts`, `lib/rss.ts` — 1h
+- [ ] Sidebar mobile behavior: collapsible list — files: `components/Sidebar.tsx` — 0.5h
+
 ---
 
 ## Slice J — SEO, Feeds & Redirects
@@ -344,6 +351,12 @@ Prompt
 - `middleware.ts` for redirects
 - `lib/seo.ts`
 
+**Tasks (merged from Narravo_Tasks.md — 2025-09-21)**
+- [ ] Global feed: `/feed.xml` listing latest N posts (FEED.LATEST-COUNT) — files: `app/feed.xml/route.ts`, `lib/rss.ts` — 1h
+- [ ] Sitemap: `sitemap.xml` including posts and month archives — files: `app/sitemap.xml/route.ts`, `lib/seo.ts` — 1.5h
+- [ ] Per-post SEO helpers (canonical, OG/Twitter, JSON-LD) — files: `lib/seo.ts`, `app/(public)/[slug]/page.tsx` — 1h
+- [ ] Redirects middleware: load redirects from DB and issue 301 — files: `middleware.ts`, `lib/redirects.ts` — 1.5h
+
 ---
 
 ## Slice K — Backup & Restore
@@ -358,6 +371,10 @@ Prompt
 **Acceptance**
 - Round-trip succeeds on sample data
 - Dry-run clearly lists planned changes
+
+**Tasks (merged from Narravo_Tasks.md — 2025-09-21)**
+- [ ] Backup script: export selected tables to JSON + media manifest; zip result — files: `scripts/backup.ts` — 1.5h
+- [ ] Restore script: dry-run + selective restore by slug/date — files: `scripts/restore.ts` — 2h
 
 ---
 
@@ -375,6 +392,10 @@ Prompt
 **Acceptance**
 - No FOUC; theme persists via cookie; accessible focus rings
 
+**Tasks (merged from Narravo_Tasks.md — 2025-09-21)**
+- [ ] Map CSS variable tokens in globals.css and Tailwind config; ensure prose styles — files: `app/globals.css`, `tailwind.config.cjs` — 1h
+- [ ] Theme cookie + toggle component and action/route to set cookie — files: `components/ThemeToggle.tsx`, `app/actions/theme.ts`, `app/layout.tsx` — 1.5h
+
 ---
 
 ## Slice M — Security Headers & Health
@@ -391,6 +412,10 @@ Prompt
 **Acceptance**
 - Headers present in responses; `/healthz` and `/readyz` return 200 when healthy
 
+**Tasks (merged from Narravo_Tasks.md — 2025-09-21)**
+- [ ] Security headers via `next.config.mjs` headers() — CSP, HSTS, X-CTO, Referrer-Policy — files: `next.config.mjs` — 1h
+- [ ] Health routes: `/healthz` (DB ping), `/readyz` (DB + S3) — files: `app/healthz/route.ts`, `app/readyz/route.ts`, `lib/s3.ts` — 1h
+
 ---
 
 ## Slice N — Testing & CI
@@ -406,6 +431,10 @@ Prompt
 
 **Acceptance**
 - CI green on PR; coverage threshold noted (e.g., keep key modules covered)
+
+**Tasks (merged from Narravo_Tasks.md — 2025-09-21)**
+- [ ] Add GitHub Actions workflow to run `pnpm i`, `pnpm build`, `pnpm test` — files: `.github/workflows/ci.yml` — 0.75h
+- [ ] Add smoke test for archives routes once implemented — files: `tests/archives.test.ts` — 0.75h
 
 ---
 
