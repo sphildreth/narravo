@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Navbar from "@/components/Navbar";
 import Header from "@/components/Header";
+import Banner from "@/components/Banner";
 import Sidebar from "@/components/Sidebar";
 import ArticleCard from "@/components/ArticleCard";
 import ProseExample from "@/components/Prose";
@@ -26,6 +27,7 @@ export default async function Page() {
     <main className="min-h-screen bg-bg text-fg">
       <Navbar variant="hero" />
       <Header />
+      <Banner />
       <div className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
         <div className="order-2 md:order-1"><Sidebar /></div>
         <div className="order-1 md:order-2 grid gap-6">
