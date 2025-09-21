@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import Link from "next/link";
 
 export default function AdminNavbar() {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { parseStringPromise } from "xml2js";
 import { db } from "../lib/db";
 import { posts, redirects } from "../drizzle/schema";

@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
   - Removes a user override.
 
 - POST /api/admin/config/invalidate

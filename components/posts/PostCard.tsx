@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import Link from "next/link";
 export default function PostCard({ post }: { post: any }) {
   const date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : "";

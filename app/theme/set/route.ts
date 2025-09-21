@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /* app/theme/set/route.ts — POST to set theme cookie */
 import { NextResponse } from "next/server";
 

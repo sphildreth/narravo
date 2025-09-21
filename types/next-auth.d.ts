@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { DefaultSession } from "next-auth";
 
 declare module "next-auth" {

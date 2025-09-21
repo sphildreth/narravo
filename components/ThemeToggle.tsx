@@ -1,5 +1,6 @@
 /* components/ThemeToggle.tsx — client toggle with SSR cookie write */
 "use client";
+// SPDX-License-Identifier: Apache-2.0
 import * as React from "react";
 export default function ThemeToggle() {
     const [theme, setTheme] = React.useState<"light" | "dark">("light");

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 const normalizeEmail = (email: string | null | undefined) => email?.trim().toLowerCase() ?? null;
 
 export const parseAdminAllowlist = (raw: string | undefined) => {

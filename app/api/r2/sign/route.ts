@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
 import { ConfigServiceImpl } from "@/lib/config";
 import { S3Service, getS3Config } from "@/lib/s3";

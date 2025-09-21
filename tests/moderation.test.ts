@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getModerationQueue, revalidateAfterModeration, type ModerationFilter } from '@/lib/moderation';
 
@@ -47,8 +48,8 @@ describe('moderation queue functionality', () => {
 
     expect(result.totalCount).toBe(5);
     expect(result.comments).toHaveLength(1);
-    expect(result.comments[0].status).toBe('pending');
-    expect(result.comments[0].author.name).toBe('John Doe');
+    expect(result.comments[0]!.status).toBe('pending');
+    expect(result.comments[0]!.author.name).toBe('John Doe');
   });
 
   it('should handle pagination correctly', async () => {

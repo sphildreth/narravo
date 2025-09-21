@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { sanitizeMarkdown } from "./comments";
 
 export type ModerateAction = "approve" | "spam" | "delete" | "hardDelete" | "edit" | "removeAttachment";

@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Narravo — Implementation Guide (Agent Slices)
 
 **Stack:** Next.js (App Router, RSC, Server Actions) + TypeScript + Tailwind + Auth.js + Drizzle ORM (Postgres) + S3/R2  
@@ -245,7 +246,7 @@ Prompt
 ## Slice G — WXR Importer (Posts + Media + Redirects)
 **Summary:** CLI to import WXR with idempotency by GUID; downloads media; creates redirects.
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - `scripts/import-wxr.ts` (expand from stub)

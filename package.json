@@ -2,6 +2,7 @@
   "name": "narravo-next",
   "private": true,
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "dev": "next dev",
@@ -13,7 +14,8 @@
     "drizzle:push": "drizzle-kit push",
     "seed:config": "tsx scripts/seed-config.ts",
     "wxr:import": "tsx scripts/import-wxr.ts",
-    "seed:posts": "tsx scripts/seed-posts.ts"
+    "seed:posts": "tsx scripts/seed-posts.ts",
+    "spdx:add": "tsx scripts/add-spdx.ts"
   },
   "dependencies": {
     "@auth/core": "0.32.0",

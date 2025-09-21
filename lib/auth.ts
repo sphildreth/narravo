@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import NextAuth from "next-auth";
 import type { NextAuthConfig } from "next-auth";
 import GitHub from "next-auth/providers/github";

@@ -1,4 +1,5 @@
 "use client";
+// SPDX-License-Identifier: Apache-2.0
 import { signIn } from "next-auth/react";
 
 export default function ProviderButtons({ providers }: { providers: { id: string; label: string }[] }) {

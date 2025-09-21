@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import AdminNavbar from "@/components/admin/AdminNavbar";

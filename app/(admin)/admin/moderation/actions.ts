@@ -1,4 +1,5 @@
 "use server";
+// SPDX-License-Identifier: Apache-2.0
 
 import { requireAdmin } from "@/lib/auth";
 import { getModerationQueue, revalidateAfterModeration, type ModerationFilter } from "@/lib/moderation";

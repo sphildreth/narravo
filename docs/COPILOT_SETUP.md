@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Copilot Instructions Setup Summary
 
 This document summarizes the GitHub Copilot instructions that have been set up for the Narravo project.

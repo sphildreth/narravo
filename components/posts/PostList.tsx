@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { listPosts } from "@/lib/posts";
 import PostCard from "./PostCard";
 import MorePosts from "./MorePosts";

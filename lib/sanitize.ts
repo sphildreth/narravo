@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import DOMPurify from "isomorphic-dompurify";
 export function sanitizeHtml(html: string) {
   return DOMPurify.sanitize(html, {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { sanitizeHtml } from "./sanitize";
