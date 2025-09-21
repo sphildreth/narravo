@@ -9,6 +9,7 @@ export const posts = pgTable("posts", {
   title: text("title").notNull(),
   html: text("html").notNull(),
   excerpt: text("excerpt"),
+  guid: text("guid").unique(), // WordPress GUID for import idempotency
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),

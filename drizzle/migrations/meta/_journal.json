@@ -22,6 +22,13 @@
       "when": 1758457710625,
       "tag": "0002_eager_giant_man",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1758459121342,
+      "tag": "0003_nebulous_iceman",
+      "breakpoints": true
     }
   ]
 }
