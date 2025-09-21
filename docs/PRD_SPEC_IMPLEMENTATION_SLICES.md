@@ -362,7 +362,7 @@ Prompt
 ## Slice K — Backup & Restore
 **Summary:** Export/import site content.
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - `scripts/backup.ts` creates `zip` with DB dump (or select tables), media manifest, `manifest.json`
@@ -373,8 +373,8 @@ Prompt
 - Dry-run clearly lists planned changes
 
 **Tasks (merged from Narravo_Tasks.md — 2025-09-21)**
-- [ ] Backup script: export selected tables to JSON + media manifest; zip result — files: `scripts/backup.ts` — 1.5h
-- [ ] Restore script: dry-run + selective restore by slug/date — files: `scripts/restore.ts` — 2h
+- [x] Backup script: export selected tables to JSON + media manifest; zip result — files: `scripts/backup.ts` — 1.5h
+- [x] Restore script: dry-run + selective restore by slug/date — files: `scripts/restore.ts` — 2h
 
 ---
 
