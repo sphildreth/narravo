@@ -24,7 +24,7 @@ export async function GET() {
     ...siteMetadata,
     posts,
     link: siteMetadata.url,
-    lastBuildDate: posts.length > 0 ? new Date(posts[0].publishedAt) : new Date(),
+    lastBuildDate: posts.length > 0 && posts[0] ? new Date(posts[0].publishedAt) : new Date(),
   };
 
   const xml = generateRSSXML(feedData);

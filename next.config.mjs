@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Get S3 hostname for CSP
-const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT;
-// We just need the hostname.
-const s3Hostname = s3Endpoint ? new URL(s3Endpoint).hostname : "";
+// Temporarily disable S3/R2 hostname extraction for CSP until Slice E is implemented and S3_ENDPOINT/R2_ENDPOINT are properly configured.
+const s3Hostname = "";
+// const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT;
+// // We just need the hostname.
+// const s3Hostname = s3Endpoint ? new URL(s3Endpoint).hostname : "";
 
 const securityHeaders = [
   {

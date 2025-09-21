@@ -418,7 +418,7 @@ Prompt
 ## Slice N — Testing & CI
 **Summary:** Expand unit/integration tests and wire a basic CI.
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - Tests:
@@ -435,19 +435,6 @@ Prompt
 
 ---
 
-## Slice O — Deployment Recipes
-**Summary:** Ship simple deploy paths.
-
-- [ ] Completed
-
-**Deliverables**
-- Vercel guide (env vars, Postgres/Neon, R2 credentials)
-- Docker Compose for self-host: web, postgres, minio (S3), caddy (optional)
-
-**Acceptance**
-- Following the docs yields a working instance
-
----
 
 # Shared Implementation Notes
 

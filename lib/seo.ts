@@ -47,7 +47,7 @@ export function generatePostMetadata(post: PostDTO, siteUrl: string, siteName: s
   const postUrl = `${siteUrl}/${post.slug}`;
   return {
     title: post.title,
-    description: post.excerpt,
+    description: post.excerpt || null,
     alternates: {
       canonical: postUrl,
     },
@@ -55,14 +55,14 @@ export function generatePostMetadata(post: PostDTO, siteUrl: string, siteName: s
       type: "article",
       url: postUrl,
       title: post.title,
-      description: post.excerpt || undefined,
+      description: post.excerpt || "",
       publishedTime: post.publishedAt || undefined,
       siteName: siteName,
     },
     twitter: {
       card: "summary_large_image",
       title: post.title,
-      description: post.excerpt || undefined,
+      description: post.excerpt || "",
     },
   };
 }
