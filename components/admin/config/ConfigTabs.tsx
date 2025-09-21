@@ -16,19 +16,21 @@ function getCategory(key: string): string {
 }
 
 export function ConfigTabs({ items, onUpdate, onDelete }: { items: ConfigItem[], onUpdate: (item: ConfigItem) => void, onDelete: (key: string) => void }) {
-  const [activeTab, setActiveTab] = React.useState(CATEGORIES[0]);
+  const [activeTab, setActiveTab] = React.useState<string>("Site");
 
   const categorizedItems = React.useMemo(() => {
-    const result: Record<string, ConfigItem[]> = {};
+    const result = new Map<string, ConfigItem[]>();
+    for (const category of CATEGORIES) {
+      result.set(category, []);
+    }
     for (const item of items) {
       const category = getCategory(item.key);
-      if (!result[category]) {
-        result[category] = [];
-      }
-      result[category].push(item);
+      result.get(category)?.push(item);
     }
     return result;
   }, [items]);
+
+  const itemsForTab = categorizedItems.get(activeTab);
 
   return (
     <div>
@@ -50,9 +52,9 @@ export function ConfigTabs({ items, onUpdate, onDelete }: { items: ConfigItem[],
         </nav>
       </div>
       <div className="mt-6">
-        {categorizedItems[activeTab] ? (
+        {itemsForTab && itemsForTab.length > 0 ? (
           <div className="grid gap-4">
-            {categorizedItems[activeTab].map((item) => (
+            {itemsForTab.map((item) => (
               <ConfigCard key={item.key} item={item} onUpdate={onUpdate} onDelete={onDelete} />
             ))}
           </div>

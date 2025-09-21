@@ -378,10 +378,7 @@ Prompt
 
 ---
 
-## Slice L — Theming (Tokens + Toggle)
-**Summary:** CSS variable tokens + Tailwind mapping; SSR cookie theme; toggle component.
-
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - Tokens in `globals.css` (`--bg`, `--fg`, `--brand`, etc.) for light/dark
