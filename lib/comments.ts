@@ -217,7 +217,7 @@ export async function getCommentAttachments(commentIds: string[]): Promise<Recor
   const attachments = await db.execute(sql`
     select comment_id as "commentId", id, kind, url, poster_url as "posterUrl", mime
     from comment_attachments
-    where comment_id = ANY(${JSON.stringify(commentIds)})
+    where comment_id IN (${sql.join(commentIds.map((id) => sql`${id}`), sql`, `)})
     order by comment_id, id
   `);
   

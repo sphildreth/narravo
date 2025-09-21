@@ -61,7 +61,7 @@ export async function performModerationAction(input: ModerateInput) {
     const commentData = await db.execute(sql`
       SELECT DISTINCT post_id 
       FROM comments 
-      WHERE id = ANY(${JSON.stringify(input.ids)})
+      WHERE id IN (${sql.join(input.ids.map((id) => sql`${id}`), sql`, `)})
     `);
     
     const rows: any[] = (commentData as any).rows ?? (Array.isArray(commentData) ? commentData : []);
