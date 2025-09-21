@@ -74,3 +74,47 @@ export async function getPostBySlugWithReactions(slug: string, userId?: string) 
         },
     };
 }
+
+/**
+ * Get all published posts for sitemap generation
+ */
+export async function getAllPublishedPosts(): Promise<PostDTO[]> {
+    const res: any = await db.execute(sql`
+        select p.id, p.slug, p.title, p.excerpt, p.published_at as "publishedAt"
+        from posts p
+        where p.published_at is not null
+        order by p.published_at desc
+    `);
+    const rows: any[] = res.rows ?? (Array.isArray(res) ? res : []);
+    return rows.map((r: any) => ({
+        id: r.id,
+        slug: r.slug,
+        title: r.title,
+        excerpt: r.excerpt ?? null,
+        publishedAt: r.publishedAt ? new Date(r.publishedAt).toISOString() : null,
+    }));
+}
+
+/**
+ * Get unique year/month combinations from published posts for archives
+ */
+export async function getArchiveMonths(): Promise<Array<{ year: number; month: number; count: number }>> {
+    const res: any = await db.execute(sql`
+        select 
+            extract(year from p.published_at) as year,
+            extract(month from p.published_at) as month,
+            count(*) as count
+        from posts p
+        where p.published_at is not null
+        group by 
+            extract(year from p.published_at),
+            extract(month from p.published_at)
+        order by year desc, month desc
+    `);
+    const rows: any[] = res.rows ?? (Array.isArray(res) ? res : []);
+    return rows.map((r: any) => ({
+        year: parseInt(r.year),
+        month: parseInt(r.month),
+        count: parseInt(r.count),
+    }));
+}
