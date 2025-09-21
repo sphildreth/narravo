@@ -46,8 +46,98 @@ There are two primary views:
 
 ---
 
-Implementation notes (current status vs. requirements)
-- Home list implementation (app/page.tsx): uses `listPosts({ limit: FEED.LATEST-COUNT })` and caches with the `"home"` tag and configurable revalidate seconds. Infinite scroll is not yet implemented on the page; `lib/posts.ts` supports cursor-based pagination (`nextCursor`) for future infinite scroll.
+## Post Authoring and Editing (WYSIWYG)
+
+To provide a rich authoring experience, posts will be created and edited using a WYSIWYG editor.
+
+### Recommended Library: TipTap
+
+**TipTap** is the recommended library for this for the following reasons:
+- **Headless:** It provides the logic but gives us full control over the UI, allowing it to integrate perfectly with our existing Tailwind CSS styles.
+- **React/Next.js Friendly:** It has excellent support for React via hooks (`useEditor`) and components (`EditorContent`).
+- **Markdown Native:** It can be configured to use Markdown as its primary data model using the `tiptap-markdown` extension, which aligns perfectly with our strategy of storing `body_md`.
+- **Customizable Image Uploads:** It provides the necessary APIs to intercept file drops/pastes, allowing us to implement a custom upload flow that uses our existing `/api/r2/sign` endpoint.
+
+### Agent Implementation Guide for TipTap
+
+This guide provides concise directions for an agent to implement the editor.
+
+**1. Installation**
+Install the required packages:
+```bash
+pnpm add @tiptap/react @tiptap/starter-kit tiptap-markdown @tiptap/extension-image
+```
+
+**2. Editor Component (`components/editor/TiptapEditor.tsx`)**
+- This must be a Client Component (`'use client'`).
+- Use the `useEditor` hook to configure the editor instance.
+- **Extensions:**
+  - `StarterKit`: Provides basic nodes and marks (bold, italic, headings, etc.).
+  - `Markdown`: Configure to use `tiptap-markdown` for state management. Set `html: false` to ensure it prefers markdown.
+  - `Image`: The default image extension.
+
+**Example Configuration:**
+```typescript
+import { useEditor, EditorContent } from '@tiptap/react';
+import { StarterKit } from '@tiptap/starter-kit';
+import { Markdown } from 'tiptap-markdown';
+import Image from '@tiptap/extension-image';
+
+const editor = useEditor({
+  extensions: [
+    StarterKit,
+    Markdown.configure({ html: false }),
+    Image,
+  ],
+  content: initialMarkdown,
+});
+```
+
+**3. Toolbar UI**
+- Create a separate component for the toolbar that receives the `editor` instance as a prop.
+- The toolbar should contain buttons for common formatting actions. The `editor.isActive()` method should be used to visually indicate the current formatting (e.g., by changing the button's style).
+
+- **Standard Buttons & Commands:**
+  - **Bold:** `editor.chain().focus().toggleBold().run()`
+  - **Italic:** `editor.chain().focus().toggleItalic().run()`
+  - **Strikethrough:** `editor.chain().focus().toggleStrike().run()`
+  - **Heading 1:** `editor.chain().focus().toggleHeading({ level: 1 }).run()`
+  - **Heading 2:** `editor.chain().focus().toggleHeading({ level: 2 }).run()`
+  - **Heading 3:** `editor.chain().focus().toggleHeading({ level: 3 }).run()`
+  - **Blockquote:** `editor.chain().focus().toggleBlockquote().run()`
+  - **Code Block:** `editor.chain().focus().toggleCodeBlock().run()`
+  - **Bulleted List:** `editor.chain().focus().toggleBulletList().run()`
+  - **Numbered List:** `editor.chain().focus().toggleOrderedList().run()`
+  - **Image:** A dedicated button should trigger a file input dialog. The selected file will then be processed by the custom image upload handler described in the next section.
+
+**Example for a "Bold" button with active state:**
+```jsx
+<button
+  onClick={() => editor.chain().focus().toggleBold().run()}
+  className={editor.isActive('bold') ? 'is-active' : ''}
+>
+  Bold
+</button>
+```
+
+**4. Image Upload Handling**
+- The editor's `editorProps` must be configured to handle dropped or pasted images.
+- The handler function must perform the following steps:
+  1. Intercept the file (from a `drop` or `paste` event).
+  2. Prevent TipTap's default file handling (which creates a base64 data URL).
+  3. Make a `fetch` request to our application's API endpoint (e.g., `/api/r2/sign`) to get a pre-signed URL for the upload.
+  4. Use `fetch` again to `PUT` the image file to the pre-signed URL.
+  5. On successful upload, get the final image URL from the storage provider.
+  6. Use the editor instance to insert the image node with the final URL: `editor.chain().focus().setImage({ src: finalUrl }).run()`.
+
+**5. Saving Content**
+- The "Save" button in the parent form will trigger a function that retrieves the content from the editor.
+- To get the content as Markdown, use: `editor.storage.markdown.getMarkdown()`.
+- This Markdown string is the value that should be sent to the server action for saving to the `body_md` column in the database.
+
+---
+
+Implementation notes (current status vs. requirements)- Home list implementation (app/page.tsx): uses `listPosts({ limit: FEED.LATEST-COUNT })` and caches with the `"home"` tag and configurable revalidate seconds. Infinite scroll is not yet implemented on the page; `lib/posts.ts` supports cursor-based pagination (`nextCursor`) for future infinite scroll.
 - List card (components/ArticleCard.tsx): shows date, title, optional excerpt, and links to the detail page. It does not yet render tags, category, or a dedicated "Comment" CTA.
 - Detail page (app/(public)/[slug]/page.tsx): renders title, date, excerpt, sanitized HTML, reactions, and a comments section. It does not yet implement previous/next post navigation, tags/category chips, or an admin delete action.
 - Admin posts (app/(admin)/admin/posts/page.tsx): provides a table with a "View" link. There is no dedicated edit page route yet.
@@ -387,3 +477,20 @@ S-15: Visual layout and theming (image-free spec)
   - No hardcoded colors or image-based styles; all use design tokens.
 - Tests:
   - Visual regression tests for light/dark modes; ensure no snapshots are needed.
+
+S-16: Implement TipTap WYSIWYG Editor
+- Summary: Create a TipTap-based editor for posts that outputs Markdown and handles server-side image uploads.
+- Touchpoints: `components/editor/TiptapEditor.tsx` (new), `app/(admin)/admin/posts/[id]/edit/page.tsx` (or similar), `tiptap-markdown` library.
+- Steps:
+  1) Install TipTap dependencies: `@tiptap/react`, `@tiptap/starter-kit`, `tiptap-markdown`, `@tiptap/extension-image`.
+  2) Create `TiptapEditor.tsx` as a client component with the `useEditor` hook, configured with `StarterKit`, `Markdown`, and `Image` extensions.
+  3) Implement a basic toolbar for essential text formatting (bold, italic, headings).
+  4) Configure `editorProps` to handle image uploads via the application's pre-signed URL flow (`/api/r2/sign`).
+  5) Integrate the editor into the post edit page. On save, retrieve content via `editor.storage.markdown.getMarkdown()` and send to the server.
+- Acceptance:
+  - Editor loads and allows text formatting.
+  - Images dropped into the editor are uploaded to the server and inserted as a URL.
+  - Saving the post correctly stores the content as Markdown.
+- Tests:
+  - Component test for the editor: mock editor instance, verify toolbar commands are called.
+  - Integration test (optional): test the image upload flow from the editor to the server.
