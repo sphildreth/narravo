@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     const opts: any = { allowedValues: allowedValues ?? null, required: Boolean(required) };
     if (typeof type !== "undefined") opts.type = type as ConfigType;
     await svc.setGlobal(String(key), value, opts);
+    await svc.invalidate(String(key));
     
     // Revalidate appearance-related cache when banner settings change
     if (String(key).startsWith("APPEARANCE.BANNER.")) {
