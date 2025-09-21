@@ -2,11 +2,13 @@
 import { getCommentTreeForPost, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
 import { ConfigServiceImpl } from "@/lib/config";
 import { requireSession } from "@/lib/auth";
+import { validateAntiAbuse } from "@/lib/rateLimit";
 import { db } from "@/lib/db";
 import { posts, comments, commentAttachments } from "@/drizzle/schema";
 import { eq, sql, count } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 import { enqueueVideoPosterGeneration } from "@/lib/jobs";
+import { headers } from "next/headers";
 
 export async function loadReplies(params: { postId: string; parentPath: string | null; already?: number; cursor?: string | null; topLevel?: boolean; }) {
   if (params.topLevel) {
@@ -35,6 +37,8 @@ export async function createComment(params: {
   parentId: string | null;
   bodyMd: string;
   attachments?: CommentAttachment[];
+  honeypot?: string;
+  submitStartTime?: number;
 }) {
   const session = await requireSession();
   const userId = session.user?.id;
@@ -44,6 +48,22 @@ export async function createComment(params: {
   }
 
   try {
+    // Anti-abuse validation including rate limiting
+    const requestHeaders = headers();
+    const antiAbuseResult = await validateAntiAbuse(userId, "comment", {
+      honeypot: params.honeypot ?? null,
+      submitStartTime: params.submitStartTime ?? null,
+      headers: requestHeaders
+    });
+
+    if (!antiAbuseResult.valid) {
+      return {
+        success: false,
+        error: antiAbuseResult.error,
+        rateLimitInfo: antiAbuseResult.rateLimitInfo
+      };
+    }
+
     // Validate config
     const config = new ConfigServiceImpl({ db });
     const maxDepth = await config.getNumber("COMMENTS.MAX-DEPTH");
