@@ -1,4 +1,5 @@
 "use client";
+// SPDX-License-Identifier: Apache-2.0
 
 import { useState, useRef } from "react";
 import { Upload, X, FileImage, FileVideo, AlertCircle } from "lucide-react";

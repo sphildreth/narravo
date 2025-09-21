@@ -1,4 +1,5 @@
 "use server";
+// SPDX-License-Identifier: Apache-2.0
 
 import { toggleReaction, type TargetType, type ReactionKind } from "@/lib/reactions";
 import { requireSession } from "@/lib/auth";

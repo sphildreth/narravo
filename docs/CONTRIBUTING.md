@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Contributing to Narravo
 
 Welcome! This document explains how to build, run, test, and contribute code to Narravo.

@@ -1,4 +1,5 @@
 "use server";
+// SPDX-License-Identifier: Apache-2.0
 import { getCommentTreeForPost, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
 import { ConfigServiceImpl } from "@/lib/config";
 import { requireSession } from "@/lib/auth";

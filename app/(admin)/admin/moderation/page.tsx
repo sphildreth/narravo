@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { Suspense } from "react";
 import { getModerationData } from "./actions";
 import ModerationQueue from "@/components/admin/ModerationQueue";

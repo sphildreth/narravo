@@ -1,4 +1,5 @@
 "use client";
+// SPDX-License-Identifier: Apache-2.0
 import * as React from "react";
 
 async function postJSON(path: string, body: any) {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { db } from "./db";
 import { configuration, configValueType } from "../drizzle/schema";
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";

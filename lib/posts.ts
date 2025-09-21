@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * lib/posts.ts — schema-aligned version (no `status`, uses `html` column)
  */

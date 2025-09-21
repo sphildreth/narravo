@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Overview
 
 One-table configuration store with typed values, optional per-user overrides, optional allowed values, and required/global defaults managed in Admin.

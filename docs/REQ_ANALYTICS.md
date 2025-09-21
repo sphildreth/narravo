@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # REQ_ANALYTICS — In‑House View Analytics (MVP)
 
 Goal

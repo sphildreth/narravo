@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { pgTable, text, uuid, timestamp, integer, foreignKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { pgEnum, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";

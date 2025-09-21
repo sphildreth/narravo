@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 export interface UsersRepo {
   deleteById(id: string): Promise<number>;
   deleteByEmail(email: string): Promise<number>;

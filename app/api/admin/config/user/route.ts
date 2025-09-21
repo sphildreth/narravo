@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { ConfigServiceImpl } from "@/lib/config";

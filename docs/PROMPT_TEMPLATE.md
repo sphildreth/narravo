@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 Project: Narravo (Next.js 14 + TypeScript + PostgreSQL + Drizzle ORM)
 Goal: Implement <feature> per requirements & acceptance criteria.
 

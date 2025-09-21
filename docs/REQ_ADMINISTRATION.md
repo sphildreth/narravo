@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Narravo — Administration PRD (MVP)
 
 Version: 1.0

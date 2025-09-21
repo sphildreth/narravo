@@ -1,4 +1,5 @@
 "use client";
+// SPDX-License-Identifier: Apache-2.0
 import Image from "next/image";
 import ReactionButtons from "@/components/reactions/ReactionButtons";
 

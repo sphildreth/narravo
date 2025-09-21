@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Background job processing for media tasks like video poster generation.
  * For MVP, this is implemented as in-process tasks but could be moved to

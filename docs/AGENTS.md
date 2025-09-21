@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # AGENTS.md — Automation & Coding Agents Guide
 
 This guide outlines **what tasks are safe to automate**, constraints to follow, and the acceptance criteria agents must meet for the Next.js/TypeScript version of Narravo.

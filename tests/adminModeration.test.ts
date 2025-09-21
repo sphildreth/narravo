@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi } from 'vitest';
 import { moderateComments, type ModerationRepo } from '../lib/adminModeration';
 
@@ -22,7 +23,7 @@ describe('adminModeration.moderateComments', () => {
   it('marks spam and delete', async () => {
     const repo = makeRepo();
     const spam = await moderateComments(repo, { action: 'spam', ids: ['x'] });
-    expect(spam[0].ok).toBe(true);
+    expect(spam[0]!.ok).toBe(true);
     const del = await moderateComments(repo, { action: 'delete', ids: ['y','z'] });
     expect(del.map(r=>r.ok)).toEqual([true,true]);
   });
@@ -38,9 +39,10 @@ describe('adminModeration.moderateComments', () => {
     const editSpy = vi.fn(async () => true);
     const repo = makeRepo({ editComment: editSpy });
     const res = await moderateComments(repo, { action: 'edit', id: 'c1', bodyMd: '<img src=x onerror=alert(1)>' });
-    expect(res[0].ok).toBe(true);
+    expect(res[0]!.ok).toBe(true);
     expect(editSpy).toHaveBeenCalled();
-    const [_id, bodyMd, bodyHtml] = editSpy.mock.calls[0];
+    const calls = editSpy.mock.calls as unknown as Array<[string, string, unknown]>;
+    const [_id, bodyMd, bodyHtml] = calls[0]!;
     expect(bodyMd).toContain('<img');
     expect(String(bodyHtml)).not.toContain('onerror');
   });
@@ -48,6 +50,6 @@ describe('adminModeration.moderateComments', () => {
   it('removes attachment', async () => {
     const repo = makeRepo();
     const res = await moderateComments(repo, { action: 'removeAttachment', attachmentId: 'att-1' });
-    expect(res[0].ok).toBe(true);
+    expect(res[0]!.ok).toBe(true);
   });
 });

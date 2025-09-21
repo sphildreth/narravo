@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Narravo — Product Requirements Document (PRD)
 **Version:** 1.0 (Next.js Edition)  
 

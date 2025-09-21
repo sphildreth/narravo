@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /* components/Navbar.withTheme.tsx — example of using the toggle in a navbar */
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";

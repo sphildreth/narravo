@@ -1,4 +1,5 @@
 "use client";
+// SPDX-License-Identifier: Apache-2.0
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";

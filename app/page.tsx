@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import Navbar from "@/components/Navbar";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";

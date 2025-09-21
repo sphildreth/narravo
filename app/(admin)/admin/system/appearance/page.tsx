@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import AppearanceManager from "@/components/admin/appearance/AppearanceManager";

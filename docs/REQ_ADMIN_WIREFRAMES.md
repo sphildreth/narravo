@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Narravo — Admin Wireframes (MVP)
 
 Purpose: low‑fidelity wireframes for the Admin area screens defined in `PRD_SPEC_ADMINISTRATION.md`. These describe layout, primary controls, and key states to guide implementation.

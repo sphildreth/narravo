@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import CommentNode from "./CommentNode";
 import LoadMoreReplies from "./LoadMoreReplies";
 export default async function CommentThread({

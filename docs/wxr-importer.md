@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # WXR Importer Documentation
 
 The WXR (WordPress eXtended RSS) Importer allows you to import content from WordPress exports into Narravo.

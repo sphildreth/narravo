@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 export type PostDTO = {
   id: string;
   slug: string;
