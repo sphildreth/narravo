@@ -293,7 +293,7 @@ Prompt
 ## Slice I — Banner & Monthly Archives
 **Summary:** Admin controls for banner + public rendering; archive pages & sidebar; monthly RSS; sitemap entries.
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - Admin “Appearance” (can be simple page) to set banner (image, alt, credit, overlay, focal point)

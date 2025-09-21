@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { ConfigServiceImpl, type ConfigType } from "@/lib/config";
 import { db } from "@/lib/db";
+import { revalidateAppearance } from "@/lib/revalidation";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +14,12 @@ export async function POST(req: NextRequest) {
     const opts: any = { allowedValues: allowedValues ?? null, required: Boolean(required) };
     if (typeof type !== "undefined") opts.type = type as ConfigType;
     await svc.setGlobal(String(key), value, opts);
+    
+    // Revalidate appearance-related cache when banner settings change
+    if (String(key).startsWith("APPEARANCE.BANNER.")) {
+      revalidateAppearance();
+    }
+    
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
