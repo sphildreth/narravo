@@ -65,7 +65,9 @@ export async function generateVideoPoster(
     console.log(`Poster generation completed for attachment ${job.attachmentId}`);
     
   } catch (error) {
-    console.error(`Failed to generate poster for attachment ${job.attachmentId}:`, error);
+    if (process.env.NODE_ENV !== "test") {
+      console.error(`Failed to generate poster for attachment ${job.attachmentId}:`, error);
+    }
     // In production, this would be retried or marked as failed
     throw error;
   }
