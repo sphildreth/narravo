@@ -15,10 +15,19 @@ export type ArticleCardPost = {
   publishedAt?: string | null;
   coverImage?: string | null; // optional
   author?: { name?: string | null; image?: string | null } | null;
+  viewsTotal?: number;
+  viewsLastNDays?: number;
 };
 
 export default function ArticleCard({ post }: { post: ArticleCardPost }) {
   const date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : null;
+
+  // Format view count for display
+  const formatViewCount = (count: number): string => {
+    if (count < 1000) return count.toString();
+    if (count < 1000000) return `${(count / 1000).toFixed(1)}k`;
+    return `${(count / 1000000).toFixed(1)}m`;
+  };
 
   return (
     <article className="group relative overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition hover:shadow-md">
@@ -35,7 +44,12 @@ export default function ArticleCard({ post }: { post: ArticleCardPost }) {
         </div>
       )}
       <div className="p-5">
-        {date && <div className="text-xs text-muted mb-1">{date}</div>}
+        <div className="flex items-center gap-3 text-xs text-muted mb-1">
+          {date && <span>{date}</span>}
+          {post.viewsTotal !== undefined && post.viewsTotal > 0 && (
+            <span>• {formatViewCount(post.viewsTotal)} views</span>
+          )}
+        </div>
         <h2 className="text-[22px] leading-snug font-extrabold tracking-tight">
           <Link href={`/${post.slug}`} className="text-fg no-underline hover:underline">
             {post.title}
