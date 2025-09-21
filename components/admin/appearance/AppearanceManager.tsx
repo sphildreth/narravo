@@ -25,6 +25,8 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
   const [state, setState] = React.useState<AppearanceState>(initial);
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const save = async () => {
     setMessage(null); setError(null);
@@ -43,6 +45,68 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
       setError(e.message || "Failed to save banner settings");
     }
   };
+
+  async function onPickBannerImage(file: File) {
+    setMessage(null); setError(null);
+    setUploading(true);
+    try {
+      // Try remote (S3/R2) first
+      const res = await fetch("/api/r2/sign", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ filename: file.name, mimeType: file.type, size: file.size, kind: "image" }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok || (data && data.error)) {
+        throw new Error(data?.error?.message || `Failed to sign upload (${res.status})`);
+      }
+
+      const method = String(data.method || "PUT").toUpperCase();
+      const uploadUrl: string = data.url;
+
+      if (method === "PUT") {
+        const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+        if (!putRes.ok) throw new Error(`Upload failed with ${putRes.status}`);
+      } else if (data.fields) {
+        const formData = new FormData();
+        for (const [k, v] of Object.entries<string>(data.fields)) formData.append(k, v);
+        formData.append("file", file);
+        const upRes = await fetch(uploadUrl, { method: "POST", body: formData });
+        if (!upRes.ok) throw new Error(`Upload failed with ${upRes.status}`);
+      } else {
+        throw new Error("Unsupported upload method");
+      }
+
+      const publicUrl: string = data.publicUrl || "";
+      if (!publicUrl) throw new Error("No public URL provided by signer");
+
+      setState((s) => ({ ...s, bannerImageUrl: publicUrl }));
+      setMessage("Banner image uploaded");
+    } catch (_remoteErr: any) {
+      // Fallback to local dev upload endpoint
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const up = await fetch("/api/uploads/banner", { method: "POST", body: form });
+        const j = await up.json().catch(() => ({}));
+        if (!up.ok || j?.ok === false || !j?.url) throw new Error(j?.error?.message || `Local upload failed (${up.status})`);
+        setState((s) => ({ ...s, bannerImageUrl: String(j.url) }));
+        setMessage("Banner image uploaded");
+      } catch (fallbackErr: any) {
+        setError(fallbackErr?.message || "Failed to upload banner image");
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.currentTarget.files?.[0] ?? null;
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { setError("Please select an image file"); return; }
+    void onPickBannerImage(f);
+  }
 
   return (
     <div className="space-y-6">
@@ -67,6 +131,23 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
             />
             Enable banner
           </label>
+          <div className="ml-auto flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onFileInputChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!state.bannerEnabled || uploading}
+              className="inline-flex items-center h-8 rounded-lg border border-border px-3 text-xs disabled:opacity-60"
+            >
+              {uploading ? "Uploading…" : "Upload image"}
+            </button>
+          </div>
         </div>
         
         {state.bannerEnabled && (
@@ -165,8 +246,11 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
             {state.bannerImageUrl && (
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-wide text-muted">Preview</label>
-                <div className="relative max-w-md h-32 rounded-lg overflow-hidden border border-border">
-                  <img 
+                <div
+                  className="relative w-full rounded-lg overflow-hidden border border-border"
+                  style={{ height: "min(38vh, 300px)" }}
+                >
+                  <img
                     src={state.bannerImageUrl} 
                     alt={state.bannerAlt}
                     className="w-full h-full object-cover"

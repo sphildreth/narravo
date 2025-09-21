@@ -82,12 +82,14 @@ export async function POST(req: NextRequest) {
     // Get S3/R2 configuration
     const s3Config = getS3Config();
     if (!s3Config) {
-      // In development/test, return a mock response
+      // In development/test, return a mock response (no real upload)
       return new Response(
         JSON.stringify({ 
           url: "https://example.com/presigned",
           fields: { "Content-Type": mimeType },
           key: `uploads/mock-${Date.now()}.${filename.split('.').pop()}`,
+          method: "PUT",
+          publicUrl: "",
           policy: {
             kind: isImage ? "image" : "video",
             limits: {
@@ -109,11 +111,15 @@ export async function POST(req: NextRequest) {
       keyPrefix: isImage ? "images" : "videos",
     });
 
+    const publicUrl = s3Service.getPublicUrl(presignedData.key);
+
     return new Response(
       JSON.stringify({
         url: presignedData.url,
         fields: presignedData.fields,
         key: presignedData.key,
+        method: "PUT",
+        publicUrl,
         policy: {
           kind: isImage ? "image" : "video",
           limits: {

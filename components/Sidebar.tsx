@@ -16,10 +16,6 @@ export default async function Sidebar({ className = "" }: { className?: string }
   return (
     <aside className={["space-y-6", className].filter(Boolean).join(" ")}>
       <section className="rounded-2xl border border-border bg-card p-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted mb-2">Archive</h3>
-        <ArchiveList months={months} />
-      </section>
-      <section className="rounded-2xl border border-border bg-card p-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted mb-2">Recent</h3>
         <ul className="space-y-2">
           {recent.map((p: RecentPost) => (
@@ -31,6 +27,10 @@ export default async function Sidebar({ className = "" }: { className?: string }
           ))}
         </ul>
       </section>
+        <section className="rounded-2xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted mb-2">Archive</h3>
+            <ArchiveList months={months} />
+        </section>
     </aside>
   );
 }
