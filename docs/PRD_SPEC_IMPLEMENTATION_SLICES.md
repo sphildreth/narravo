@@ -331,7 +331,7 @@ Prompt
 ## Slice J — SEO, Feeds & Redirects
 **Summary:** Global SEO helpers; site-wide RSS; redirects middleware.
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - `/feed.xml` (latest 20)
