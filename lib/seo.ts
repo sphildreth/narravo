@@ -1,177 +1,96 @@
 // SPDX-License-Identifier: Apache-2.0
-import { db } from "./db";
-import { posts } from "../drizzle/schema";
-import { desc, and, isNotNull, sql } from "drizzle-orm";
-import { getArchiveMonths } from "./archives";
+import { listPosts } from "@/lib/posts";
+import { getArchiveMonths } from "@/lib/archives";
+import type { PostDTO } from "@/src/types/content";
+import type { Metadata } from "next";
 
-export interface SitemapUrl {
-  url: string;
-  lastModified?: Date;
-  changeFrequency?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
-  priority?: number;
-}
+const escapeXML = (str: string) => {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+};
 
-/**
- * Get site metadata from environment or defaults
- */
-export function getSiteMetadata() {
-  return {
-    title: process.env.SITE_TITLE || "Narravo Blog",
-    description: process.env.SITE_DESCRIPTION || "A modern blog platform",
-    url: process.env.SITE_URL || "https://localhost:3000",
-  };
-}
+export async function generateSitemap(siteUrl: string): Promise<string> {
+  const urls: string[] = [];
 
-/**
- * Generate URLs for sitemap
- */
-export async function getSitemapUrls(): Promise<SitemapUrl[]> {
-  const siteMetadata = getSiteMetadata();
-  const baseUrl = siteMetadata.url;
-  const urls: SitemapUrl[] = [];
+  // Add home page
+  urls.push(`<url><loc>${siteUrl}</loc></url>`);
 
-  // Home page
-  urls.push({
-    url: baseUrl,
-    changeFrequency: 'daily',
-    priority: 1.0,
+  // Add posts
+  let nextCursor: { publishedAt: string; id: string } | null = null;
+  do {
+    const postResult = await listPosts({ limit: 50, cursor: nextCursor });
+    postResult.items.forEach((post) => {
+      urls.push(`<url><loc>${siteUrl}/${post.slug}</loc></url>`);
+    });
+    nextCursor = postResult.nextCursor;
+  } while (nextCursor);
+
+  // Add archives
+  const archiveMonths = await getArchiveMonths();
+  archiveMonths.forEach((archive) => {
+    urls.push(`<url><loc>${siteUrl}/archive/${archive.slug}</loc></url>`);
   });
 
-  // Get all published posts
-  const postRows = await db
-    .select({
-      slug: posts.slug,
-      updatedAt: posts.updatedAt,
-      publishedAt: posts.publishedAt,
-    })
-    .from(posts)
-    .where(isNotNull(posts.publishedAt))
-    .orderBy(desc(posts.publishedAt));
-
-  // Add post URLs
-  for (const post of postRows) {
-    const lastModified = post.updatedAt || post.publishedAt;
-    const url: SitemapUrl = {
-      url: `${baseUrl}/${post.slug}`,
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    };
-    
-    if (lastModified) {
-      url.lastModified = lastModified;
-    }
-    
-    urls.push(url);
-  }
-
-  // Get archive months and add archive URLs
-  const archiveMonths = await getArchiveMonths();
-  for (const month of archiveMonths) {
-    const [year, monthStr] = month.slug.split('/');
-    
-    // Year archive
-    urls.push({
-      url: `${baseUrl}/archive/${year}`,
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    });
-
-    // Month archive
-    urls.push({
-      url: `${baseUrl}/archive/${year}/${monthStr}`,
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    });
-  }
-
-  return urls;
-}
-
-/**
- * Generate sitemap XML
- */
-export function generateSitemapXML(urls: SitemapUrl[]): string {
-  const urlElements = urls.map(url => {
-    let urlElement = `  <url>
-    <loc>${url.url}</loc>`;
-    
-    if (url.lastModified) {
-      urlElement += `
-    <lastmod>${url.lastModified.toISOString()}</lastmod>`;
-    }
-    
-    if (url.changeFrequency) {
-      urlElement += `
-    <changefreq>${url.changeFrequency}</changefreq>`;
-    }
-    
-    if (url.priority !== undefined) {
-      urlElement += `
-    <priority>${url.priority.toFixed(1)}</priority>`;
-    }
-    
-    urlElement += `
-  </url>`;
-    
-    return urlElement;
-  }).join('\n');
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urlElements}
+  ${urls.join("\n  ")}
 </urlset>`;
+
+  return sitemap;
 }
 
-/**
- * Generate Open Graph meta tags for a post
- */
-export function generatePostOpenGraph(post: {
-  title: string;
-  excerpt?: string | null;
-  slug: string;
-}): { [key: string]: string } {
-  const siteMetadata = getSiteMetadata();
-  const postUrl = `${siteMetadata.url}/${post.slug}`;
-  
+export function generatePostMetadata(post: PostDTO, siteUrl: string, siteName: string): Metadata {
+  const postUrl = `${siteUrl}/${post.slug}`;
   return {
-    'og:title': post.title,
-    'og:description': post.excerpt || siteMetadata.description,
-    'og:url': postUrl,
-    'og:type': 'article',
-    'og:site_name': siteMetadata.title,
-    'twitter:card': 'summary_large_image',
-    'twitter:title': post.title,
-    'twitter:description': post.excerpt || siteMetadata.description,
+    title: post.title,
+    description: post.excerpt,
+    alternates: {
+      canonical: postUrl,
+    },
+    openGraph: {
+      type: "article",
+      url: postUrl,
+      title: post.title,
+      description: post.excerpt || undefined,
+      publishedTime: post.publishedAt || undefined,
+      siteName: siteName,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.title,
+      description: post.excerpt || undefined,
+    },
   };
 }
 
-/**
- * Generate JSON-LD structured data for a post
- */
-export function generatePostJsonLd(post: {
-  title: string;
-  excerpt?: string | null;
-  slug: string;
-  publishedAt?: string | null;
-  html?: string;
-}) {
-  const siteMetadata = getSiteMetadata();
-  const postUrl = `${siteMetadata.url}/${post.slug}`;
-  
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: post.title,
-    description: post.excerpt || siteMetadata.description,
-    url: postUrl,
-    datePublished: post.publishedAt,
-    author: {
-      '@type': 'Organization',
-      name: siteMetadata.title,
+export function generatePostJsonLd(post: PostDTO, siteUrl: string, siteName: string): string {
+  const postUrl = `${siteUrl}/${post.slug}`;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": postUrl,
     },
-    publisher: {
-      '@type': 'Organization',
-      name: siteMetadata.title,
+    "headline": post.title,
+    "description": post.excerpt,
+    "datePublished": post.publishedAt,
+    "author": {
+      "@type": "Organization",
+      "name": siteName,
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": siteName,
+      "logo": {
+        "@type": "ImageObject",
+        "url": `${siteUrl}/images/logo-269x255.png`,
+      },
     },
   };
+  return JSON.stringify(jsonLd, null, 2);
 }

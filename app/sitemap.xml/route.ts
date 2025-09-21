@@ -1,23 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
-import { NextRequest } from "next/server";
-import { getSitemapUrls, generateSitemapXML } from "@/lib/seo";
+import { generateSitemap } from "@/lib/seo";
+import { getSiteMetadata } from "@/lib/rss";
 
-export async function GET(request: NextRequest) {
-  try {
-    const urls = await getSitemapUrls();
-    const sitemapXML = generateSitemapXML(urls);
+// Revalidate the sitemap every hour
+export const revalidate = 3600;
 
-    return new Response(sitemapXML, {
-      headers: {
-        'Content-Type': 'application/xml; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600, s-maxage=3600',
-      },
+export async function GET() {
+  const { url: siteUrl } = getSiteMetadata();
+
+  if (!siteUrl) {
+    return new Response("Internal Server Error: SITE_URL is not configured.", {
+      status: 500,
     });
-  } catch (error) {
-    console.error('Error generating sitemap:', error);
-    return new Response('Internal Server Error', { status: 500 });
   }
-}
 
-// Enable ISR
-export const revalidate = 3600; // 1 hour
+  const sitemap = await generateSitemap(siteUrl);
+
+  return new Response(sitemap, {
+    headers: {
+      "Content-Type": "application/xml; charset=utf-8",
+      "Cache-Control": `public, s-maxage=${revalidate}, stale-while-revalidate=1800`,
+    },
+  });
+}

@@ -199,8 +199,8 @@ Prompt
 - Server job to generate poster for videos (can be in-process for MVP)
 
 +**Config (use ConfigService):**
-+- UPLOADS.IMAGE-MAX-BYTES (default 5,000,000)
-+- UPLOADS.VIDEO-MAX-BYTES (default 50,000,000)
++- UPLOADS.IMAGE-MAX-BYTES (default 5000000)
++- UPLOADS.VIDEO-MAX-BYTES (default 50000000)
 +- UPLOADS.VIDEO-MAX-DURATION-SECONDS (default 90)
 +- Optional: UPLOADS.ALLOWED-MIME-IMAGE / UPLOADS.ALLOWED-MIME-VIDEO (json arrays)
 +
@@ -331,7 +331,7 @@ Prompt
 ## Slice J — SEO, Feeds & Redirects
 **Summary:** Global SEO helpers; site-wide RSS; redirects middleware.
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - `/feed.xml` (latest 20)
@@ -352,10 +352,10 @@ Prompt
 - `lib/seo.ts`
 
 **Tasks (merged from Narravo_Tasks.md — 2025-09-21)**
-- [ ] Global feed: `/feed.xml` listing latest N posts (FEED.LATEST-COUNT) — files: `app/feed.xml/route.ts`, `lib/rss.ts` — 1h
-- [ ] Sitemap: `sitemap.xml` including posts and month archives — files: `app/sitemap.xml/route.ts`, `lib/seo.ts` — 1.5h
-- [ ] Per-post SEO helpers (canonical, OG/Twitter, JSON-LD) — files: `lib/seo.ts`, `app/(public)/[slug]/page.tsx` — 1h
-- [ ] Redirects middleware: load redirects from DB and issue 301 — files: `middleware.ts`, `lib/redirects.ts` — 1.5h
+- [x] Global feed: `/feed.xml` listing latest N posts (FEED.LATEST-COUNT) — files: `app/feed.xml/route.ts`, `lib/rss.ts` — 1h
+- [x] Sitemap: `sitemap.xml` including posts and month archives — files: `app/sitemap.xml/route.ts`, `lib/seo.ts` — 1.5h
+- [x] Per-post SEO helpers (canonical, OG/Twitter, JSON-LD) — files: `lib/seo.ts`, `app/(public)/[slug]/page.tsx` — 1h
+- [x] Redirects middleware: load redirects from DB and issue 301 — files: `middleware.ts`, `lib/redirects.ts` — 1.5h
 
 ---
 
