@@ -8,4 +8,6 @@ export type PostDTO = {
   bodyHtml?: string | null;
   publishedAt?: string | null;
   author?: { name?: string | null; image?: string | null } | null;
+  viewsTotal?: number;
+  viewsLastNDays?: number;
 };

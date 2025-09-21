@@ -19,11 +19,15 @@ function normalizePagination(input?: { page?: number; pageSize?: number }) {
 
 export const __testables__ = { normalizePagination };
 
-export async function listPosts(opts: { cursor?: { publishedAt: string; id: string } | null; limit?: number } = {}) {
+export async function listPosts(opts: { cursor?: { publishedAt: string; id: string } | null; limit?: number; includeViews?: boolean } = {}) {
     const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
     const c = opts.cursor;
+    const includeViews = opts.includeViews ?? false;
+    
+    const viewsSelect = includeViews ? sql`, p.views_total as "viewsTotal"` : sql``;
+    
     const rowsRes: any = await db.execute(sql`
-    select p.id, p.slug, p.title, p.excerpt, p.published_at as "publishedAt"
+    select p.id, p.slug, p.title, p.excerpt, p.published_at as "publishedAt"${viewsSelect}
     from posts p
     where true
       ${c ? sql`and (p.published_at, p.id) < (${c.publishedAt}::timestamptz, ${c.id}::uuid)` : sql``}
@@ -35,6 +39,7 @@ export async function listPosts(opts: { cursor?: { publishedAt: string; id: stri
     const slice: PostDTO[] = rows.slice(0, limit).map((r:any)=>({
           id: r.id, slug: r.slug, title: r.title, excerpt: r.excerpt ?? null,
           publishedAt: r.publishedAt ? new Date(r.publishedAt).toISOString() : null,
+          ...(includeViews && { viewsTotal: r.viewsTotal ?? 0 })
       }));
     const last = slice.at(-1);
     const nextCursor = hasMore && last && last.publishedAt ? { publishedAt: last.publishedAt, id: last.id } : null;
@@ -43,7 +48,8 @@ export async function listPosts(opts: { cursor?: { publishedAt: string; id: stri
 
 export async function getPostBySlug(slug: string) {
     const res: any = await db.execute(sql`
-    select p.id, p.slug, p.title, p.excerpt, p.html as "bodyHtml", p.published_at as "publishedAt"
+    select p.id, p.slug, p.title, p.excerpt, p.html as "bodyHtml", 
+           p.published_at as "publishedAt", p.views_total as "viewsTotal"
     from posts p
     where p.slug = ${slug}
     limit 1
@@ -52,7 +58,8 @@ export async function getPostBySlug(slug: string) {
     return row ? {
         id: row.id, slug: row.slug, title: row.title, excerpt: row.excerpt ?? null,
         bodyHtml: row.bodyHtml ?? null,
-        publishedAt: row.publishedAt ? new Date(row.publishedAt).toISOString() : null
+        publishedAt: row.publishedAt ? new Date(row.publishedAt).toISOString() : null,
+        viewsTotal: row.viewsTotal ?? 0
     } : null;
 }
 

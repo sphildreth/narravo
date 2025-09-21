@@ -8,6 +8,7 @@ import { getSiteMetadata } from "@/lib/rss";
 import { generatePostMetadata, generatePostJsonLd } from "@/lib/seo";
 import CommentsSection from "@/components/comments/CommentsSection";
 import ReactionButtons from "@/components/reactions/ReactionButtons";
+import { ViewTracker } from "@/components/analytics/ViewTracker";
 
 type Props = {
   params: { slug: string };
@@ -40,6 +41,13 @@ export default async function PostPage({ params }: Props) {
   const { title: siteName, url: siteUrl } = getSiteMetadata();
   const jsonLd = generatePostJsonLd(post, siteUrl, siteName);
 
+  // Format view count for display
+  const formatViewCount = (count: number): string => {
+    if (count < 1000) return count.toString();
+    if (count < 1000000) return `${(count / 1000).toFixed(1)}k`;
+    return `${(count / 1000000).toFixed(1)}m`;
+  };
+
   return (
     <>
       <script
@@ -47,11 +55,17 @@ export default async function PostPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: jsonLd }}
       />
       <main className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
+        <ViewTracker postId={post.id} />
         <div className="order-1 md:order-2 grid gap-6">
           <article className="article border border-border rounded-xl bg-card shadow-soft">
             <div className="article__body p-6">
               <header className="mb-3">
-                <div className="text-xs text-muted">{date}</div>
+                <div className="flex items-center gap-3 text-xs text-muted">
+                  <span>{date}</span>
+                  {post.viewsTotal !== undefined && post.viewsTotal > 0 && (
+                    <span>• {formatViewCount(post.viewsTotal)} views</span>
+                  )}
+                </div>
                 <h1 className="text-3xl md:text-4xl font-extrabold leading-tight mt-1">
                   {post.title}
                 </h1>
