@@ -47,6 +47,15 @@ async function main() {
   await service.setGlobal("APPEARANCE.BANNER.FOCAL-X", 0.5, { type: "number", required: true });
   await service.setGlobal("APPEARANCE.BANNER.FOCAL-Y", 0.5, { type: "number", required: true });
 
+  // Analytics configuration
+  await service.setGlobal("VIEW.SESSION-WINDOW-MINUTES", 30, { type: "integer", required: true });
+  await service.setGlobal("VIEW.TRENDING-DAYS", 7, { type: "integer", required: true });
+  await service.setGlobal("VIEW.ADMIN-SPARKLINE-DAYS", 30, { type: "integer", required: true });
+  await service.setGlobal("VIEW.REVALIDATE-SECONDS", 60, { type: "integer", required: true });
+  await service.setGlobal("VIEW.COUNT-BOTS", false, { type: "boolean", required: true });
+  await service.setGlobal("VIEW.RESPECT-DNT", true, { type: "boolean", required: true });
+  await service.setGlobal("RATE.VIEWS-PER-MINUTE", 120, { type: "integer", required: true });
+
   console.log("Seeded configuration defaults.");
 }
 

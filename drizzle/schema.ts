@@ -11,6 +11,7 @@ export const posts = pgTable("posts", {
   html: text("html").notNull(),
   excerpt: text("excerpt"),
   guid: text("guid").unique(), // WordPress GUID for import idempotency
+  viewsTotal: integer("views_total").notNull().default(0),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
@@ -100,5 +101,38 @@ export const configuration = pgTable(
     configurationKeyUserIdx: index("configuration_key_user_idx").on(table.key, table.userId),
     configurationKeyUserUniq: uniqueIndex("configuration_key_user_uniq").on(table.key, table.userId),
     configurationGlobalKeyUniq: uniqueIndex("configuration_global_key_uniq").on(table.key).where(sql`"user_id" is null`),
+  })
+);
+
+export const postDailyViews = pgTable(
+  "post_daily_views",
+  {
+    day: text("day").notNull(), // DATE format YYYY-MM-DD
+    postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }).notNull(),
+    views: integer("views").notNull().default(0),
+    uniques: integer("uniques").notNull().default(0),
+  },
+  (table) => ({
+    primaryKey: { columns: [table.day, table.postId] },
+    postIdDayIndex: index("post_daily_views_post_id_day_idx").on(table.postId, table.day),
+  })
+);
+
+export const postViewEvents = pgTable(
+  "post_view_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }).notNull(),
+    ts: timestamp("ts", { withTimezone: true }).default(sql`now()`),
+    sessionId: text("session_id"),
+    ipHash: text("ip_hash"),
+    userAgent: text("user_agent"),
+    referrerHost: text("referrer_host"),
+    referrerPath: text("referrer_path"),
+    userLang: text("user_lang"),
+    bot: boolean("bot").notNull().default(false),
+  },
+  (table) => ({
+    postIdTsIndex: index("post_view_events_post_id_ts_idx").on(table.postId, table.ts),
   })
 );

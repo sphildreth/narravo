@@ -29,6 +29,13 @@
       "when": 1758459121342,
       "tag": "0003_nebulous_iceman",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1758490873871,
+      "tag": "0004_friendly_master_mold",
+      "breakpoints": true
     }
   ]
 }
