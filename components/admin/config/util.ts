@@ -24,3 +24,25 @@ export function coerceToType(raw: any, type: ConfigType): any {
     return raw;
   }
 }
+
+export function formatValueForDisplay(value: unknown, type: ConfigType): string {
+  if (value === null || value === undefined) return "(not set)";
+  try {
+    switch (type) {
+      case "boolean":
+        return String(Boolean(value));
+      case "integer":
+      case "number":
+        return typeof value === "number" ? String(value) : String(Number(value as any));
+      case "json":
+        return JSON.stringify(value);
+      case "string":
+      case "date":
+      case "datetime":
+      default:
+        return String(value);
+    }
+  } catch {
+    return String(value);
+  }
+}

@@ -51,3 +51,6 @@ out/
 next-env.d.ts
 
 /.output.txt
+
+# Ignore the uploads folder
+uploads/

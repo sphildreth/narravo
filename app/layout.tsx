@@ -5,7 +5,6 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
-import Banner from "@/components/Banner"; // Import Banner component
 
 export async function generateMetadata(): Promise<Metadata> {
     try {
@@ -38,7 +37,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
         <html lang="en" data-theme={theme} suppressHydrationWarning>
         <body>
-            <Banner /> {/* Add Banner component here */}
             {children}
         </body>
         </html>
