@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { db } from "./db";
 import { posts, postDailyViews, postViewEvents } from "../drizzle/schema";
-import { sql, eq, gte, desc, and, count, sum } from "drizzle-orm";
+import { sql, eq, gte, desc, and, count, sum, inArray } from "drizzle-orm";
 import { ConfigServiceImpl } from "./config";
 import crypto from "crypto";
 
@@ -33,6 +33,15 @@ interface ViewCounts {
 interface SparklineData {
   day: string; // YYYY-MM-DD
   views: number;
+}
+
+// Detect a missing relation/table error (e.g., post_daily_views not created yet)
+function isMissingDailyViewsRelation(err: unknown): boolean {
+  const e = err as any;
+  if (!e) return false;
+  if (e.code === "42P01") return true; // undefined_table
+  const msg: string | undefined = e.message || e.cause?.message;
+  return !!msg && /post_daily_views/.test(msg);
 }
 
 // Bot detection regex patterns
@@ -156,24 +165,29 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
         .set({ viewsTotal: sql`${posts.viewsTotal} + 1` })
         .where(eq(posts.id, postId));
 
-      // Upsert daily views
-      await tx
-        .insert(postDailyViews)
-        .values({
-          day: currentDate,
-          postId,
-          views: 1,
-          uniques: 1,
-        })
-        .onConflictDoUpdate({
-          target: [postDailyViews.day, postDailyViews.postId],
-          set: {
-            views: sql`${postDailyViews.views} + 1`,
-            // For uniques, we'd need more complex logic to track if this is a unique view
-            // For MVP, we'll approximate by checking if this session hasn't been seen today
-            uniques: sessionId ? sql`${postDailyViews.uniques} + 1` : postDailyViews.uniques,
-          },
-        });
+      // Upsert daily views (if table exists). Swallow missing-table errors.
+      try {
+        await tx
+          .insert(postDailyViews)
+          .values({
+            day: currentDate,
+            postId,
+            views: 1,
+            uniques: 1,
+          })
+          .onConflictDoUpdate({
+            target: [postDailyViews.day, postDailyViews.postId],
+            set: {
+              views: sql`${postDailyViews.views} + 1`,
+              // For uniques, we'd need more complex logic to track if this is a unique view
+              // For MVP, we'll approximate by checking if this session hasn't been seen today
+              uniques: sessionId ? sql`${postDailyViews.uniques} + 1` : postDailyViews.uniques,
+            },
+          });
+      } catch (err) {
+        if (!isMissingDailyViewsRelation(err)) throw err;
+        // If the table is missing, we simply skip daily aggregation.
+      }
     });
 
     return true;
@@ -190,34 +204,47 @@ export async function getTrendingPosts({ days = 7, limit = 10 }: { days?: number
   
   if (!startDateStr) throw new Error("Invalid start date");
 
-  const trendingPosts = await db
-    .select({
-      id: posts.id,
-      slug: posts.slug,
-      title: posts.title,
-      totalViews: posts.viewsTotal,
-      viewsLastNDays: sum(postDailyViews.views),
-    })
-    .from(posts)
-    .leftJoin(postDailyViews, eq(posts.id, postDailyViews.postId))
-    .where(
-      and(
-        gte(postDailyViews.day, startDateStr),
-        // Only include published posts
-        sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`
+  try {
+    const trendingPosts = await db
+      .select({
+        id: posts.id,
+        slug: posts.slug,
+        title: posts.title,
+        totalViews: posts.viewsTotal,
+        viewsLastNDays: sum(postDailyViews.views),
+      })
+      .from(posts)
+      .leftJoin(postDailyViews, eq(posts.id, postDailyViews.postId))
+      .where(
+        and(
+          gte(postDailyViews.day, startDateStr),
+          // Only include published posts
+          sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`
+        )
       )
-    )
-    .groupBy(posts.id, posts.slug, posts.title, posts.viewsTotal)
-    .orderBy(desc(sum(postDailyViews.views)))
-    .limit(limit);
+      .groupBy(posts.id, posts.slug, posts.title, posts.viewsTotal)
+      .orderBy(desc(sum(postDailyViews.views)))
+      .limit(limit);
 
-  return trendingPosts.map(post => ({
-    id: post.id,
-    slug: post.slug,
-    title: post.title,
-    totalViews: post.totalViews,
-    viewsLastNDays: Number(post.viewsLastNDays) || 0,
-  }));
+    return trendingPosts.map(post => ({
+      id: post.id,
+      slug: post.slug,
+      title: post.title,
+      totalViews: post.totalViews,
+      viewsLastNDays: Number(post.viewsLastNDays) || 0,
+    }));
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    // Fallback: if daily views table is missing, approximate trending by total views
+    const rows = await db
+      .select({ id: posts.id, slug: posts.slug, title: posts.title, totalViews: posts.viewsTotal })
+      .from(posts)
+      .where(sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`)
+      .orderBy(desc(posts.viewsTotal))
+      .limit(limit);
+
+    return rows.map(r => ({ id: r.id, slug: r.slug, title: r.title, totalViews: r.totalViews, viewsLastNDays: 0 }));
+  }
 }
 
 export async function getPostViewCounts(postIds: string[]): Promise<Map<string, ViewCounts>> {
@@ -230,34 +257,49 @@ export async function getPostViewCounts(postIds: string[]): Promise<Map<string, 
   
   if (!startDateStr) throw new Error("Invalid start date");
 
-  const results = await db
-    .select({
-      postId: posts.id,
-      totalViews: posts.viewsTotal,
-      recentViews: sum(postDailyViews.views),
-    })
-    .from(posts)
-    .leftJoin(
-      postDailyViews,
-      and(
-        eq(posts.id, postDailyViews.postId),
-        gte(postDailyViews.day, startDateStr)
+  try {
+    const results = await db
+      .select({
+        postId: posts.id,
+        totalViews: posts.viewsTotal,
+        recentViews: sum(postDailyViews.views),
+      })
+      .from(posts)
+      .leftJoin(
+        postDailyViews,
+        and(
+          eq(posts.id, postDailyViews.postId),
+          gte(postDailyViews.day, startDateStr)
+        )
       )
-    )
-    .where(sql`${posts.id} = ANY(${postIds})`)
-    .groupBy(posts.id, posts.viewsTotal);
+      .where(inArray(posts.id, postIds))
+      .groupBy(posts.id, posts.viewsTotal);
 
-  const viewCounts = new Map<string, ViewCounts>();
-  
-  for (const result of results) {
-    viewCounts.set(result.postId, {
-      postId: result.postId,
-      totalViews: result.totalViews,
-      viewsLastNDays: Number(result.recentViews) || 0,
-    });
+    const viewCounts = new Map<string, ViewCounts>();
+
+    for (const result of results) {
+      viewCounts.set(result.postId, {
+        postId: result.postId,
+        totalViews: result.totalViews,
+        viewsLastNDays: Number(result.recentViews) || 0,
+      });
+    }
+
+    return viewCounts;
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    // Fallback: no daily table, return totalViews and zeros for recent
+    const rows = await db
+      .select({ postId: posts.id, totalViews: posts.viewsTotal })
+      .from(posts)
+      .where(inArray(posts.id, postIds));
+
+    const viewCounts = new Map<string, ViewCounts>();
+    for (const r of rows) {
+      viewCounts.set(r.postId, { postId: r.postId, totalViews: r.totalViews, viewsLastNDays: 0 });
+    }
+    return viewCounts;
   }
-
-  return viewCounts;
 }
 
 export async function getPostSparkline(postId: string, days: number = 30): Promise<SparklineData[]> {
@@ -283,27 +325,33 @@ export async function getPostSparkline(postId: string, days: number = 30): Promi
   const startDateStr = startDate.toISOString().split('T')[0];
   if (!startDateStr) throw new Error("Invalid start date");
   
-  const viewData = await db
-    .select({
-      day: postDailyViews.day,
-      views: postDailyViews.views,
-    })
-    .from(postDailyViews)
-    .where(
-      and(
-        eq(postDailyViews.postId, postId),
-        gte(postDailyViews.day, startDateStr)
+  try {
+    const viewData = await db
+      .select({
+        day: postDailyViews.day,
+        views: postDailyViews.views,
+      })
+      .from(postDailyViews)
+      .where(
+        and(
+          eq(postDailyViews.postId, postId),
+          gte(postDailyViews.day, startDateStr)
+        )
       )
-    )
-    .orderBy(postDailyViews.day);
+      .orderBy(postDailyViews.day);
 
-  // Merge actual data with the template
-  const dataMap = new Map(viewData.map(item => [item.day, item.views]));
-  
-  return sparklineData.map(item => ({
-    ...item,
-    views: dataMap.get(item.day) ?? 0,
-  }));
+    // Merge actual data with the template
+    const dataMap = new Map(viewData.map(item => [item.day, item.views]));
+
+    return sparklineData.map(item => ({
+      ...item,
+      views: dataMap.get(item.day) ?? 0,
+    }));
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    // Fallback: table missing, return zeros
+    return sparklineData;
+  }
 }
 
 // Test helpers
