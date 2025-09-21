@@ -3,6 +3,11 @@ import { ConfigServiceImpl } from "../lib/config";
 import { db } from "../lib/db";
 
 async function main() {
+  // Example: Initialize with allowlist of keys that users can override themselves
+  // const allowUserOverrides = new Set(['THEME', 'USER.LANGUAGE', 'USER.TIMEZONE', 'USER.NOTIFICATIONS.EMAIL']);
+  // const service = new ConfigServiceImpl({ db, allowUserOverrides });
+  
+  // For seeding, we use admin service (no restrictions)
   const service = new ConfigServiceImpl({ db });
 
   // Cache TTL (minutes)
@@ -46,6 +51,12 @@ async function main() {
   await service.setGlobal("APPEARANCE.BANNER.OVERLAY", 0.45, { type: "number", required: true });
   await service.setGlobal("APPEARANCE.BANNER.FOCAL-X", 0.5, { type: "number", required: true });
   await service.setGlobal("APPEARANCE.BANNER.FOCAL-Y", 0.5, { type: "number", required: true });
+
+  // User-customizable preferences (can be overridden per user)
+  await service.setGlobal("THEME", "light", { type: "string", allowedValues: ["light", "dark", "system"], required: true });
+  await service.setGlobal("USER.LANGUAGE", "en", { type: "string", allowedValues: ["en", "es", "fr", "de"], required: true });
+  await service.setGlobal("USER.TIMEZONE", "UTC", { type: "string", required: true });
+  await service.setGlobal("USER.NOTIFICATIONS.EMAIL", true, { type: "boolean", required: true });
 
   console.log("Seeded configuration defaults.");
 }

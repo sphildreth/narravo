@@ -47,3 +47,92 @@ describe('config helpers', () => {
   });
 });
 
+describe('ConfigService user allowlist', () => {
+  it('allows user overrides when no allowlist is configured', async () => {
+    const { ConfigServiceImpl } = await import('../lib/config');
+    const mockRepo = {
+      readEffective: vi.fn(),
+      upsertGlobal: vi.fn(),
+      getGlobalType: vi.fn().mockResolvedValue('string'),
+      upsertUser: vi.fn(),
+      deleteUser: vi.fn(),
+      getGlobalNumber: vi.fn()
+    };
+    
+    const service = new ConfigServiceImpl({ repo: mockRepo });
+    
+    // Should allow any key when no allowlist is set
+    expect(service.canUserOverride('THEME')).toBe(true);
+    expect(service.canUserOverride('ANY.KEY')).toBe(true);
+  });
+
+  it('restricts user overrides to allowlisted keys only', async () => {
+    const { ConfigServiceImpl } = await import('../lib/config');
+    const mockRepo = {
+      readEffective: vi.fn(),
+      upsertGlobal: vi.fn(),
+      getGlobalType: vi.fn().mockResolvedValue('string'),
+      upsertUser: vi.fn(),
+      deleteUser: vi.fn(),
+      getGlobalNumber: vi.fn()
+    };
+    
+    const allowUserOverrides = new Set(['THEME', 'USER.LANGUAGE']);
+    const service = new ConfigServiceImpl({ repo: mockRepo, allowUserOverrides });
+    
+    // Should allow allowlisted keys
+    expect(service.canUserOverride('THEME')).toBe(true);
+    expect(service.canUserOverride('USER.LANGUAGE')).toBe(true);
+    
+    // Should reject non-allowlisted keys
+    expect(service.canUserOverride('SYSTEM.CACHE.DEFAULT-TTL')).toBe(false);
+    expect(service.canUserOverride('OTHER.KEY')).toBe(false);
+  });
+
+  it('throws error when setting user override for non-allowlisted key', async () => {
+    const { ConfigServiceImpl } = await import('../lib/config');
+    const mockRepo = {
+      readEffective: vi.fn(),
+      upsertGlobal: vi.fn(),
+      getGlobalType: vi.fn().mockResolvedValue('string'),
+      upsertUser: vi.fn(),
+      deleteUser: vi.fn(),
+      getGlobalNumber: vi.fn()
+    };
+    
+    const allowUserOverrides = new Set(['THEME']);
+    const service = new ConfigServiceImpl({ repo: mockRepo, allowUserOverrides });
+    
+    // Should throw for non-allowlisted key
+    await expect(service.setUserOverride('SYSTEM.CACHE.DEFAULT-TTL', 'user123', 60))
+      .rejects.toThrow('User overrides not allowed for key: SYSTEM.CACHE.DEFAULT-TTL');
+      
+    // Should work for allowlisted key
+    await expect(service.setUserOverride('THEME', 'user123', 'dark'))
+      .resolves.not.toThrow();
+  });
+
+  it('throws error when deleting user override for non-allowlisted key', async () => {
+    const { ConfigServiceImpl } = await import('../lib/config');
+    const mockRepo = {
+      readEffective: vi.fn(),
+      upsertGlobal: vi.fn(),
+      getGlobalType: vi.fn(),
+      upsertUser: vi.fn(),
+      deleteUser: vi.fn(),
+      getGlobalNumber: vi.fn()
+    };
+    
+    const allowUserOverrides = new Set(['THEME']);
+    const service = new ConfigServiceImpl({ repo: mockRepo, allowUserOverrides });
+    
+    // Should throw for non-allowlisted key
+    await expect(service.deleteUserOverride('SYSTEM.CACHE.DEFAULT-TTL', 'user123'))
+      .rejects.toThrow('User overrides not allowed for key: SYSTEM.CACHE.DEFAULT-TTL');
+      
+    // Should work for allowlisted key
+    await expect(service.deleteUserOverride('THEME', 'user123'))
+      .resolves.not.toThrow();
+  });
+});
+

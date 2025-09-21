@@ -37,6 +37,9 @@ export interface ConfigService {
   setUserOverride(key: string, userId: string, value: unknown, opts?: SetUserOptions): Promise<void>;
   deleteUserOverride(key: string, userId: string, opts?: SetUserOptions): Promise<void>;
 
+  // Helper to check if user overrides are allowed for a key
+  canUserOverride(key: string): boolean;
+
   invalidate(key: string, userId?: string | null | "*"): Promise<void>;
 }
 
@@ -208,9 +211,11 @@ export class ConfigServiceImpl implements ConfigService {
   private cache = new InMemoryCache();
   private repo: Repo;
   private ttlMinutesCache: { value: number; nextRefreshAt: number } = { value: DEFAULT_TTL_MINUTES, nextRefreshAt: 0 };
+  private allowUserOverrides: Set<string>;
 
-  constructor(opts?: { db?: NodePgDatabase; repo?: Repo }) {
+  constructor(opts?: { db?: NodePgDatabase; repo?: Repo; allowUserOverrides?: Set<string> }) {
     this.repo = opts?.repo ?? new DrizzleRepo(opts?.db ?? (db as any));
+    this.allowUserOverrides = opts?.allowUserOverrides ?? new Set();
   }
 
   private cacheKey(key: string, userId: string | null) {
@@ -287,6 +292,12 @@ export class ConfigServiceImpl implements ConfigService {
 
   async setUserOverride(key: string, userId: string, value: unknown, _opts?: SetUserOptions): Promise<void> {
     const k = normalizeKey(key);
+    
+    // Check if this key allows user overrides
+    if (this.allowUserOverrides.size > 0 && !this.allowUserOverrides.has(k)) {
+      throw new Error(`User overrides not allowed for key: ${k}`);
+    }
+    
     const type = await this.repo.getGlobalType(k);
     if (!type) throw new Error("Cannot set user override without existing global type");
     if (!ensureType(value, type)) throw new Error("Value does not match declared type");
@@ -296,8 +307,20 @@ export class ConfigServiceImpl implements ConfigService {
 
   async deleteUserOverride(key: string, userId: string): Promise<void> {
     const k = normalizeKey(key);
+    
+    // Check if this key allows user overrides
+    if (this.allowUserOverrides.size > 0 && !this.allowUserOverrides.has(k)) {
+      throw new Error(`User overrides not allowed for key: ${k}`);
+    }
+    
     await this.repo.deleteUser(k, userId);
     await this.invalidate(k, userId);
+  }
+
+  // Helper method to check if a key allows user overrides
+  canUserOverride(key: string): boolean {
+    const k = normalizeKey(key);
+    return this.allowUserOverrides.size === 0 || this.allowUserOverrides.has(k);
   }
 
   async invalidate(key: string, userId?: string | null | "*") {
