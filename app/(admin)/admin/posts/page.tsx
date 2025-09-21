@@ -1,47 +1,70 @@
 // SPDX-License-Identifier: Apache-2.0
-import { db } from "@/lib/db";
-import { posts } from "@/drizzle/schema";
-import { desc } from "drizzle-orm";
-import Link from "next/link";
+import { Suspense } from "react";
+import { getPostsWithFilters, type PostsFilter, type PostsSortOptions } from "./actions";
+import PostsManager from "@/components/admin/posts/PostsManager";
 
-export default async function AdminPostsPage() {
-  const rows = await db
-    .select({ id: posts.id, title: posts.title, slug: posts.slug, publishedAt: posts.publishedAt, updatedAt: posts.updatedAt })
-    .from(posts)
-    .orderBy(desc(posts.updatedAt))
-    .limit(50);
+interface SearchParams {
+  search?: string;
+  status?: "published" | "draft";
+  dateFrom?: string;
+  dateTo?: string;
+  hasComments?: string;
+  sortField?: "updatedAt" | "publishedAt" | "title";
+  sortDirection?: "asc" | "desc";
+  page?: string;
+}
+
+export default async function AdminPostsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const page = parseInt(searchParams.page || "1", 10);
+  
+  const filter: PostsFilter = {
+    ...(searchParams.search && { search: searchParams.search }),
+    ...(searchParams.status && { status: searchParams.status }),
+    ...(searchParams.dateFrom && { dateFrom: searchParams.dateFrom }),
+    ...(searchParams.dateTo && { dateTo: searchParams.dateTo }),
+    ...(searchParams.hasComments === "true" && { hasComments: true }),
+  };
+  
+  const sort: PostsSortOptions = {
+    field: searchParams.sortField || "updatedAt",
+    direction: searchParams.sortDirection || "desc",
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Posts</h1>
-        <div className="text-sm text-muted">Showing {rows.length} items</div>
+    <main className="max-w-7xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Posts</h1>
+        <p className="text-muted-foreground">Manage blog posts</p>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/10 text-left">
-            <tr>
-              <th className="px-3 py-2 font-semibold">Title</th>
-              <th className="px-3 py-2 font-semibold">Slug</th>
-              <th className="px-3 py-2 font-semibold">Published</th>
-              <th className="px-3 py-2 font-semibold">Updated</th>
-              <th className="px-3 py-2 font-semibold">View</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.id} className="border-t border-border">
-                <td className="px-3 py-2 font-medium truncate max-w-[40ch]" title={p.title}>{p.title}</td>
-                <td className="px-3 py-2 font-mono text-xs">{p.slug}</td>
-                <td className="px-3 py-2">{p.publishedAt ? new Date(p.publishedAt).toLocaleString() : "—"}</td>
-                <td className="px-3 py-2">{p.updatedAt ? new Date(p.updatedAt).toLocaleString() : "—"}</td>
-                <td className="px-3 py-2"><Link href={`/${p.slug}`} className="rounded-lg border border-border px-2 py-1 hover:bg-muted/20">Open</Link></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+
+      <Suspense
+        fallback={
+          <div className="p-8 text-center">
+            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
+            <p className="mt-2 text-sm text-muted-foreground">Loading posts...</p>
+          </div>
+        }
+      >
+        <PostsManagerWrapper filter={filter} sort={sort} page={page} />
+      </Suspense>
+    </main>
   );
+}
+
+async function PostsManagerWrapper({ 
+  filter, 
+  sort,
+  page 
+}: { 
+  filter: PostsFilter; 
+  sort: PostsSortOptions;
+  page: number; 
+}) {
+  const data = await getPostsWithFilters(filter, sort, page);
+  return <PostsManager initialData={data} filter={filter} sort={sort} page={page} />;
 }
 
