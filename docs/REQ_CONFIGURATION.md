@@ -9,7 +9,7 @@ A dynamic single table for all configuration options. Each option is addressed b
 
 # Key naming
 
-- Keys are dot-separated and uppercased for consistency (e.g., SYSTEM.SITE.TITLE, THEME).
+- Keys are dot-separated and uppercased for consistency (e.g., SYSTEM.SITE.NAME, THEME).
 - Do not store a separate Category column; derive category (e.g., SYSTEM, USER) from the key prefix if needed.
 - Normalize keys at write time to a single canonical format (e.g., uppercase with dots, no spaces).
 - Do not use underscores in keys; use dashes instead (e.g., SYSTEM.CACHE.DEFAULT-TTL).
@@ -217,7 +217,7 @@ Usage example (server):
 const theme = await configService.getString('THEME', { userId: session?.user.id });
 
 // Admin updates global site title and makes it required
-await configService.setGlobal('SYSTEM.SITE.TITLE', 'Narravo', { type: 'string', required: true, actorId: adminId });
+await configService.setGlobal('SYSTEM.SITE.NAME', 'Narravo', { type: 'string', required: true, actorId: adminId });
 
 // User sets their theme override
 await configService.setUserOverride('THEME', userId, 'dark');
@@ -231,8 +231,8 @@ await configService.setUserOverride('THEME', userId, 'dark');
   - allowed_values: ["light", "dark", "system"]
   - global default: value = "light", required = true
   - per-user override: user_id specific value, e.g., "dark"
-- SYSTEM.SITE.TITLE
-  - key: SYSTEM.SITE.TITLE
+- SYSTEM.SITE.NAME
+  - key: SYSTEM.SITE.NAME
   - type: string
   - required = true; global value like "Narravo"
 - SYSTEM.CACHE.DEFAULT-TTL

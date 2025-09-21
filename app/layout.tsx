@@ -6,11 +6,23 @@ import { cookies } from "next/headers";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 
-export const metadata: Metadata = {
-    title: "Narravo",
-    manifest: "/site.webmanifest",
-    description: "Simple, modern blog",
-};
+export async function generateMetadata(): Promise<Metadata> {
+    try {
+        const config = new ConfigServiceImpl({ db });
+        const siteName = (await config.getString("SITE.NAME")) ?? "Narravo";
+        return {
+            title: siteName,
+            manifest: "/site.webmanifest",
+            description: "Simple, modern blog",
+        };
+    } catch {
+        return {
+            title: "Narravo",
+            manifest: "/site.webmanifest",
+            description: "Simple, modern blog",
+        };
+    }
+}
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
     const themeCookie = cookies().get("theme")?.value;

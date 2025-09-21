@@ -144,7 +144,7 @@ Acceptance
 Backed by `configuration` table and `ConfigService`.
 
 6.1 Concepts
-- Keys are UPPERCASE dot-separated namespaces, e.g., `SITE.TITLE`, `SITE.DESCRIPTION`, `THEME.DEFAULT`, `SYSTEM.CACHE.DEFAULT-TTL`.
+- Keys are UPPERCASE dot-separated namespaces, e.g., `SITE.NAME`, `SITE.DESCRIPTION`, `THEME.DEFAULT`, `SYSTEM.CACHE.DEFAULT-TTL`.
 - Types: `string | integer | number | boolean | date | datetime | json`.
 - Values: stored as JSON; validated by type and optional `allowedValues`.
 - Scopes: `global` (userId null) with optional per-user overrides (requires existing global type).

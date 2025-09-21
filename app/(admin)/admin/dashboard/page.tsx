@@ -11,6 +11,7 @@ import {
   ApproveButton,
   SpamButton,
 } from "@/components/admin/DashboardActions";
+import ServerDetails from "@/components/admin/ServerDetails";
 
 export default async function AdminDashboardPage() {
   const [
@@ -57,33 +58,39 @@ export default async function AdminDashboardPage() {
           </div>
         </Link>
       </div>
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h2 className="font-bold">Recent Comments</h2>
-        {recentComments.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">
-            No comments yet.
-          </p>
-        ) : (
-          <ul className="mt-4 space-y-4">
-            {recentComments.map((comment) => (
-              <li key={comment.id} className="flex items-start justify-between">
-                <div>
-                  <p
-                    className="text-sm"
-                    dangerouslySetInnerHTML={{ __html: comment.bodyHtml }}
-                  ></p>
-                  <p className="text-xs text-muted-foreground">
-                    {comment.author.name}
-                  </p>
-                </div>
-                <div className="flex space-x-2">
-                  <ApproveButton commentId={comment.id} />
-                  <SpamButton commentId={comment.id} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h2 className="font-bold">Recent Comments</h2>
+          {recentComments.length === 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">
+              No comments yet.
+            </p>
+          ) : (
+            <ul className="mt-4 space-y-4">
+              {recentComments.map((comment) => (
+                <li
+                  key={comment.id}
+                  className="flex items-start justify-between"
+                >
+                  <div>
+                    <div
+                      className="text-sm"
+                      dangerouslySetInnerHTML={{ __html: comment.bodyHtml }}
+                    ></div>
+                    <p className="text-xs text-muted-foreground">
+                      {comment.author.name}
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <ApproveButton commentId={comment.id} />
+                    <SpamButton commentId={comment.id} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <ServerDetails />
       </div>
     </div>
   );

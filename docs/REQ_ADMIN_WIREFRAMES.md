@@ -169,7 +169,7 @@ Layout (desktop)
 [Table]
 | Key                         | Type     | Scope   | Required | Updated | Actions |
 |-----------------------------|----------|---------|----------|---------|---------|
-| SITE.TITLE                  | string   | Global  | Yes      | 09-19   | Edit    |
+| SITE.NAME                  | string   | Global  | Yes      | 09-19   | Edit    |
 | THEME.DEFAULT               | string   | Global  | No       | 09-18   | Edit    |
 
 [Drawer: Create/Edit]
