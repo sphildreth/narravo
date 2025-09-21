@@ -50,3 +50,4 @@ out/
 # Ignore next-env file (auto-generated)
 next-env.d.ts
 
+/.output.txt
