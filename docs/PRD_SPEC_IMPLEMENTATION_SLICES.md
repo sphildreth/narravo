@@ -398,7 +398,7 @@ Prompt
 ## Slice M — Security Headers & Health
 **Summary:** Add CSP/HSTS/etc; health endpoints.
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - `next.config.mjs` headers function or `middleware.ts` to set:
@@ -410,8 +410,8 @@ Prompt
 - Headers present in responses; `/healthz` and `/readyz` return 200 when healthy
 
 **Tasks (merged from Narravo_Tasks.md — 2025-09-21)**
-- [ ] Security headers via `next.config.mjs` headers() — CSP, HSTS, X-CTO, Referrer-Policy — files: `next.config.mjs` — 1h
-- [ ] Health routes: `/healthz` (DB ping), `/readyz` (DB + S3) — files: `app/healthz/route.ts`, `app/readyz/route.ts`, `lib/s3.ts` — 1h
+- [x] Security headers via `next.config.mjs` headers() — CSP, HSTS, X-CTO, Referrer-Policy — files: `next.config.mjs` — 1h
+- [x] Health routes: `/healthz` (DB ping), `/readyz` (DB + S3) — files: `app/healthz/route.ts`, `app/readyz/route.ts`, `lib/s3.ts` — 1h
 
 ---
 
