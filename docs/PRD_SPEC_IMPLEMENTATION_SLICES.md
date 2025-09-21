@@ -268,7 +268,7 @@ Prompt
 ## Slice H — Rate Limiting & Anti-Abuse
 **Summary:** Enforce limits and basic anti-spam on writes.
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - Rate limits: comments `5/min`, reactions `20/min` (by user+IP)
