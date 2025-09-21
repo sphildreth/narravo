@@ -3,7 +3,7 @@
 import * as React from "react";
 import type { ConfigItem } from "./types";
 import { ValueInput } from "./ValueInput";
-import { coerceToType } from "./util";
+import { coerceToType, formatValueForDisplay } from "./util";
 
 async function postJSON(path: string, body: any) {
   const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -73,6 +73,12 @@ export function ConfigCard({ item, onUpdate, onDelete }: { item: ConfigItem, onU
           )}
         </div>
       </div>
+      {!isEditing && (
+        <div className="mt-2 text-sm">
+          <span className="text-muted">Value: </span>
+          <span className="font-mono break-all">{formatValueForDisplay(item.value, item.type)}</span>
+        </div>
+      )}
       {isEditing && (
         <div className="mt-3 space-y-3">
           <ValueInput type={item.type} value={value} onChange={setValue} />
