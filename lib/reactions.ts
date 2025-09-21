@@ -2,7 +2,6 @@ import { db } from "./db";
 import { reactions, posts, comments } from "../drizzle/schema";
 import { and, eq, count, sql } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
-import { ConfigServiceImpl } from "./config";
 
 export type TargetType = "post" | "comment";
 export type ReactionKind = "like" | "dislike" | "heart" | "laugh" | "thumbsup" | "thumbsdown";
@@ -26,17 +25,6 @@ export async function toggleReaction(
   kind: ReactionKind
 ): Promise<{ added: boolean; error?: string }> {
   try {
-    // Check rate limit
-    const config = new ConfigServiceImpl({ db });
-    const rateLimit = await config.getNumber("RATE.REACTIONS-PER-MINUTE");
-    if (rateLimit == null) {
-      throw new Error("Missing required config: RATE.REACTIONS-PER-MINUTE");
-    }
-
-    // TODO: Implement actual rate limiting in Slice H
-    // For now, we'll just log the rate limit
-    console.log(`Rate limit for reactions: ${rateLimit} per minute`);
-
     // Check if reaction already exists
     const existingReaction = await db
       .select()
