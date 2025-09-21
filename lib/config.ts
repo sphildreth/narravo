@@ -17,8 +17,8 @@ export interface GetOptions {
 
 export interface SetGlobalOptions {
   type?: ConfigType; // required on first insert
-  allowedValues?: unknown[] | null;
-  required?: boolean;
+  allowedValues?: unknown[] | null; // if undefined, preserve existing allowedValues
+  required?: boolean; // if undefined, preserve existing required
   actorId?: string; // reserved for future audit use
 }
 
@@ -36,6 +36,7 @@ export interface ConfigService {
   setGlobal(key: string, value: unknown, opts: SetGlobalOptions): Promise<void>;
   setUserOverride(key: string, userId: string, value: unknown, opts?: SetUserOptions): Promise<void>;
   deleteUserOverride(key: string, userId: string, opts?: SetUserOptions): Promise<void>;
+  deleteGlobal(key: string): Promise<void>;
 
   invalidate(key: string, userId?: string | null | "*"): Promise<void>;
 }
@@ -58,6 +59,11 @@ class InMemoryCache {
   del(k: string) {
     this.store.delete(k);
   }
+  delByPrefix(prefix: string) {
+    for (const key of this.store.keys()) {
+      if (key.startsWith(prefix)) this.store.delete(key);
+    }
+  }
 }
 
 // Single-flight dedupe
@@ -74,9 +80,11 @@ export interface Repo {
   readEffective(key: string, userId: string | null): Promise<any | null>;
   upsertGlobal(key: string, type: ConfigType, value: unknown, allowedValues: unknown[] | null, required: boolean): Promise<void>;
   getGlobalType(key: string): Promise<ConfigType | null>;
+  getGlobalMeta(key: string): Promise<{ type: ConfigType; allowedValues: unknown[] | null; required: boolean } | null>;
   upsertUser(key: string, userId: string, type: ConfigType, value: unknown): Promise<void>;
   deleteUser(key: string, userId: string): Promise<void>;
   getGlobalNumber(key: string): Promise<number | null>;
+  deleteGlobal(key: string): Promise<void>;
 }
 
 class DrizzleRepo implements Repo {
@@ -131,6 +139,16 @@ class DrizzleRepo implements Repo {
     return rows[0]?.type ?? null;
   }
 
+  async getGlobalMeta(key: string) {
+    const rows = await this.db
+      .select({ type: configuration.type, allowedValues: configuration.allowedValues, required: configuration.required })
+      .from(configuration)
+      .where(and(eq(configuration.key, key), isNull(configuration.userId)))
+      .limit(1);
+    if (!rows[0]) return null;
+    return { type: rows[0].type, allowedValues: (rows[0].allowedValues as any) ?? null, required: !!rows[0].required };
+  }
+
   async upsertUser(key: string, userId: string, type: ConfigType, value: unknown) {
     await this.db.execute(sql`
       insert into ${configuration} (${configuration.key}, ${configuration.userId}, ${configuration.type}, ${configuration.value})
@@ -162,6 +180,12 @@ class DrizzleRepo implements Repo {
     } catch {
       return null;
     }
+  }
+
+  async deleteGlobal(key: string): Promise<void> {
+    await this.db
+      .delete(configuration)
+      .where(and(eq(configuration.key, key), isNull(configuration.userId)));
   }
 }
 
@@ -277,19 +301,29 @@ export class ConfigServiceImpl implements ConfigService {
 
   async setGlobal(key: string, value: unknown, opts: SetGlobalOptions): Promise<void> {
     const k = normalizeKey(key);
-    const type = opts.type ?? (await this.repo.getGlobalType(k)) ?? null;
+    // Load existing meta to preserve allowedValues/required when not provided
+    const meta = await this.repo.getGlobalMeta(k);
+    const type = opts.type ?? meta?.type ?? null;
     if (!type) throw new Error("Global config type required on first set");
     if (!ensureType(value, type)) throw new Error("Value does not match declared type");
-    if (!inAllowed(value, opts.allowedValues)) throw new Error("Value not in allowed_values");
-    await this.repo.upsertGlobal(k, type, value, opts.allowedValues ?? null, !!opts.required);
-    await this.invalidate(k, null);
+
+    const finalAllowed = (opts.allowedValues !== undefined ? opts.allowedValues : meta?.allowedValues) ?? null;
+    if (!inAllowed(value, finalAllowed)) throw new Error("Value not in allowed_values");
+
+    const finalRequired = opts.required !== undefined ? !!opts.required : !!meta?.required;
+
+    await this.repo.upsertGlobal(k, type, value, finalAllowed, finalRequired);
+    // Invalidate both global and per-user entries for this key
+    await this.invalidate(k, "*");
   }
 
   async setUserOverride(key: string, userId: string, value: unknown, _opts?: SetUserOptions): Promise<void> {
     const k = normalizeKey(key);
-    const type = await this.repo.getGlobalType(k);
+    const meta = await this.repo.getGlobalMeta(k);
+    const type = meta?.type ?? null;
     if (!type) throw new Error("Cannot set user override without existing global type");
     if (!ensureType(value, type)) throw new Error("Value does not match declared type");
+    if (!inAllowed(value, meta?.allowedValues ?? null)) throw new Error("Value not in allowed_values");
     await this.repo.upsertUser(k, userId, type, value);
     await this.invalidate(k, userId);
   }
@@ -300,8 +334,21 @@ export class ConfigServiceImpl implements ConfigService {
     await this.invalidate(k, userId);
   }
 
+  async deleteGlobal(key: string): Promise<void> {
+    const k = normalizeKey(key);
+    const meta = await this.repo.getGlobalMeta(k);
+    if (!meta) return; // nothing to do
+    if (meta.required) throw new Error("Cannot delete required global configuration");
+    await this.repo.deleteGlobal(k);
+    await this.invalidate(k, "*");
+  }
+
   async invalidate(key: string, userId?: string | null | "*") {
     const k = normalizeKey(key);
+    if (userId === "*") {
+      this.cache.delByPrefix(`config:${k}:`);
+      return;
+    }
     const ck = this.cacheKey(k, userId && userId !== "*" ? userId : null);
     this.cache.del(ck);
     // No cross-process invalidation in MVP

@@ -60,7 +60,10 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
               type="checkbox" 
               className="accent-[var(--brand)]" 
               checked={state.bannerEnabled} 
-              onChange={(e) => setState((s) => ({ ...s, bannerEnabled: e.currentTarget.checked }))} 
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                setState((s) => ({ ...s, bannerEnabled: checked }));
+              }}
             />
             Enable banner
           </label>
@@ -74,7 +77,10 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
                 className="rounded-lg border border-border bg-bg px-3 py-2 text-sm" 
                 placeholder="https://example.com/banner.jpg" 
                 value={state.bannerImageUrl} 
-                onChange={(e) => setState((s) => ({ ...s, bannerImageUrl: e.currentTarget.value }))} 
+                onChange={(e) => {
+                  const v = e.currentTarget.value;
+                  setState((s) => ({ ...s, bannerImageUrl: v }));
+                }}
               />
             </div>
             
@@ -85,7 +91,10 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
                   className="rounded-lg border border-border bg-bg px-3 py-2 text-sm" 
                   placeholder="Alt text for banner image" 
                   value={state.bannerAlt} 
-                  onChange={(e) => setState((s) => ({ ...s, bannerAlt: e.currentTarget.value }))} 
+                  onChange={(e) => {
+                    const v = e.currentTarget.value;
+                    setState((s) => ({ ...s, bannerAlt: v }));
+                  }}
                 />
               </div>
               <div className="grid gap-2">
@@ -94,7 +103,10 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
                   className="rounded-lg border border-border bg-bg px-3 py-2 text-sm" 
                   placeholder="Photo credit" 
                   value={state.bannerCredit} 
-                  onChange={(e) => setState((s) => ({ ...s, bannerCredit: e.currentTarget.value }))} 
+                  onChange={(e) => {
+                    const v = e.currentTarget.value;
+                    setState((s) => ({ ...s, bannerCredit: v }));
+                  }}
                 />
               </div>
             </div>
@@ -110,7 +122,10 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
                   max={1} 
                   step={0.01} 
                   value={state.bannerOverlay} 
-                  onChange={(e) => setState((s) => ({ ...s, bannerOverlay: Number(e.currentTarget.value) }))} 
+                  onChange={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    setState((s) => ({ ...s, bannerOverlay: v }));
+                  }}
                 />
               </div>
               <div className="space-y-2">
@@ -123,7 +138,10 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
                   max={1} 
                   step={0.01} 
                   value={state.bannerFocalX} 
-                  onChange={(e) => setState((s) => ({ ...s, bannerFocalX: Number(e.currentTarget.value) }))} 
+                  onChange={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    setState((s) => ({ ...s, bannerFocalX: v }));
+                  }}
                 />
               </div>
               <div className="space-y-2">
@@ -136,7 +154,10 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
                   max={1} 
                   step={0.01} 
                   value={state.bannerFocalY} 
-                  onChange={(e) => setState((s) => ({ ...s, bannerFocalY: Number(e.currentTarget.value) }))} 
+                  onChange={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    setState((s) => ({ ...s, bannerFocalY: v }));
+                  }}
                 />
               </div>
             </div>
@@ -170,4 +191,3 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
     </div>
   );
 }
-
