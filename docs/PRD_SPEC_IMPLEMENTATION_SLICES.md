@@ -219,7 +219,7 @@ Prompt
 ## Slice F — Moderation Queue (Admin)
 **Summary:** Admin page to review `pending`/`spam`, approve/deny/spam/delete; bulk actions.
 
-- [ ] Completed
+- [x] Completed
 
 **Deliverables**
 - Admin route: `/admin/moderation`
