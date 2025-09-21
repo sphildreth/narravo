@@ -239,3 +239,38 @@ export async function getCommentAttachments(commentIds: string[]): Promise<Recor
   
   return result;
 }
+
+export async function countPendingComments(): Promise<number> {
+  const rows = await db.execute(
+    sql`select count(*)::int as c from comments where status = 'pending'`
+  );
+  const first = Array.isArray(rows) ? rows[0] : (rows as any).rows?.[0];
+  return Number(first?.c ?? 0);
+}
+
+export async function countSpamComments(): Promise<number> {
+  const rows = await db.execute(
+    sql`select count(*)::int as c from comments where status = 'spam'`
+  );
+  const first = Array.isArray(rows) ? rows[0] : (rows as any).rows?.[0];
+  return Number(first?.c ?? 0);
+}
+
+export async function getRecentComments(limit = 5) {
+  const res: any = await db.execute(sql`
+    select c.id, c.body_html as "bodyHtml", c.created_at as "createdAt",
+           u.name as "authorName", u.image as "authorImage"
+    from comments c
+    left join users u on u.id = c.user_id
+    order by c.created_at desc
+    limit ${limit}
+  `);
+
+  const rows: any[] = res.rows ?? (Array.isArray(res) ? res : []);
+  return rows.map((r) => ({
+    id: r.id,
+    bodyHtml: r.bodyHtml,
+    createdAt: new Date(r.createdAt).toISOString(),
+    author: { name: r.authorName ?? null, image: r.authorImage ?? null },
+  }));
+}

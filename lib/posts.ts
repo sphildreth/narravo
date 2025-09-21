@@ -74,3 +74,10 @@ export async function getPostBySlugWithReactions(slug: string, userId?: string) 
         },
     };
 }
+
+export async function countPublishedPosts(): Promise<number> {
+  const rowsRes: any = await db.execute(
+    sql`select count(*)::int as c from posts where published_at is not null`
+  );
+  return Number(rowsRes.rows?.[0]?.c ?? 0);
+}
