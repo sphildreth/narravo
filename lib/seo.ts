@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { listPosts } from "@/lib/posts";
-import { getArchiveMonths } from "@/lib/archives";
+import { listArchiveMonths } from "@/lib/archives"; // Use listArchiveMonths
 import type { PostDTO } from "@/src/types/content";
 import type { Metadata } from "next";
 
@@ -30,9 +30,28 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
   } while (nextCursor);
 
   // Add archives
-  const archiveMonths = await getArchiveMonths();
+  const archiveMonths = await listArchiveMonths();
+  const years = new Set<number>(); // To keep track of unique years for yearly archives
+
   archiveMonths.forEach((archive) => {
-    urls.push(`<url><loc>${siteUrl}/archive/${archive.slug}</loc></url>`);
+    // Add monthly archive URL
+    const monthUrl = `${siteUrl}/archives/${archive.year}/${String(archive.month).padStart(2, '0')}`;
+    urls.push(`<url><loc>${monthUrl}</loc></url>`);
+    
+    // Add year to set for yearly archives
+    years.add(archive.year);
+  });
+
+  // Add yearly archive URLs
+  years.forEach(year => {
+    const yearUrl = `${siteUrl}/archives/${year}`;
+    urls.push(`<url><loc>${yearUrl}</loc></url>`);
+  });
+
+  // Add monthly RSS feed URLs
+  archiveMonths.forEach((archive) => {
+    const rssUrl = `${siteUrl}/rss-feed/${archive.year}/${String(archive.month).padStart(2, '0')}`;
+    urls.push(`<url><loc>${rssUrl}</loc></url>`);
   });
 
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>

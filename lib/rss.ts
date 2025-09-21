@@ -1,131 +1,80 @@
 // SPDX-License-Identifier: Apache-2.0
-import { db } from "./db";
-import { posts } from "../drizzle/schema";
-import { desc, and, isNotNull, gte, lt } from "drizzle-orm";
+import { listPosts } from "./posts";
+import { getPostsByYearAndMonth } from "./archives";
 
-export interface RSSPost {
-  id: string;
-  slug: string;
+export type SiteMetadata = {
   title: string;
-  html: string;
-  excerpt: string | null;
-  publishedAt: Date;
-  guid: string | null;
+  url: string;
+  description: string;
+};
+
+export function getSiteMetadata(): SiteMetadata {
+  const title = process.env.NEXT_PUBLIC_SITE_NAME ?? "Narravo";
+  const url = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const description = process.env.NEXT_PUBLIC_SITE_DESCRIPTION ?? "Simple, modern blog";
+  return { title, url, description };
 }
 
-export interface RSSFeedData {
+export async function getPostsForRSS(limit: number) {
+  const { items } = await listPosts({ limit });
+  return items;
+}
+
+function escapeXML(str: string) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function generateRSSXML(feed: {
   title: string;
+  url: string;
   description: string;
   link: string;
-  posts: RSSPost[];
   lastBuildDate: Date;
+  posts: Array<{ slug: string; title: string; excerpt?: string | null; publishedAt?: string | null }>
+}) {
+  const items = feed.posts.map((p) => {
+    const link = `${feed.url}/${p.slug}`;
+    const pubDate = p.publishedAt ? new Date(p.publishedAt).toUTCString() : undefined;
+    return `
+      <item>
+        <title>${escapeXML(p.title)}</title>
+        <link>${escapeXML(link)}</link>
+        <guid isPermaLink="true">${escapeXML(link)}</guid>
+        ${p.excerpt ? `<description>${escapeXML(p.excerpt)}</description>` : ""}
+        ${pubDate ? `<pubDate>${pubDate}</pubDate>` : ""}
+      </item>
+    `;
+  });
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+  <rss version="2.0">
+    <channel>
+      <title>${escapeXML(feed.title)}</title>
+      <link>${escapeXML(feed.link)}</link>
+      <description>${escapeXML(feed.description)}</description>
+      <lastBuildDate>${feed.lastBuildDate.toUTCString()}</lastBuildDate>
+      ${items.join("\n")}
+    </channel>
+  </rss>`;
+  return xml;
 }
 
-/**
- * Get posts for RSS feed
- */
-export async function getPostsForRSS(limit = 20): Promise<RSSPost[]> {
-  const result = await db
-    .select({
-      id: posts.id,
-      slug: posts.slug,
-      title: posts.title,
-      html: posts.html,
-      excerpt: posts.excerpt,
-      publishedAt: posts.publishedAt,
-      guid: posts.guid,
-    })
-    .from(posts)
-    .where(isNotNull(posts.publishedAt))
-    .orderBy(desc(posts.publishedAt))
-    .limit(limit);
-
-  return result.filter(post => post.publishedAt !== null) as RSSPost[];
-}
-
-/**
- * Get posts for monthly RSS feed
- */
-export async function getMonthlyPostsForRSS(year: number, month: number): Promise<RSSPost[]> {
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 1);
-
-  const result = await db
-    .select({
-      id: posts.id,
-      slug: posts.slug,
-      title: posts.title,
-      html: posts.html,
-      excerpt: posts.excerpt,
-      publishedAt: posts.publishedAt,
-      guid: posts.guid,
-    })
-    .from(posts)
-    .where(
-      and(
-        isNotNull(posts.publishedAt),
-        gte(posts.publishedAt, monthStart),
-        lt(posts.publishedAt, monthEnd)
-      )
-    )
-    .orderBy(desc(posts.publishedAt));
-
-  return result.filter(post => post.publishedAt !== null) as RSSPost[];
-}
-
-/**
- * Generate RSS XML
- */
-export function generateRSSXML(feedData: RSSFeedData): string {
-  const { title, description, link, posts, lastBuildDate } = feedData;
-  
-  const rssItems = posts.map(post => {
-    const postUrl = `${link}/${post.slug}`;
-    const pubDate = post.publishedAt.toUTCString();
-    const guid = post.guid || post.id;
-    
-    // Escape XML content
-    const escapeXML = (str: string) => {
-      return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    };
-
-    return `    <item>
-      <title>${escapeXML(post.title)}</title>
-      <link>${postUrl}</link>
-      <guid isPermaLink="false">${escapeXML(guid)}</guid>
-      <pubDate>${pubDate}</pubDate>
-      <description><![CDATA[${post.excerpt || ''}]]></description>
-      <content:encoded><![CDATA[${post.html}]]></content:encoded>
-    </item>`;
-  }).join('\n');
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
-  <channel>
-    <title>${title}</title>
-    <description>${description}</description>
-    <link>${link}</link>
-    <lastBuildDate>${lastBuildDate.toUTCString()}</lastBuildDate>
-    <language>en-US</language>
-    <atom:link href="${link}/feed.xml" rel="self" type="application/rss+xml" />
-    <generator>Narravo</generator>
-${rssItems}
-  </channel>
-</rss>`;
-}
-
-/**
- * Get site metadata from environment or defaults
- */
-export function getSiteMetadata() {
-  return {
-    title: process.env.SITE_TITLE || "Narravo Blog",
-    description: process.env.SITE_DESCRIPTION || "A modern blog platform",
-    url: process.env.SITE_URL || "https://localhost:3000",
-  };
+export async function generateMonthlyRssFeed(year: number, month: number): Promise<string> {
+  const site = getSiteMetadata();
+  const monthName = new Date(year, month - 1).toLocaleString("default", { month: "long" });
+  const posts = await getPostsByYearAndMonth(year, month, 1, 50);
+  const xml = generateRSSXML({
+    title: `${site.title} - Archive: ${monthName} ${year}`,
+    description: site.description,
+    url: site.url,
+    link: `${site.url}/rss-feed/${year}/${String(month).padStart(2, "0")}`,
+    lastBuildDate: new Date(),
+    posts: posts.map((p) => ({ slug: p.slug, title: p.title, publishedAt: p.publishedAt?.toISOString?.() ?? null })),
+  });
+  return xml;
 }

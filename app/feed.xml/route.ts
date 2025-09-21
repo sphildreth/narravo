@@ -20,11 +20,14 @@ export async function GET() {
   const posts = await getPostsForRSS(latestCount);
   const siteMetadata = getSiteMetadata();
 
+  const firstPublished = posts.find((p) => !!p.publishedAt)?.publishedAt ?? null;
+  const lastBuildDate = firstPublished ? new Date(firstPublished) : new Date();
+
   const feedData = {
     ...siteMetadata,
     posts,
     link: siteMetadata.url,
-    lastBuildDate: posts.length > 0 && posts[0] ? new Date(posts[0].publishedAt) : new Date(),
+    lastBuildDate,
   };
 
   const xml = generateRSSXML(feedData);

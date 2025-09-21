@@ -57,13 +57,13 @@ describe("Backup and Restore Scripts", () => {
       ], null, 2));
 
       const testBackupPath = path.join(testDir, "manifest-test.zip");
-      const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
-      await fs.writeFile(testBackupPath, zipBuffer);
+      const zipBytes: Uint8Array = await zip.generateAsync({ type: "uint8array" });
+      await fs.writeFile(testBackupPath, zipBytes);
 
       // Verify we can read it back
       const readBuffer = await fs.readFile(testBackupPath);
-      const readZip = await JSZip.loadAsync(readBuffer);
-      
+      const readZip = await JSZip.loadAsync(new Uint8Array(readBuffer));
+
       expect(readZip.file("manifest.json")).toBeTruthy();
       expect(readZip.file("db/posts.json")).toBeTruthy();
 
@@ -88,12 +88,12 @@ describe("Backup and Restore Scripts", () => {
         "reactions",
         "redirects",
         "configuration"
-      ];
+      ] as const;
 
-      const manifest = {
+      const manifest: any = {
         version: 1,
         createdUtc: new Date().toISOString(),
-        tables: {} as any,
+        tables: {} as Record<string, any>,
         media: [],
         counts: {
           posts: 0,
@@ -106,7 +106,7 @@ describe("Backup and Restore Scripts", () => {
       };
 
       tables.forEach(table => {
-        const data = [];
+        const data: unknown[] = [];
         zip.file(`db/${table}.json`, JSON.stringify(data, null, 2));
         manifest.tables[table] = {
           filename: `db/${table}.json`,
@@ -118,12 +118,12 @@ describe("Backup and Restore Scripts", () => {
       zip.file("manifest.json", JSON.stringify(manifest, null, 2));
 
       const testBackupPath = path.join(testDir, "complete-structure.zip");
-      const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
-      await fs.writeFile(testBackupPath, zipBuffer);
+      const zipBytes: Uint8Array = await zip.generateAsync({ type: "uint8array" });
+      await fs.writeFile(testBackupPath, zipBytes);
 
       // Verify all files exist
-      const readZip = await JSZip.loadAsync(await fs.readFile(testBackupPath));
-      
+      const readZip = await JSZip.loadAsync(new Uint8Array(await fs.readFile(testBackupPath)));
+
       tables.forEach(table => {
         expect(readZip.file(`db/${table}.json`)).toBeTruthy();
       });
@@ -161,10 +161,10 @@ describe("Backup and Restore Scripts", () => {
       zip.file("manifest.json", JSON.stringify(manifest, null, 2));
 
       const mediaBackupPath = path.join(testDir, "media-manifest.zip");
-      const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
-      await fs.writeFile(mediaBackupPath, zipBuffer);
+      const zipBytes: Uint8Array = await zip.generateAsync({ type: "uint8array" });
+      await fs.writeFile(mediaBackupPath, zipBytes);
 
-      const readZip = await JSZip.loadAsync(await fs.readFile(mediaBackupPath));
+      const readZip = await JSZip.loadAsync(new Uint8Array(await fs.readFile(mediaBackupPath)));
       const readManifest = JSON.parse(
         await readZip.file("manifest.json")!.async("text")
       );
@@ -243,7 +243,8 @@ describe("Backup and Restore Scripts", () => {
       });
 
       expect(filtered).toHaveLength(1);
-      expect(filtered[0].slug).toBe("middle-post");
+      const only = filtered[0] as { slug: string };
+      expect(only.slug).toBe("middle-post");
     });
   });
 });

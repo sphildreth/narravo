@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getRedirects } from "@/lib/redirects";
+import { getRedirectsEdge } from "@/lib/redirectsEdge";
 
 // This is a simple in-memory cache. For a real app, you might use
 // something more robust like Redis or Next.js's Data Cache with revalidation.
@@ -9,10 +9,10 @@ let redirectsCache: { fromPath: string; toPath: string }[] | null = null;
 let cacheTimestamp = 0;
 const CACHE_DURATION_MS = 60 * 1000; // 1 minute
 
-async function getCachedRedirects() {
+async function getCachedRedirects(request: NextRequest) {
   const now = Date.now();
   if (!redirectsCache || now - cacheTimestamp > CACHE_DURATION_MS) {
-    redirectsCache = await getRedirects();
+    redirectsCache = await getRedirectsEdge(request);
     cacheTimestamp = now;
     console.log(`[middleware] Refreshed redirects cache: ${redirectsCache.length} entries`);
   }
@@ -20,7 +20,7 @@ async function getCachedRedirects() {
 }
 
 export async function middleware(request: NextRequest) {
-  const redirects = await getCachedRedirects();
+  const redirects = await getCachedRedirects(request);
   const pathname = request.nextUrl.pathname;
 
   if (redirects) {

@@ -6,13 +6,11 @@
  */
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { listArchiveMonths, type ArchiveMonth as BaseArchiveMonth } from "./archives"; // Import from archives.ts
 
-export type ArchiveMonth = {
-  year: number;
-  month: number;     // 1-12
+export type ArchiveMonth = BaseArchiveMonth & {
   key: string;       // YYYY-MM
   label: string;     // e.g., "September 2025"
-  count: number;
 };
 
 export type RecentPost = {
@@ -23,26 +21,11 @@ export type RecentPost = {
 };
 
 export async function getArchiveMonths(limit: number = 24): Promise<ArchiveMonth[]> {
-  const rowsRes: any = await db.execute(sql`
-    with base as (
-      select coalesce(p.published_at, p.created_at) as dt
-      from posts p
-      where coalesce(p.published_at, p.created_at) is not null
-    )
-    select
-      extract(year from dt)::int as year,
-      extract(month from dt)::int as month,
-      to_char(date_trunc('month', dt), 'YYYY-MM') as key,
-      to_char(date_trunc('month', dt), 'FMMonth YYYY') as label,
-      count(*)::int as count
-    from base
-    group by 1,2,3,4
-    order by year desc, month desc
-    limit ${limit}
-  `);
-  const rows: any[] = rowsRes.rows ?? (Array.isArray(rowsRes) ? rowsRes : []);
-  return rows.map((r:any) => ({
-    year: Number(r.year), month: Number(r.month), key: String(r.key), label: String(r.label), count: Number(r.count)
+  const months = await listArchiveMonths();
+  return months.slice(0, limit).map(m => ({
+    ...m,
+    key: `${m.year}-${String(m.month).padStart(2, '0')}`,
+    label: new Date(m.year, m.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' }),
   }));
 }
 

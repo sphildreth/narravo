@@ -1,11 +1,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Get S3 hostname for CSP
-// Temporarily disable S3/R2 hostname extraction for CSP until Slice E is implemented and S3_ENDPOINT/R2_ENDPOINT are properly configured.
-const s3Hostname = "";
-// const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT;
-// // We just need the hostname.
-// const s3Hostname = s3Endpoint ? new URL(s3Endpoint).hostname : "";
+const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || "";
+const s3Hostname = (() => {
+  try {
+    return s3Endpoint ? new URL(s3Endpoint).hostname : "";
+  } catch {
+    return "";
+  }
+})();
+
+const imgSrc = [
+  "'self'",
+  "data:",
+  "blob:",
+  s3Hostname,
+  "avatars.githubusercontent.com",
+  "images.unsplash.com",
+  "lh3.googleusercontent.com",
+].filter(Boolean).join(" ");
+
+const mediaSrc = [
+  "'self'",
+  s3Hostname,
+].filter(Boolean).join(" ");
 
 const securityHeaders = [
   {
@@ -26,8 +44,8 @@ const securityHeaders = [
       `default-src 'self';` +
       `script-src 'self' 'unsafe-eval' 'unsafe-inline';` + // Next.js needs unsafe-eval/inline for dev/HMR
       `style-src 'self' 'unsafe-inline';` +
-      `img-src 'self' data: ${s3Hostname};` +
-      `media-src 'self' ${s3Hostname};` +
+      `img-src ${imgSrc};` +
+      `media-src ${mediaSrc};` +
       `font-src 'self';` +
       `object-src 'none';` +
       `base-uri 'self';` +
@@ -43,6 +61,14 @@ const securityHeaders = [
 const nextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: '5mb' },
+  },
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      ...(s3Hostname ? [{ protocol: 'https', hostname: s3Hostname }] : []),
+    ],
   },
   async headers() {
     return [

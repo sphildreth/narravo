@@ -33,6 +33,7 @@ async function main() {
   // Feeds & archives
   await service.setGlobal("FEED.LATEST-COUNT", 20, { type: "integer", required: true });
   await service.setGlobal("ARCHIVE.MONTHS-SIDEBAR", 24, { type: "integer", required: true });
+  await service.setGlobal("PUBLIC.ARCHIVE.PAGE-SIZE", 10, { type: "integer", required: true }); // Add this line
 
   // Moderation defaults
   await service.setGlobal("MODERATION.PAGE-SIZE", 20, { type: "integer", required: true });
