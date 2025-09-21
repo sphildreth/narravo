@@ -128,6 +128,18 @@ export default function ModerationQueue({ initialData, filter, page }: Moderatio
               >
                 Delete
               </button>
+              <button
+                onClick={() => {
+                  if (confirm(`Are you sure you want to permanently delete ${selectedIds.length} comment(s)? This action cannot be undone and will also remove all attachments.`)) {
+                    handleModerationAction("hardDelete");
+                  }
+                }}
+                disabled={isPending}
+                className="px-3 py-1 bg-red-800 text-white rounded text-sm hover:bg-red-900 disabled:opacity-50"
+                title="Permanently delete selected comments"
+              >
+                Hard Delete
+              </button>
             </div>
           </div>
         </div>
@@ -198,8 +210,8 @@ function ModerationFilters({
 
   return (
     <div className="bg-white dark:bg-gray-800 border rounded-lg p-4">
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="lg:col-span-2">
           <form onSubmit={handleSearchSubmit} className="flex gap-2">
             <input
               type="text"
@@ -217,13 +229,17 @@ function ModerationFilters({
           </form>
         </div>
         
-        <div className="flex gap-2">
+        <div>
+          <label htmlFor="status" className="block text-sm font-medium mb-1">
+            Status
+          </label>
           <select
+            id="status"
             value={filter.status || ""}
             onChange={(e) => onFilterChange({ 
               status: e.target.value as any || undefined 
             })}
-            className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Status</option>
             <option value="pending">Pending</option>
@@ -231,6 +247,19 @@ function ModerationFilters({
             <option value="spam">Spam</option>
             <option value="deleted">Deleted</option>
           </select>
+        </div>
+
+        <div>
+          <label htmlFor="dateFrom" className="block text-sm font-medium mb-1">
+            Date Range
+          </label>
+          <input
+            id="dateFrom"
+            type="date"
+            value={(filter as any).dateFrom || ""}
+            onChange={(e) => onFilterChange({ dateFrom: e.target.value || undefined } as any)}
+            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
       </div>
     </div>
@@ -253,12 +282,69 @@ function CommentCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.bodyMd || "");
+  const [showReplyForm, setShowReplyForm] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
 
   const handleEdit = () => {
     if (editText.trim() && editText !== comment.bodyMd) {
       onModerationAction("edit", undefined, { id: comment.id, bodyMd: editText.trim() });
       setIsEditing(false);
     }
+  };
+
+  const handleReply = async () => {
+    if (!replyText.trim()) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("postId", comment.postId);
+      formData.append("parentId", comment.id);
+      formData.append("bodyMd", replyText.trim());
+
+      // Import the action dynamically to avoid server action issues in client component
+      const { createAdminReply } = await import("@/app/(admin)/admin/moderation/actions");
+      const result = await createAdminReply(formData);
+
+      if (result.success) {
+        setReplyText("");
+        setShowReplyForm(false);
+        // Refresh the page to show the new reply
+        window.location.reload();
+      } else {
+        alert(result.error || "Failed to create reply");
+      }
+    } catch (error) {
+      console.error("Error creating reply:", error);
+      alert("Failed to create reply");
+    }
+  };
+
+  const handleRemoveAttachment = async (attachmentId: string) => {
+    if (!confirm("Are you sure you want to remove this attachment?")) return;
+
+    try {
+      const { removeCommentAttachment } = await import("@/app/(admin)/admin/moderation/actions");
+      const result = await removeCommentAttachment(attachmentId);
+
+      if (result.success) {
+        // Refresh the page to update the attachments list
+        window.location.reload();
+      } else {
+        alert(result.error || "Failed to remove attachment");
+      }
+    } catch (error) {
+      console.error("Error removing attachment:", error);
+      alert("Failed to remove attachment");
+    }
+  };
+
+  const handleHardDelete = () => {
+    if (!confirm("Are you sure you want to permanently delete this comment? This action cannot be undone and will also remove all attachments.")) {
+      return;
+    }
+
+    onModerationAction("hardDelete", [comment.id]);
   };
 
   const statusBadgeClass = {
@@ -297,9 +383,17 @@ function CommentCard({
                 {comment.postTitle}
               </a>
             </div>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass}`}>
-              {comment.status}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass}`}>
+                {comment.status}
+              </span>
+              <button
+                onClick={() => setShowDetails(!showDetails)}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                {showDetails ? "Hide Details" : "Show Details"}
+              </button>
+            </div>
           </div>
 
           {/* Content */}
@@ -350,12 +444,59 @@ function CommentCard({
           {/* Attachments */}
           {comment.attachments.length > 0 && (
             <div className="mb-3">
-              <div className="flex gap-2 flex-wrap">
+              <h4 className="text-sm font-medium mb-2">Attachments:</h4>
+              <div className="space-y-2">
                 {comment.attachments.map((attachment) => (
-                  <div key={attachment.id} className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                    {attachment.kind}: {attachment.url.split("/").pop()}
+                  <div key={attachment.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-2 rounded">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
+                        {attachment.kind}
+                      </span>
+                      <span className="text-sm truncate">{attachment.url.split("/").pop()}</span>
+                      {attachment.posterUrl && (
+                        <span className="text-xs text-muted-foreground">(with poster)</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleRemoveAttachment(attachment.id)}
+                      className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200"
+                      title="Remove attachment"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Admin Reply Form */}
+          {showReplyForm && (
+            <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md">
+              <h4 className="text-sm font-medium mb-2">Reply as Admin:</h4>
+              <textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Write your admin reply..."
+                className="w-full p-2 border rounded-md min-h-[80px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={handleReply}
+                  disabled={!replyText.trim() || isPending}
+                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Post Reply
+                </button>
+                <button
+                  onClick={() => {
+                    setShowReplyForm(false);
+                    setReplyText("");
+                  }}
+                  className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           )}
@@ -390,7 +531,42 @@ function CommentCard({
             >
               Edit
             </button>
+            <button
+              onClick={() => setShowReplyForm(!showReplyForm)}
+              disabled={isPending}
+              className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 disabled:opacity-50"
+            >
+              Reply
+            </button>
+            <button
+              onClick={handleHardDelete}
+              disabled={isPending}
+              className="px-3 py-1 bg-red-800 text-white rounded text-sm hover:bg-red-900 disabled:opacity-50"
+              title="Permanently delete comment and all attachments"
+            >
+              Hard Delete
+            </button>
           </div>
+
+          {/* Additional Details (when expanded) */}
+          {showDetails && (
+            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-medium">Comment ID:</span> <code className="text-xs">{comment.id}</code>
+                </div>
+                <div>
+                  <span className="font-medium">Author Email:</span> {comment.author.email || "—"}
+                </div>
+                <div>
+                  <span className="font-medium">User ID:</span> <code className="text-xs">{comment.userId || "—"}</code>
+                </div>
+                <div>
+                  <span className="font-medium">Created:</span> {new Date(comment.createdAt).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
