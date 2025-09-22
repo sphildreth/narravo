@@ -2,6 +2,7 @@
 /* components/Navbar.withTheme.tsx — example of using the toggle in a navbar */
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
+import SearchBar from "@/components/SearchBar";
 import { auth } from "@/lib/auth";
 import UserMenu from "@/components/auth/UserMenu";
 import { ConfigServiceImpl } from "@/lib/config";
@@ -41,6 +42,7 @@ export default async function Navbar({ context, variant }: { context?: "admin" |
                     <span className="font-extrabold tracking-wide text-xs uppercase text-fg">{siteName}</span>
                 </Link>
                 <div className="flex items-center gap-3">
+                    {effectiveContext === "site" && <SearchBar />}
                     <ThemeToggle initialTheme={theme} />
                     {effectiveContext === "admin" && (
                         <Link href="/" className="inline-flex items-center h-9 border border-border px-3 rounded-xl bg-bg text-fg text-sm font-semibold hover:border-accent">View site</Link>
