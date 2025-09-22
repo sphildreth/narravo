@@ -119,7 +119,7 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
   const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;
   const windowStart = new Date(Date.now() - sessionWindowMinutes * 60 * 1000);
 
-  // Check for existing view in session window
+  // Check for existing view in session window (session-scoped dedupe)
   if (sessionId) {
     const existingView = await db
       .select({ id: postViewEvents.id })
@@ -135,6 +135,27 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
 
     if (existingView.length > 0) {
       return false; // Skip duplicate view
+    }
+  }
+  
+  // If no sessionId, best-effort dedupe by IP hash within window
+  if (!sessionId && ip) {
+    const ipHashForDedupe = hashIp(ip);
+    if (ipHashForDedupe) {
+      const existingByIp = await db
+        .select({ id: postViewEvents.id })
+        .from(postViewEvents)
+        .where(
+          and(
+            eq(postViewEvents.postId, postId),
+            eq(postViewEvents.ipHash, ipHashForDedupe),
+            gte(postViewEvents.ts, windowStart)
+          )
+        )
+        .limit(1);
+      if (existingByIp.length > 0) {
+        return false;
+      }
     }
   }
 
@@ -167,21 +188,52 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
 
       // Upsert daily views (if table exists). Swallow missing-table errors.
       try {
+        // Determine if this is considered unique for the day
+        let isUniqueForDay = false;
+        if (sessionId) {
+          const seen = await tx
+            .select({ id: postViewEvents.id })
+            .from(postViewEvents)
+            .where(
+              and(
+                eq(postViewEvents.postId, postId),
+                eq(postViewEvents.sessionId, sessionId),
+                gte(postViewEvents.ts, new Date(`${currentDate}T00:00:00.000Z`))
+              )
+            )
+            .limit(1);
+          isUniqueForDay = seen.length === 0;
+        } else if (ip) {
+          const ipHashForDay = hashIp(ip);
+          if (ipHashForDay) {
+            const seen = await tx
+              .select({ id: postViewEvents.id })
+              .from(postViewEvents)
+              .where(
+                and(
+                  eq(postViewEvents.postId, postId),
+                  eq(postViewEvents.ipHash, ipHashForDay),
+                  gte(postViewEvents.ts, new Date(`${currentDate}T00:00:00.000Z`))
+                )
+              )
+              .limit(1);
+            isUniqueForDay = seen.length === 0;
+          }
+        }
+
         await tx
           .insert(postDailyViews)
           .values({
             day: currentDate,
             postId,
             views: 1,
-            uniques: 1,
+            uniques: isUniqueForDay ? 1 : 0,
           })
           .onConflictDoUpdate({
             target: [postDailyViews.day, postDailyViews.postId],
             set: {
               views: sql`${postDailyViews.views} + 1`,
-              // For uniques, we'd need more complex logic to track if this is a unique view
-              // For MVP, we'll approximate by checking if this session hasn't been seen today
-              uniques: sessionId ? sql`${postDailyViews.uniques} + 1` : postDailyViews.uniques,
+              uniques: isUniqueForDay ? sql`${postDailyViews.uniques} + 1` : postDailyViews.uniques,
             },
           });
       } catch (err) {
@@ -200,7 +252,7 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
 export async function getTrendingPosts({ days = 7, limit = 10 }: { days?: number; limit?: number }): Promise<PostDTO[]> {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
-  const startDateStr = startDate.toISOString().split('T')[0];
+  const startDateStr: string = startDate.toISOString().slice(0, 10);
   
   if (!startDateStr) throw new Error("Invalid start date");
 
@@ -361,3 +413,74 @@ export const __testHelpers__ = {
   parseReferer,
   parseLang,
 };
+
+// Dashboard summary: totals and top posts
+export async function getSiteAnalyticsSummary({ days = 7, topN = 5 }: { days?: number; topN?: number }) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const startDateStr = startDate.toISOString().split('T')[0];
+
+  // Total views all time
+  const totalRows = await db
+    .select({ total: sum(posts.viewsTotal) })
+    .from(posts)
+    .where(sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`);
+  const totalViewsAllTime = Number(totalRows[0]?.total || 0);
+
+  // Recent views in last N days (sum of daily views)
+  let viewsLastNDays = 0;
+  try {
+    const recentRows = await db
+      .select({ total: sum(postDailyViews.views) })
+      .from(postDailyViews)
+      .where(sql`${postDailyViews.day} >= ${startDateStr}`);
+    viewsLastNDays = Number(recentRows[0]?.total || 0);
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    viewsLastNDays = 0;
+  }
+
+  // Top posts by last N days
+  let topPosts: PostDTO[] = [];
+  try {
+    const rows = await db
+      .select({
+        id: posts.id,
+        slug: posts.slug,
+        title: posts.title,
+        totalViews: posts.viewsTotal,
+        recent: sum(postDailyViews.views),
+      })
+      .from(posts)
+      .leftJoin(postDailyViews, eq(posts.id, postDailyViews.postId))
+      .where(
+        and(
+          sql`${postDailyViews.day} >= ${startDateStr}`,
+          sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`
+        )
+      )
+      .groupBy(posts.id, posts.slug, posts.title, posts.viewsTotal)
+      .orderBy(desc(sum(postDailyViews.views)))
+      .limit(topN);
+
+    topPosts = rows.map(r => ({
+      id: r.id,
+      slug: r.slug,
+      title: r.title,
+      totalViews: r.totalViews,
+      viewsLastNDays: Number(r.recent) || 0,
+    }));
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    // Fallback to top by total views
+    const rows = await db
+      .select({ id: posts.id, slug: posts.slug, title: posts.title, totalViews: posts.viewsTotal })
+      .from(posts)
+      .where(sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`)
+      .orderBy(desc(posts.viewsTotal))
+      .limit(topN);
+    topPosts = rows.map(r => ({ id: r.id, slug: r.slug, title: r.title, totalViews: r.totalViews, viewsLastNDays: 0 }));
+  }
+
+  return { totalViewsAllTime, viewsLastNDays, topPosts };
+}

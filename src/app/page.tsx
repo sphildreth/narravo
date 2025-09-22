@@ -3,7 +3,6 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import LoadMore from "@/components/LoadMore";
 import ProseExample from "@/components/Prose";
-import TrendingPosts from "@/components/analytics/TrendingPosts";
 import { listPosts } from "@/lib/posts";
 import { getPostViewCounts } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
@@ -46,7 +45,6 @@ export default async function Page() {
         <div className="order-2 md:order-1">
           <div className="space-y-6">
             <Sidebar />
-            <TrendingPosts />
           </div>
         </div>
         <div className="order-1 md:order-2">

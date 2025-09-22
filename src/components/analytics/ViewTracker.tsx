@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 
 interface ViewTrackerProps {
   postId: string;
+  sessionWindowMinutes?: number;
 }
 
 interface SessionData {
@@ -69,19 +70,19 @@ function trackView(postId: string, sessionId: string) {
   });
 }
 
-export function ViewTracker({ postId }: ViewTrackerProps) {
+export function ViewTracker({ postId, sessionWindowMinutes = 30 }: ViewTrackerProps) {
   useEffect(() => {
     // Don't track in development if in Next.js preview mode
     if (process.env.NODE_ENV === "development" && window.location.search.includes("preview")) {
       return;
     }
 
-    // Get or create session
-    const sessionId = getOrCreateSession(30); // 30 minutes default
+  // Get or create session using configured window
+  const sessionId = getOrCreateSession(sessionWindowMinutes);
 
     // Track the view
     trackView(postId, sessionId);
-  }, [postId]);
+  }, [postId, sessionWindowMinutes]);
 
   // This component renders nothing
   return null;

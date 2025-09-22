@@ -12,6 +12,7 @@ import {
   SpamButton,
 } from "@/components/admin/DashboardActions";
 import ServerDetails from "@/components/admin/ServerDetails";
+import AdminActivityWidget from "@/components/admin/analytics/AdminActivityWidget";
 
 export default async function AdminDashboardPage() {
   const [
@@ -58,6 +59,8 @@ export default async function AdminDashboardPage() {
           </div>
         </Link>
       </div>
+      {/* Site analytics summary */}
+      <AdminActivityWidget />
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-card p-4">
           <h2 className="font-bold">Recent Comments</h2>

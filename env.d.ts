@@ -18,6 +18,8 @@ declare namespace NodeJS {
     R2_ACCESS_KEY_ID?: string;
     R2_SECRET_ACCESS_KEY?: string;
     R2_BUCKET?: string;
+    // Analytics
+    ANALYTICS_IP_SALT?: string;
     [key: `NEXT_PUBLIC_${string}`]: string | undefined;
   }
 }

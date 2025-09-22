@@ -9,6 +9,8 @@ import { generatePostMetadata, generatePostJsonLd } from "@/lib/seo";
 import CommentsSection from "@/components/comments/CommentsSection";
 import ReactionButtons from "@/components/reactions/ReactionButtons";
 import { ViewTracker } from "@/components/analytics/ViewTracker";
+import { ConfigServiceImpl } from "@/lib/config";
+import { db } from "@/lib/db";
 import DeletePostButton from "@/components/admin/DeletePostButton";
 import Link from "next/link";
 
@@ -29,6 +31,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function PostPage({ params }: Props) {
+  const config = new ConfigServiceImpl({ db });
+  const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;
   const session = await getSession();
   const userId = session?.user?.id || undefined;
   const isAdmin = Boolean(session?.user?.isAdmin);
@@ -65,7 +69,7 @@ export default async function PostPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: jsonLd }}
       />
       <main className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
-        <ViewTracker postId={post.id} />
+  <ViewTracker postId={post.id} sessionWindowMinutes={sessionWindowMinutes} />
         <div className="order-1 md:order-2 grid gap-6">
             {isAdmin && (
                 <div className="px-6 p-3 bg-amber-50 border border-amber-200 rounded-lg">

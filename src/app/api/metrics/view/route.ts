@@ -28,14 +28,14 @@ function getClientIp(request: NextRequest): string {
   return "127.0.0.1";
 }
 
-function isRateLimited(ip: string, limit: number): boolean {
+function isRateLimited(ipKey: string, limit: number): boolean {
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 minute window
   
-  const current = rateLimitMap.get(ip);
+  const current = rateLimitMap.get(ipKey);
   
   if (!current || now > current.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
+    rateLimitMap.set(ipKey, { count: 1, resetTime: now + windowMs });
     return false;
   }
   
@@ -77,9 +77,20 @@ export async function POST(request: NextRequest) {
 
     // Get client IP and check rate limiting
     const clientIp = getClientIp(request);
+    // Hash IP for rate limiting when salt exists, else use plain IP in dev
+    const ipSalt = process.env.ANALYTICS_IP_SALT;
+    let ipKey = `P:${clientIp}`;
+    if (ipSalt) {
+      try {
+        const crypto = await import("crypto");
+        ipKey = `H:${crypto.createHmac("sha256", ipSalt).update(clientIp).digest("hex")}`;
+      } catch {
+        // Fallback: keep plain key
+      }
+    }
     const rateLimit = await config.getNumber("RATE.VIEWS-PER-MINUTE") ?? 120;
     
-    if (isRateLimited(clientIp, rateLimit)) {
+    if (isRateLimited(ipKey, rateLimit)) {
       return NextResponse.json(
         { error: { code: "RATE_LIMITED", message: "Too many requests" } },
         { 
@@ -115,9 +126,7 @@ export async function POST(request: NextRequest) {
       lang: acceptLanguage,
     };
     
-    if (sessionId) {
-      recordViewInput.sessionId = sessionId;
-    }
+    if (sessionId) recordViewInput.sessionId = sessionId;
     
     await recordView(recordViewInput);
 
