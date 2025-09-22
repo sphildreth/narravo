@@ -5,9 +5,9 @@ import { posts, redirects, categories, tags, postTags, comments, users, importJo
 import { sanitizeHtml } from "@/lib/sanitize";
 import { getS3Config, S3Service } from "@/lib/s3";
 import slugify from "slugify";
-import fs from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import crypto from "node:crypto";
-import { sql, eq, and } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 
 export interface WxrItem {
   title?: string;
@@ -107,8 +107,7 @@ export interface ImportResult {
 
 export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | null {
   const postType = item["wp:post_type"];
-  const status = item["wp:status"];
-  
+
   // Extract GUID
   let guid: string;
   if (typeof item.guid === "string") {
@@ -238,15 +237,13 @@ async function downloadMedia(url: string, s3Service: S3Service | null, allowedHo
     
     // Check if already exists
     try {
-      const existingUrl = s3Service.getPublicUrl(key);
-      // TODO: Check if file actually exists in S3
-      return existingUrl;
+      return s3Service.getPublicUrl(key);
     } catch {
       // File doesn't exist, upload it
     }
 
     // Upload to S3
-    const { PutObjectCommand, S3Client } = await import("@aws-sdk/client-s3");
+    const { PutObjectCommand } = await import("@aws-sdk/client-s3");
     const putCommand = new PutObjectCommand({
       Bucket: s3Service['bucket'], // Access private property
       Key: key,
@@ -359,7 +356,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     // Parse XML
     if (verbose) console.log("📖 Parsing WXR file...");
-    const xml = await fs.readFile(filePath, "utf-8");
+    const xml = await readFile(filePath, "utf-8");
     const doc = await parseStringPromise(xml, { explicitArray: false, ignoreAttrs: false });
     
     const items = doc.rss?.channel?.item ?? [];
@@ -525,7 +522,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
         // Handle featured image
         let featuredImageUrl: string | undefined;
-        let featuredImageAlt: string | undefined;
+        let featuredImageAlt: string | undefined = undefined;
         if (post.featuredImageId && attachmentMap.has(post.featuredImageId)) {
           const originalUrl = attachmentMap.get(post.featuredImageId)!;
           featuredImageUrl = result.mediaUrls.get(originalUrl) || originalUrl;
@@ -790,7 +787,7 @@ async function run() {
   };
 
   const checkpointPath = `${pathArg}.checkpoint.json`;
-  await fs.writeFile(checkpointPath, JSON.stringify(checkpointData, null, 2));
+  await writeFile(checkpointPath, JSON.stringify(checkpointData, null, 2));
   console.log(`\n💾 Checkpoint saved to: ${checkpointPath}`);
 
   if (result.errors.length > 0) {

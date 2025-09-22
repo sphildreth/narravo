@@ -13,6 +13,7 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import DeletePostButton from "@/components/admin/DeletePostButton";
 import Link from "next/link";
+import Prose from "@/components/Prose";
 
 type Props = {
   params: { slug: string };
@@ -68,7 +69,7 @@ export default async function PostPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd }}
       />
-      <main className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
+      <main className="max-w-screen mx-auto px-6 my-7 grid gap-7">
   <ViewTracker postId={post.id} sessionWindowMinutes={sessionWindowMinutes} />
         <div className="order-1 md:order-2 grid gap-6">
             {isAdmin && (
@@ -108,10 +109,8 @@ export default async function PostPage({ params }: Props) {
               </header>
 
 
-              <div
-                className="prose"
-                dangerouslySetInnerHTML={{ __html: post.bodyHtml ?? "" }}
-              />
+              {/* Render post body with Prose to avoid max-width cap */}
+              <Prose html={post.bodyHtml ?? ""} />
 
               {/* Tags and Category */}
               {(post.tags && post.tags.length > 0) || post.category && (
