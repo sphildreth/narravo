@@ -100,7 +100,7 @@ export default function CommentForm({
           onChange={(e) => setBodyMd(e.target.value)}
           placeholder={placeholder}
           rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+          className="w-full px-3 py-2 resize-vertical"
           disabled={isSubmitting}
         />
       </div>
@@ -114,7 +114,7 @@ export default function CommentForm({
 
       {/* Error Message */}
       {error && (
-        <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded">
+        <div className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded dark:text-red-300 dark:bg-red-950/30 dark:border-red-800">
           {error}
         </div>
       )}
@@ -124,7 +124,7 @@ export default function CommentForm({
         <button
           type="submit"
           disabled={isSubmitting || (!bodyMd.trim() && attachments.length === 0)}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 text-sm font-medium text-brand-contrast bg-brand border border-transparent rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? "Posting..." : "Post Comment"}
         </button>
@@ -134,7 +134,7 @@ export default function CommentForm({
             type="button"
             onClick={handleCancel}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-fg bg-card border border-border rounded-md hover:bg-bg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-50"
           >
             Cancel
           </button>
@@ -142,8 +142,8 @@ export default function CommentForm({
       </div>
 
       {/* Markdown Help */}
-      <div className="text-xs text-gray-500">
-        Supports <strong>**bold**</strong>, <em>*italic*</em>, and [links](url). 
+      <div className="text-xs text-muted">
+        Supports <strong>**bold**</strong>, <em>*italic*</em>, and [links](url).
         Comments are moderated and may take time to appear.
       </div>
     </form>

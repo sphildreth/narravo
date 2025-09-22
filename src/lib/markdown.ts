@@ -14,8 +14,10 @@ export function expandShortcodes(markdown: string): string {
     const attrs: Record<string, string> = {};
     let m: RegExpExecArray | null;
     while ((m = attrRe.exec(attrStr))) {
-      const key = m[1].toLowerCase();
-      let val = m[2];
+      const rawKey = m[1] ?? "";
+      if (!rawKey) continue;
+      const key = rawKey.toLowerCase();
+      let val = m[2] ?? "";
       if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
         val = val.slice(1, -1);
       }

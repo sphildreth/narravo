@@ -48,7 +48,7 @@ export default function CommentNode({ node }: CommentNodeProps) {
       {node.attachments && node.attachments.length > 0 && (
         <div className="mt-3 space-y-2">
           {node.attachments.map((attachment) => (
-            <div key={attachment.id} className="overflow-hidden rounded-lg border border-gray-200">
+            <div key={attachment.id} className="overflow-hidden rounded-lg border border-border">
               {attachment.kind === "image" ? (
                 <img
                   src={attachment.url}

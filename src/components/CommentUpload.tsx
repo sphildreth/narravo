@@ -180,12 +180,12 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled || files.length >= maxFiles}
-          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-fg bg-card border border-border rounded-md hover:bg-bg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Upload className="w-4 h-4" />
           Add media
         </button>
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-muted">
           {files.length}/{maxFiles} files
         </span>
       </div>
@@ -201,7 +201,7 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
 
       {/* Errors */}
       {Object.entries(errors).map(([filename, message]) => (
-        <div key={filename} className="flex items-center gap-2 p-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded">
+        <div key={filename} className="flex items-center gap-2 p-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded dark:text-red-300 dark:bg-red-950/30 dark:border-red-800">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {filename === 'limit' ? message : `${filename}: ${message}`}
         </div>
@@ -209,9 +209,9 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
 
       {/* Uploading Files */}
       {Array.from(uploading).map(fileId => (
-        <div key={fileId} className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-          <span className="text-sm text-gray-600">Uploading {fileId.split('-')[0]}...</span>
+        <div key={fileId} className="flex items-center gap-3 p-3 bg-card border border-border rounded">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand"></div>
+          <span className="text-sm text-muted">Uploading {fileId.split('-')[0]}...</span>
         </div>
       ))}
 
@@ -219,13 +219,13 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
       {files.map((file, index) => {
         const Icon = getFileIcon(file.kind);
         return (
-          <div key={file.key} className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded">
-            <Icon className="w-5 h-5 text-green-600 flex-shrink-0" />
+          <div key={file.key} className="flex items-center gap-3 p-3 bg-accent/10 border border-accent/30 rounded">
+            <Icon className="w-5 h-5 text-accent flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-gray-900 truncate">
+              <div className="text-sm font-medium text-fg truncate">
                 {file.name}
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-muted">
                 {file.kind} • {formatFileSize(file.size)}
               </div>
             </div>
@@ -233,7 +233,7 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
               <button
                 type="button"
                 onClick={() => removeFile(index)}
-                className="p-1 text-gray-400 hover:text-red-600 focus:outline-none"
+                className="p-1 text-muted hover:text-red-600 focus:outline-none"
                 aria-label="Remove file"
               >
                 <X className="w-4 h-4" />
