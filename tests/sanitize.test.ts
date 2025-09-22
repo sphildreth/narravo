@@ -35,6 +35,26 @@ describe("sanitizeHtml", () => {
     expect(out).toContain('target="_blank"');
     expect(out).toContain('rel="noopener noreferrer"');
   });
+
+  it("allows basic table markup", () => {
+    const table = `
+      <table>
+        <thead>
+          <tr><th>Label</th><th>Value</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>First Layer</td><td>30</td></tr>
+          <tr><td>Nozzle</td><td>250</td></tr>
+        </tbody>
+      </table>`;
+    const out = sanitizeHtml(table);
+    expect(out).toContain("<table>");
+    expect(out).toContain("<thead>");
+    expect(out).toContain("<tbody>");
+    expect(out).toContain("<tr>");
+    expect(out).toContain("<th>");
+    expect(out).toContain("<td>");
+  });
 });
 
 describe("sanitizeCommentHtml", () => {

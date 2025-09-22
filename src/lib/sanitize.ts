@@ -12,13 +12,17 @@ export function sanitizeHtml(html: string): string {
       "p", "a", "strong", "em", "code", "pre", "ul", "ol", "li", 
       "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6",
       // Allow safe media tags
-      "video", "source"
+      "video", "source",
+      // Allow tables (needed for WordPress imports)
+      "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col"
     ],
     // Allowed attributes
     ALLOWED_ATTR: [
       "href", "src", "alt", "title", "target", "rel", "controls", "poster",
       // Video-related safe attributes
-      "muted", "loop", "playsinline", "preload", "width", "height", "type"
+      "muted", "loop", "playsinline", "preload", "width", "height", "type",
+      // Table-related safe attributes
+      "colspan", "rowspan", "scope"
     ],
     // Explicitly forbidden attributes (security-critical)
     FORBID_ATTR: [

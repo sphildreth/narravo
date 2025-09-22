@@ -26,9 +26,10 @@ interface CommentNodeProps {
     };
     attachments?: CommentAttachment[];
   };
+  canReact?: boolean;
 }
 
-export default function CommentNode({ node }: CommentNodeProps) {
+export default function CommentNode({ node, canReact = false }: CommentNodeProps) {
   const created = new Date(node.createdAt).toLocaleString();
   
   return (
@@ -76,7 +77,7 @@ export default function CommentNode({ node }: CommentNodeProps) {
           <button className="text-sm text-brand hover:underline">Reply</button>
           <a className="text-sm text-muted hover:underline" href={`#comment-${node.id}`}>Link</a>
         </div>
-        {node.reactions && (
+        {canReact && node.reactions && (
           <ReactionButtons
             targetType="comment"
             targetId={node.id}

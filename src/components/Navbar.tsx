@@ -53,7 +53,7 @@ export default async function Navbar({ context, variant }: { context?: "admin" |
                     {isLoggedIn && userForMenu ? (
                         <UserMenu user={userForMenu} />
                     ) : (
-                        <Link href="/login" className="inline-flex items-center h-9 border border-border px-3 rounded-xl bg-bg text-fg text-sm font-semibold hover:border-accent">Login</Link>
+                        <Link href="/login" className="inline-flex items-center h-9 border border-border px-3 rounded-xl bg-bg text-fg text-sm font-semibold hover:border-accent">Sign In</Link>
                     )}
                 </div>
             </div>

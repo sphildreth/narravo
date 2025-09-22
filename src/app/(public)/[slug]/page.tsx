@@ -37,6 +37,7 @@ export default async function PostPage({ params }: Props) {
   const session = await getSession();
   const userId = session?.user?.id || undefined;
   const isAdmin = Boolean(session?.user?.isAdmin);
+  const canReact = Boolean(session?.user?.id);
 
   const post = await getPostBySlugWithReactions(params.slug, userId);
   if (!post) {
@@ -115,13 +116,13 @@ export default async function PostPage({ params }: Props) {
               {/* Tags and Category */}
               {(post.tags && post.tags.length > 0) || post.category && (
                 <div className="mt-6 pt-4 border-t border-border">
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-wrap gap-6">
                     {post.category && (
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide block mb-1">Category</span>
                         <Link
                           href={`/categories/${post.category.slug}`}
-                          className="inline-flex items-center px-3 py-1 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                          className="inline-flex items-center text-brand hover:opacity-90 text-sm font-medium"
                         >
                           {post.category.name}
                         </Link>
@@ -135,7 +136,7 @@ export default async function PostPage({ params }: Props) {
                             <Link
                               key={tag.id}
                               href={`/tags/${tag.slug}`}
-                              className="inline-flex items-center px-2 py-1 rounded-md bg-accent text-accent-foreground text-sm hover:bg-accent/80 transition-colors"
+                              className="inline-flex items-center px-2 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent text-sm hover:bg-accent/20 transition-colors"
                             >
                               #{tag.name}
                             </Link>
@@ -148,7 +149,7 @@ export default async function PostPage({ params }: Props) {
               )}
 
               {/* Post reactions */}
-              {post.reactions && (
+              {canReact && post.reactions && (
                 <div className="mt-4 pt-4 border-t border-border">
                   <ReactionButtons
                     targetType="post"

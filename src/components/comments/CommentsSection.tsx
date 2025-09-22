@@ -8,7 +8,8 @@ import CommentForm from "./CommentForm";
 export default async function CommentsSection({ postId }: { postId: string }) {
   const session = await getSession();
   const userId = session?.user?.id || undefined;
-  
+  const canReact = Boolean(session?.user?.id);
+
   const [count, initial] = await Promise.all([
     countApprovedComments(postId),
     getCommentTreeForPost(postId, { limitTop: 10, limitReplies: 3, userId }),
@@ -27,7 +28,7 @@ export default async function CommentsSection({ postId }: { postId: string }) {
         <div className="mb-8 p-4 border border-border rounded-lg bg-card text-center">
           <p className="text-muted mb-2">Sign in to join the conversation</p>
           <a
-            href="/login" 
+            href="/login"
             className="text-brand hover:opacity-90 font-medium"
           >
             Sign in
@@ -46,6 +47,7 @@ export default async function CommentsSection({ postId }: { postId: string }) {
             childrenMap={initial.children}
             nextCursor={initial.nextCursor}
             limitReplies={3}
+            canReact={canReact}
           />
         </Suspense>
       )}

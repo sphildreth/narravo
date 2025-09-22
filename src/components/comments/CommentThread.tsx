@@ -7,12 +7,14 @@ export default async function CommentThread({
   childrenMap,
   nextCursor,
   limitReplies,
+  canReact = false,
 }: {
   postId: string;
   nodes: any[];
   childrenMap: Record<string, any[]>;
   nextCursor: string | null;
   limitReplies: number;
+  canReact?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -22,11 +24,11 @@ export default async function CommentThread({
           typeof n.childrenCount === "number" ? n.childrenCount > kids.length : false;
         return (
           <div key={n.id} id={`comment-${n.id}`}>
-            <CommentNode node={n} />
+            <CommentNode node={n} canReact={canReact} />
             {kids.length > 0 && (
               <div className="ml-4 pl-3 border-l border-border space-y-4">
                 {kids.map((c) => (
-                  <CommentNode key={c.id} node={c} />
+                  <CommentNode key={c.id} node={c} canReact={canReact} />
                 ))}
                 {hasMoreForParent && (
                   <LoadMoreReplies postId={postId} parentPath={n.path} already={kids.length} />

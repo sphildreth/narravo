@@ -7,6 +7,12 @@
 :focus-visible { outline:2px solid var(--focus); outline-offset:2px }
 .prose a { @apply text-brand underline; } .prose h1 { @apply text-3xl md:text-4xl font-extrabold leading-tight mt-2 mb-3; } .prose h2 { @apply text-2xl md:text-3xl font-bold mt-5 mb-3; } .prose p { @apply my-3 leading-7; } .prose blockquote { @apply my-4 pl-4 border-l-4 border-brand bg-gray-50/70 rounded-lg py-3; } .prose img, .prose video { @apply max-w-full rounded-xl; }
 
+/* Table styles for imported WordPress content */
+.prose table { @apply w-full text-left border-collapse my-4; background: var(--card); color: var(--card-fg); }
+.prose thead th { @apply text-sm font-semibold; background: color-mix(in oklab, var(--bg) 80%, var(--fg) 20%); }
+.prose th, .prose td { @apply border border-border px-3 py-2 align-top; }
+.prose tbody tr:nth-child(odd) { background: color-mix(in oklab, var(--card) 95%, var(--fg) 5%); }
+
 /* Base theme-aware element styles */
 @layer base {
   body { @apply bg-bg text-fg; }
