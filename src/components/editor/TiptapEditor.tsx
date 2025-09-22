@@ -16,6 +16,7 @@ export type TiptapEditorProps = {
 
 export default function TiptapEditor({ initialMarkdown = "", onChange, placeholder = "Write your post...", className = "" }: TiptapEditorProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
 
   const uploadFile = useCallback(async (file: File): Promise<string | null> => {
     try {
@@ -55,6 +56,11 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     }
   }, []);
 
+  const insertVideoShortcode = useCallback((editor: Editor, url: string) => {
+    const shortcode = `[video mp4="${url}"][/video]`;
+    editor.chain().focus().insertContent(shortcode).run();
+  }, []);
+
   const handleFileEvent = useCallback((view: Editor['view'], event: ClipboardEvent | DragEvent, editor: Editor) => {
     (async () => {
       const e = event as ClipboardEvent & DragEvent;
@@ -80,9 +86,10 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
       if (files.length === 0) return false; // let default continue
 
-      // Only handle images here
       const imageFiles = files.filter(f => f.type.startsWith("image/"));
-      if (imageFiles.length === 0) return false;
+      const videoFiles = files.filter(f => f.type.startsWith("video/"));
+
+      if (imageFiles.length === 0 && videoFiles.length === 0) return false;
 
       e.preventDefault();
 
@@ -93,9 +100,16 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         }
       }
 
+      for (const file of videoFiles) {
+        const url = await uploadFile(file);
+        if (url && editor) {
+          insertVideoShortcode(editor, url);
+        }
+      }
+
       return true;
     })();
-  }, [uploadFile]);
+  }, [uploadFile, insertVideoShortcode]);
 
   const editor: Editor | null = useEditor({
     extensions: [
@@ -135,11 +149,21 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     );
 
     const triggerImage = () => fileInputRef.current?.click();
-    const onPick = async (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const triggerVideo = () => videoInputRef.current?.click();
+
+    const onPickImage = async (ev: React.ChangeEvent<HTMLInputElement>) => {
       const file = ev.target.files?.[0];
       if (!file) return;
       const url = await uploadFile(file);
       if (url && editor) editor.chain().focus().setImage({ src: url }).run();
+      ev.target.value = "";
+    };
+
+    const onPickVideo = async (ev: React.ChangeEvent<HTMLInputElement>) => {
+      const file = ev.target.files?.[0];
+      if (!file) return;
+      const url = await uploadFile(file);
+      if (url && editor) insertVideoShortcode(editor, url);
       ev.target.value = "";
     };
 
@@ -156,10 +180,12 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         {btn({ label: "• List", active: editor.isActive("bulletList"), onClick: () => editor.chain().focus().toggleBulletList().run() })}
         {btn({ label: "1. List", active: editor.isActive("orderedList"), onClick: () => editor.chain().focus().toggleOrderedList().run() })}
         {btn({ label: "Image", onClick: triggerImage })}
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
+        {btn({ label: "Video", onClick: triggerVideo })}
+        <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={onPickVideo} />
       </div>
     );
-  }, [uploadFile]);
+  }, [uploadFile, insertVideoShortcode]);
 
   return (
     <div className={className}>

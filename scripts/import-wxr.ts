@@ -8,6 +8,7 @@ import slugify from "slugify";
 import { readFile, writeFile } from "node:fs/promises";
 import crypto from "node:crypto";
 import { sql, eq } from "drizzle-orm";
+import { expandShortcodes } from "@/lib/markdown";
 
 export interface WxrItem {
   title?: string;
@@ -464,7 +465,9 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     for (const post of postItems) {
       try {
         // Rewrite media URLs in content
-        const finalHtml = rewriteMediaUrls(sanitizeHtml(post.html), result.mediaUrls);
+        const expanded = expandShortcodes(post.html);
+        const sanitized = sanitizeHtml(expanded);
+        const finalHtml = rewriteMediaUrls(sanitized, result.mediaUrls);
 
         // Get or create author
         let authorId: string | null = null;

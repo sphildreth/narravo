@@ -10,11 +10,15 @@ export function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       "p", "a", "strong", "em", "code", "pre", "ul", "ol", "li", 
-      "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6"
+      "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6",
+      // Allow safe media tags
+      "video", "source"
     ],
     // Allowed attributes
     ALLOWED_ATTR: [
-      "href", "src", "alt", "title", "target", "rel", "controls", "poster"
+      "href", "src", "alt", "title", "target", "rel", "controls", "poster",
+      // Video-related safe attributes
+      "muted", "loop", "playsinline", "preload", "width", "height", "type"
     ],
     // Explicitly forbidden attributes (security-critical)
     FORBID_ATTR: [
