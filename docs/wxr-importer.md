@@ -38,6 +38,12 @@ pnpm wxr:import path=./export.xml --verbose
 6. **Create redirects**: Maps old WordPress URLs to new post URLs
 7. **Save checkpoint**: Records import statistics and errors
 
+## Storage Behavior
+
+- The importer stores sanitized WordPress HTML into `posts.body_html` and mirrors it into the legacy `posts.html` column for backward compatibility.
+- Because WXR exports HTML and not Markdown, `posts.body_md` is set to `NULL` on initial import.
+- Re-imports (same GUID) will update title, excerpt, published date, `body_html`, and legacy `html`, but will not overwrite `body_md` if you later add Markdown manually.
+
 ## Configuration
 
 The importer uses the existing S3/R2 configuration from environment variables:
