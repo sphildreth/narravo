@@ -1,227 +1,182 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-# Narravo
+
+# Narravo: A Modern Next.js Blog Engine 🚀
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-blue?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-blue?logo=drizzle&logoColor=white)](https://orm.drizzle.team/)
+[![Auth.js](https://img.shields.io/badge/Auth.js-blue?logo=next.js&logoColor=white)](https://authjs.dev/)
+[![Docker](https://img.shields.io/badge/Docker-blue?logo=docker&logoColor=white)](https://www.docker.com/)
 
-A modern, minimal blog engine built with Next.js 14 App Router, TypeScript, Drizzle ORM (Postgres), Auth.js (GitHub/Google), nested comments with moderation, reactions, and optional S3/R2 media uploads.
+Narravo is a sleek, minimal, and feature-rich blog engine designed for developers who appreciate modern web technologies and a robust content management experience. Built with the latest Next.js App Router, TypeScript, and Drizzle ORM, it offers a powerful foundation for your next personal blog or content platform.
 
-- Next.js 14 (App Router, Server Actions, RSC by default)
-- TypeScript (strict), Tailwind CSS
-- PostgreSQL + Drizzle ORM
-- Auth.js (NextAuth) with GitHub/Google OAuth
-- Nested comments, attachments (image/video), reactions
-- Config service backed by database
-- Vitest + Testing Library
-- Docker Compose for local Postgres
+✨ **Key Features:**
 
-## Table of contents
-- Features
-- Tech stack
-- Project structure
-- Quick start
-- Environment variables
-- Database (migrations, seeding)
-- Development scripts
-- Docs and APIs
-- Testing
-- Troubleshooting
-- Contributing
-- License
+*   **Next.js 14 App Router:** Leverage Server Components, Server Actions, and advanced caching for optimal performance.
+*   **TypeScript:** Enjoy a fully typed codebase for enhanced reliability and developer experience.
+*   **Tailwind CSS:** Rapidly build beautiful, responsive UIs with a utility-first CSS framework.
+*   **PostgreSQL + Drizzle ORM:** A modern, type-safe ORM for seamless database interactions.
+*   **Auth.js (NextAuth):** Secure authentication with GitHub and Google OAuth providers out-of-the-box.
+*   **Nested Comments & Reactions:** Engage your audience with threaded comments, attachments (image/video), and emoji-like reactions.
+*   **Admin Dashboard:** A powerful moderation queue to manage comments, attachments, and user content.
+*   **S3/R2 Media Uploads:** Scalable media storage with presigned URLs for AWS S3 or Cloudflare R2.
+*   **Config Service:** Centralized, database-backed configuration for dynamic feature and UX settings.
+*   **Dockerized Development:** Easy local setup with Docker Compose for PostgreSQL.
+*   **Comprehensive Testing:** Built with Vitest and Testing Library for robust code quality.
 
-## Features
-- Posts: typed data model and basic public pages
-- Authentication: GitHub/Google via Auth.js, JWT sessions
-- Admin: moderation queue with approve/spam/delete, edit comments, remove attachments
-- Comments: nested threads (with path-based tree), pagination for top level and replies
-- Reactions: emoji-like reactions with per-user uniqueness
-- Media uploads: presigned S3-compatible uploads (AWS S3 or Cloudflare R2)
-- Configuration: feature and UX settings stored centrally in DB with per-user overrides ready (MVP uses global)
-- Performance: ISR and caching with revalidateTag/revalidatePath where appropriate
+---
 
-## Tech stack
-- Frontend: Next.js 14 (App Router), React 18, TypeScript
-- Styling: Tailwind CSS
-- Database: PostgreSQL + Drizzle ORM
-- Auth: Auth.js (NextAuth) providers (GitHub, Google)
-- Tests: Vitest + Testing Library
-- Package manager: pnpm
-- Dev infra: Docker Compose (Postgres)
+## 🚀 Quick Start
 
-## Project structure
-```
-app/                    # Next.js App Router routes
-├── (admin)/            # Admin routes group
-├── (auth)/             # Auth routes group
-├── (public)/           # Public routes group
-├── api/                # API endpoints
-components/             # Reusable components
-lib/                    # Server-side services and utilities
-drizzle/                # DB schema and migrations
-scripts/                # Seed/import scripts
-tests/                  # Unit tests
-docs/                   # Design + API docs
-```
+Get Narravo up and running in minutes!
 
-## Quick start
-These steps assume Docker, Node 18+, and pnpm.
+**Prerequisites:**
+*   [Docker](https://www.docker.com/get-started)
+*   [Node.js](https://nodejs.org/en/download/) (v18+)
+*   [pnpm](https://pnpm.io/installation)
 
 ```bash
-# 0) Start Postgres (Docker)
+# 0) Start PostgreSQL database with Docker Compose
 docker compose up -d db
 
-# 1) Install deps
+# 1) Install project dependencies
 pnpm install
 
-# 2) Configure env
+# 2) Configure environment variables
 cp .env.example .env
-# Ensure DATABASE_URL and NEXTAUTH_SECRET are set. For local Docker, .env.example defaults work.
+# IMPORTANT: Ensure DATABASE_URL and NEXTAUTH_SECRET are set.
+# For local Docker, .env.example defaults usually work.
 
-# 3) Apply schema (create tables)
+# 3) Apply database schema (create tables)
 pnpm drizzle:push
 
-# 4) Seed required configuration defaults (caching, pagination, etc.)
+# 4) Seed essential configuration defaults
 pnpm seed:config
 
-# 5) (Optional) Seed demo posts/comments
+# 5) (Optional) Seed demo posts and comments
 pnpm seed:posts
 
-# 6) Run dev server
+# 6) Start the development server
 pnpm dev
-# open http://localhost:3000
+# Open your browser to http://localhost:3000
 ```
 
-If you prefer a manual DB, set `DATABASE_URL` accordingly and skip Docker.
+> 💡 **Manual DB Setup:** If you prefer a manual PostgreSQL instance, update `DATABASE_URL` in your `.env` file and skip the `docker compose up -d db` step.
 
-## Environment variables
-All variables are documented in `.env.example`. Copy it and adjust for your environment:
+---
+
+## ⚙️ Configuration
+
+All environment variables are documented in detail within the `.env.example` file. Copy it to `.env` and adjust as needed:
 
 ```bash
 cp .env.example .env
 ```
 
-Required (local dev):
-- DATABASE_URL: Postgres connection string (Docker defaults provided)
-- NEXTAUTH_SECRET: strong random string for session/JWT encryption
-- NEXTAUTH_URL: your app URL (defaults to http://localhost:3000 for dev)
-- ADMIN_EMAILS: comma-separated allowlist for admin capabilities
+**Key Variables:**
 
-OAuth (optional; enabled when both ID and SECRET are provided):
-- GitHub: GITHUB_ID, GITHUB_SECRET
-- Google: GOOGLE_ID, GOOGLE_SECRET
+*   `DATABASE_URL`: PostgreSQL connection string.
+*   `NEXTAUTH_SECRET`: A strong, random string for session/JWT encryption.
+*   `NEXTAUTH_URL`: Your application's URL (e.g., `http://localhost:3000`).
+*   `ADMIN_EMAILS`: Comma-separated list of emails for admin access.
 
-Media storage (optional; enable either S3_* or R2_* set):
-- S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET, S3_ENDPOINT?
-- or R2_REGION, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_ENDPOINT?
+**Optional Integrations:**
 
-See `lib/s3.ts` for how these are detected at runtime.
+*   **OAuth:** `GITHUB_ID`, `GITHUB_SECRET`, `GOOGLE_ID`, `GOOGLE_SECRET`
+*   **Media Storage:** Configure either `S3_*` (AWS S3) or `R2_*` (Cloudflare R2) variables.
 
-## Database (migrations, seeding)
-- Generate migrations from schema changes:
-  ```bash
-  pnpm drizzle:generate
-  ```
-- Push schema to database:
-  ```bash
-  pnpm drizzle:push
-  ```
-- Seed configuration (required for first run):
-  ```bash
-  pnpm seed:config
-  ```
-- Seed demo content:
-  ```bash
-  pnpm seed:posts
-  ```
+---
 
-The seed config includes keys like:
-- SYSTEM.CACHE.DEFAULT-TTL
-- PUBLIC.HOME.REVALIDATE-SECONDS
-- COMMENTS.MAX-DEPTH, COMMENTS.TOP-PAGE-SIZE, COMMENTS.REPLIES-PAGE-SIZE
-- RATE.* (basic rate limits)
-- UPLOADS.* (size and MIME allowlists)
-- FEED.LATEST-COUNT, ARCHIVE.MONTHS-SIDEBAR
-- MODERATION.PAGE-SIZE
-- APPEARANCE.BANNER.* (banner defaults)
+## 🗄️ Database Management
 
-## Development scripts
-```bash
-pnpm dev            # start Next.js dev server
-pnpm build          # production build
-pnpm start          # start production server
-pnpm typecheck      # TypeScript type check
-pnpm test           # run tests (Vitest)
-pnpm test:watch     # watch mode for tests
-pnpm drizzle:generate  # create migration from schema diffs
-pnpm drizzle:push      # apply schema to DB
-pnpm seed:config       # seed configuration defaults
-pnpm seed:posts        # seed demo posts/comments
-pnpm wxr:import path=./sample.wxr  # import WordPress WXR (stub)
-```
+Narravo uses Drizzle ORM for type-safe database interactions and migrations.
 
-## Docs and APIs
-- Admin API overview: `docs/ADMIN_API.md`
-- Moderation notes: `docs/moderation.md`
-- Reactions: `docs/reactions.md`
-- Media uploads: `docs/media-uploads.md`
-- Importer: `scripts/import-wxr.ts`
-- Project slices: `docs/PRD_SPEC.md`, `docs/PRD_SPEC_IMPLEMENTATION_SLICES.md`
-
-## Testing
-We use Vitest with Testing Library. Run the full suite:
-```bash
-pnpm test
-```
-Type-only checks:
-```bash
-pnpm typecheck
-```
-
-## Troubleshooting
-- Home page 404/500 on first run
-  - The home page reads required config keys: `PUBLIC.HOME.REVALIDATE-SECONDS` and `FEED.LATEST-COUNT`.
-  - If these are missing or the DB isn’t reachable, the page will error during SSR.
-  - Fix by applying the schema and seeding config while Postgres is running:
+*   **Generate Migrations:** Create new migration files based on schema changes.
     ```bash
-    docker compose up -d db
+    pnpm drizzle:generate
+    ```
+*   **Apply Schema:** Push the current schema to your database.
+    ```bash
     pnpm drizzle:push
+    ```
+*   **Seed Configuration:** Essential for initial setup and default settings.
+    ```bash
     pnpm seed:config
     ```
-- Admin endpoints
-  - Admin routes require your email in `ADMIN_EMAILS` in `.env`.
-  - Sign in via Auth.js provider and verify access before calling admin APIs.
-- Postgres port in use (5432)
-  - Change the `ports:` mapping in `docker-compose.yml` (e.g., `55432:5432`) and update `DATABASE_URL`.
-- Drizzle push fails
-  - Check `DATABASE_URL` and container status: `docker compose ps`.
-- OAuth callback mismatch
-  - When ports/hosts change, update `NEXTAUTH_URL` and OAuth app callback URLs accordingly.
+*   **Seed Demo Content:** Populate your blog with sample posts and comments.
+    ```bash
+    pnpm seed:posts
+    ```
 
-### Docker-based DB onboarding
-```bash
-# Start Postgres
-docker compose up -d db
-# Verify container
-docker compose ps
-# Tables overview (optional)
-docker compose exec db psql -U narravo -d narravo -c "\dt"
-# Stop / remove / reset
-# stop only
-docker compose stop db
-# remove container, keep data
-docker compose rm -f db
-# nuke data volume (fresh start)
-docker compose down -v
+---
+
+## 🛠️ Development Scripts
+
+A quick reference for common development tasks:
+
+| Command                 | Description                                     |
+| :---------------------- | :---------------------------------------------- |
+| `pnpm dev`              | Start the Next.js development server            |
+| `pnpm build`            | Create a production-ready build                 |
+| `pnpm start`            | Start the production server                     |
+| `pnpm typecheck`        | Run TypeScript type checks                      |
+| `pnpm test`             | Execute the full test suite (Vitest)            |
+| `pnpm test:watch`       | Run tests in watch mode                         |
+| `pnpm drizzle:generate` | Generate new Drizzle migrations                 |
+| `pnpm drizzle:push`     | Apply schema changes to the database            |
+| `pnpm seed:config`      | Seed default configuration values               |
+| `pnpm seed:posts`       | Seed demo posts and comments                    |
+| `pnpm wxr:import`       | Import WordPress WXR content (stub)             |
+
+---
+
+## 📂 Project Structure
+
+A high-level overview of the project's directory layout:
+
+```
+app/                    # Next.js App Router routes (admin, auth, public, api)
+components/             # Reusable UI components
+lib/                    # Server-side services, utilities, and business logic
+drizzle/                # Drizzle ORM schema and database migrations
+scripts/                # Utility scripts (seeding, imports)
+tests/                  # Unit and integration tests
+docs/                   # Project documentation and specifications
 ```
 
-## Contributing
-Contributions welcome! A few guidelines:
-- Use pnpm
-- Follow Conventional Commits:
-  - `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`
-- Keep PRs focused and include tests when changing behavior
-- Align with project patterns (App Router, Server Actions, Drizzle, Zod validation where applicable)
-- Add or update docs in `docs/` and README when needed
-- See also: `docs/CONTRIBUTING.md` for more details
+---
 
-## License
-Licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
+## 🧪 Testing
+
+We use [Vitest](https://vitest.dev/) with [Testing Library](https://testing-library.com/) for our test suite.
+
+*   **Run all tests:**
+    ```bash
+    pnpm test
+    ```
+*   **Type checking only:**
+    ```bash
+    pnpm typecheck
+    ```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please refer to our [CONTRIBUTING.md](./docs/CONTRIBUTING.md) for detailed guidelines.
+
+**Quick Guidelines:**
+
+*   Use `pnpm` for package management.
+*   Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for clear commit messages.
+*   Keep Pull Requests focused and include tests for behavior changes.
+*   Align with existing project patterns (App Router, Server Actions, Drizzle, Zod).
+*   Update documentation (`docs/` and `README.md`) as needed.
+
+---
+
+## 📄 License
+
+This project is licensed under the Apache License, Version 2.0. See the [LICENSE](./LICENSE) and [NOTICE](./NOTICE) files for more details.
