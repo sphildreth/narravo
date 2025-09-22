@@ -137,14 +137,17 @@ A quick reference for common development tasks:
 A high-level overview of the project's directory layout:
 
 ```
-app/                    # Next.js App Router routes (admin, auth, public, api)
-components/             # Reusable UI components
-lib/                    # Server-side services, utilities, and business logic
+src/app/                # Next.js App Router routes (admin, auth, public, api)
+src/components/         # Reusable UI components
+src/lib/                # Server-side services, utilities, and business logic
+src/types/              # TypeScript types (consolidated)
 drizzle/                # Drizzle ORM schema and database migrations
 scripts/                # Utility scripts (seeding, imports)
 tests/                  # Unit and integration tests
 docs/                   # Project documentation and specifications
 ```
+
+See docs/RESTRUCTURE.md for the detailed rationale and migration plan.
 
 ---
 

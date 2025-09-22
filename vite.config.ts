@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./', import.meta.url)),
-    },
+    alias: [
+      // Make sure the more specific drizzle alias matches before '@'
+      { find: '@/drizzle', replacement: fileURLToPath(new URL('./drizzle/', import.meta.url)) },
+      { find: '@', replacement: fileURLToPath(new URL('./src/', import.meta.url)) },
+    ],
   },
   test: {
     environment: 'node',

@@ -4,7 +4,7 @@
  */
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import type { PostDTO } from "@/src/types/content";
+import type { PostDTO } from "@/types/content";
 import { getReactionCounts, getUserReactions, type ReactionCounts, type UserReactions } from "./reactions";
 import { markdownToHtmlSync, extractExcerpt } from "./markdown";
 import { posts } from "@/drizzle/schema";

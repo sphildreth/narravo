@@ -7,7 +7,7 @@
 
 import { S3Service, getS3Config } from "./s3";
 import { db } from "./db";
-import { commentAttachments } from "../drizzle/schema";
+import { commentAttachments } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 
 export interface JobContext {

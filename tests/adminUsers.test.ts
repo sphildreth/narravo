@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from 'vitest';
-import { anonymizeUser, type UsersRepo } from '../lib/adminUsers';
+import { anonymizeUser, type UsersRepo } from '@/lib/adminUsers';
 
 class MockRepo implements UsersRepo {
   deletedById: string[] = [];

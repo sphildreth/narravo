@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { listPosts } from "@/lib/posts";
 
+export const dynamic = "force-dynamic"; // avoid static prerender; this route depends on request URL
+
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional().default(10),
   cursor: z.object({

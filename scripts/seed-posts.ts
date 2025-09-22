@@ -6,7 +6,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import slugify from "slugify";
 import { randomUUID } from "crypto";
 
-import { posts, users, comments } from "../drizzle/schema";
+import { posts, users, comments } from "@/drizzle/schema";
 
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;

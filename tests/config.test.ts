@@ -2,9 +2,9 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // Mock db to avoid real connections during import of lib/config
-vi.mock('../lib/db', () => ({ db: {} }));
+vi.mock('@/lib/db', () => ({ db: {} }));
 
-const { __testables__ } = await import('../lib/config');
+const { __testables__ } = await import('@/lib/config');
 const { normalizeKey, ensureType, inAllowed, minutesToMs, withJitter } = __testables__;
 
 describe('config helpers', () => {

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest, NextResponse } from "next/server";
-import { recordView } from "../../../../lib/analytics";
-import { ConfigServiceImpl } from "../../../../lib/config";
-import { db } from "../../../../lib/db";
-import { posts } from "../../../../drizzle/schema";
+import { recordView } from "@/lib/analytics";
+import { ConfigServiceImpl } from "@/lib/config";
+import { db } from "@/lib/db";
+import { posts } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 

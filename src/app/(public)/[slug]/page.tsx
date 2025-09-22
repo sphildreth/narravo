@@ -128,7 +128,7 @@ export default async function PostPage({ params }: Props) {
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide block mb-1">Tags</span>
                         <div className="flex flex-wrap gap-2">
-                          {post.tags.map((tag) => (
+                          {post.tags.map((tag: { id: string; slug: string; name: string }) => (
                             <Link
                               key={tag.id}
                               href={`/tags/${tag.slug}`}

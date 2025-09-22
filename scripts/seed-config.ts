@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-import { ConfigServiceImpl } from "../lib/config";
-import { db } from "../lib/db";
+import { ConfigServiceImpl } from "@/lib/config";
+import { db } from "@/lib/db";
 
 async function main() {
   const service = new ConfigServiceImpl({ db });

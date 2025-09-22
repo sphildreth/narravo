@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from "vitest";
-import { sanitizeHtml, sanitizeCommentHtml } from "../lib/sanitize";
+import { sanitizeHtml, sanitizeCommentHtml } from "@/lib/sanitize";
 
 describe("sanitizeHtml", () => {
   it("removes scripts and inline handlers", () => {
