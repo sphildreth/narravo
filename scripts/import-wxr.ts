@@ -320,7 +320,11 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           await db.insert(posts).values({
             slug: post.slug,
             title: post.title,
+            // Store sanitized HTML in both legacy html and new bodyHtml
             html: finalHtml,
+            bodyHtml: finalHtml,
+            // No markdown available from WXR exports
+            bodyMd: null,
             excerpt: post.excerpt,
             guid: post.guid,
             publishedAt: post.publishedAt,
@@ -328,7 +332,10 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
             target: posts.guid,
             set: {
               title: post.title,
+              // Keep legacy html in sync
               html: finalHtml,
+              // Update rendered HTML; do not overwrite bodyMd to preserve later edits
+              bodyHtml: finalHtml,
               excerpt: post.excerpt,
               publishedAt: post.publishedAt,
               updatedAt: sql`now()`,
