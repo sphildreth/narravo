@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi } from 'vitest';
-import { moderateComments, type ModerationRepo } from '../lib/adminModeration';
+import { moderateComments, type ModerationRepo } from '@/lib/adminModeration';
 
 function makeRepo(overrides: Partial<ModerationRepo> = {}): ModerationRepo {
   return {

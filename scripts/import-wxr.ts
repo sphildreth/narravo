@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { parseStringPromise } from "xml2js";
-import { db } from "../lib/db";
-import { posts, redirects } from "../drizzle/schema";
-import { sanitizeHtml } from "../lib/sanitize";
-import { getS3Config, S3Service } from "../lib/s3";
+import { db } from "@/lib/db";
+import { posts, redirects } from "@/drizzle/schema";
+import { sanitizeHtml } from "@/lib/sanitize";
+import { getS3Config, S3Service } from "@/lib/s3";
 import slugify from "slugify";
 import fs from "node:fs/promises";
 import crypto from "node:crypto";

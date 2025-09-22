@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from "vitest";
-import { isEmailAdmin, parseAdminAllowlist } from "../lib/admin";
+import { isEmailAdmin, parseAdminAllowlist } from "@/lib/admin";
 
 describe("parseAdminAllowlist", () => {
   it("splits comma separated values and trims whitespace", () => {

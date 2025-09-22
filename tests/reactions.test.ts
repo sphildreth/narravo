@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, test, expect } from "vitest";
-import { type TargetType, type ReactionKind } from "../lib/reactions";
+import { type TargetType, type ReactionKind } from "@/lib/reactions";
 
 describe("reactions types and constants", () => {
   test("reaction types are properly defined", () => {

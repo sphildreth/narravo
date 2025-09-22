@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import JSZip from "jszip";
-import { db } from "../lib/db";
-import { posts, users, comments, commentAttachments, reactions, redirects, configuration } from "../drizzle/schema";
+import { db } from "@/lib/db";
+import { posts, users, comments, commentAttachments, reactions, redirects, configuration } from "@/drizzle/schema";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import { getS3Config, S3Service } from "../lib/s3";
+import { getS3Config, S3Service } from "@/lib/s3";
 
 export interface BackupManifest {
   version: number;

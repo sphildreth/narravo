@@ -2,6 +2,7 @@
 import { getRedirects } from "@/lib/redirects";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic"; // avoid prerendering during static export
 
 export async function GET() {
   try {
@@ -12,8 +13,14 @@ export async function GET() {
       },
     });
   } catch (err) {
-    console.error("Failed to load redirects:", err);
-    return new Response("Internal Server Error", { status: 500 });
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn("Failed to load redirects; returning empty list");
+    }
+    return Response.json([], {
+      headers: {
+        "Cache-Control": "public, max-age=5, s-maxage=5",
+      },
+    });
   }
 }
 

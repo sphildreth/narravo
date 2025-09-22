@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { db } from "./db";
-import { posts, postDailyViews, postViewEvents } from "../drizzle/schema";
+import { posts, postDailyViews, postViewEvents } from "@/drizzle/schema";
 import { sql, eq, gte, desc, and, count, sum, inArray } from "drizzle-orm";
 import { ConfigServiceImpl } from "./config";
 import crypto from "crypto";

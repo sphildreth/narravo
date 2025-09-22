@@ -7,18 +7,18 @@ import {
   validateAntiAbuse,
   RateLimitError,
   __testables__
-} from "../lib/rateLimit";
+} from "@/lib/rateLimit";
 
 const { InMemoryRateLimiter, extractIpFromHeaders, isValidIp } = __testables__;
 
 // Mock the db module
-vi.mock("../lib/db", () => ({
+vi.mock("@/lib/db", () => ({
   db: {}
 }));
 
 // Mock the config service
 const mockGetNumber = vi.fn();
-vi.mock("../lib/config", () => ({
+vi.mock("@/lib/config", () => ({
   ConfigServiceImpl: vi.fn().mockImplementation(() => ({
     getNumber: mockGetNumber
   }))

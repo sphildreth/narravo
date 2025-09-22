@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { listPosts } from "@/lib/posts";
 import { listArchiveMonths } from "@/lib/archives"; // Use listArchiveMonths
-import type { PostDTO } from "@/src/types/content";
+import type { PostDTO } from "@/types/content";
 import type { Metadata } from "next";
 
 const escapeXML = (str: string) => {
@@ -19,18 +19,31 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
   // Add home page
   urls.push(`<url><loc>${siteUrl}</loc></url>`);
 
-  // Add posts
+  // Add posts (best-effort; tolerate DB being unavailable at build time)
   let nextCursor: { publishedAt: string; id: string } | null = null;
-  do {
-    const postResult = await listPosts({ limit: 50, cursor: nextCursor });
-    postResult.items.forEach((post) => {
-      urls.push(`<url><loc>${siteUrl}/${post.slug}</loc></url>`);
-    });
-    nextCursor = postResult.nextCursor;
-  } while (nextCursor);
+  try {
+    do {
+      const postResult = await listPosts({ limit: 50, cursor: nextCursor });
+      postResult.items.forEach((post) => {
+        urls.push(`<url><loc>${siteUrl}/${post.slug}</loc></url>`);
+      });
+      nextCursor = postResult.nextCursor;
+    } while (nextCursor);
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('Sitemap: failed to list posts; continuing with partial sitemap');
+    }
+  }
 
-  // Add archives
-  const archiveMonths = await listArchiveMonths();
+  // Add archives (best-effort)
+  let archiveMonths: Array<{ year: number; month: number }> = [];
+  try {
+    archiveMonths = await listArchiveMonths();
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('Sitemap: failed to list archive months; continuing without archives');
+    }
+  }
   const years = new Set<number>(); // To keep track of unique years for yearly archives
 
   archiveMonths.forEach((archive) => {

@@ -2,14 +2,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("../lib/db", () => ({
+vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn,
     insert: vi.fn,
   },
 }));
 
-const { __testables__, MAX_COMMENT_DEPTH } = await import("../lib/comments");
+const { __testables__, MAX_COMMENT_DEPTH } = await import("@/lib/comments");
 
 const { createCommentCore, CommentError, sanitizeMarkdown } = __testables__;
 

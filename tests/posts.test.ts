@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../lib/db", () => ({
+vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn(),
   },
@@ -9,7 +9,7 @@ vi.mock("../lib/db", () => ({
 
 const {
   __testables__: { normalizePagination },
-} = await import("../lib/posts");
+} = await import("@/lib/posts");
 
 describe("normalizePagination", () => {
   it("returns defaults when params are missing", () => {

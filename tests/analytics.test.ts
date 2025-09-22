@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 // Mock db to avoid real connections
-vi.mock('../lib/db', () => ({ 
+vi.mock('@/lib/db', () => ({ 
   db: {
     select: vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -35,7 +35,7 @@ vi.mock('../lib/db', () => ({
   }
 }));
 
-const { __testHelpers__ } = await import("../lib/analytics");
+const { __testHelpers__ } = await import("@/lib/analytics");
 const { isBot, hashIp, parseReferer, parseLang } = __testHelpers__;
 
 describe("Analytics helpers", () => {

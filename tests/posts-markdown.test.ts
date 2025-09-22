@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createPost, updatePost } from "../lib/posts";
+import { createPost, updatePost } from "@/lib/posts";
 
 // Mock the database
-vi.mock("../lib/db", () => ({
+vi.mock("@/lib/db", () => ({
   db: {
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
@@ -21,7 +21,7 @@ vi.mock("../lib/db", () => ({
 }));
 
 // Mock the schema
-vi.mock("../drizzle/schema", () => ({
+vi.mock("@/drizzle/schema", () => ({
   posts: {}
 }));
 

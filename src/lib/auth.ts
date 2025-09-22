@@ -4,7 +4,7 @@ import type { NextAuthConfig } from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 import { db } from "./db";
-import { users } from "../drizzle/schema";
+import { users } from "@/drizzle/schema";
 import { isEmailAdmin } from "./admin";
 
 type DbUser = {

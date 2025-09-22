@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from "vitest";
-import { markdownToHtmlSync, extractExcerpt, isMarkdown } from "../lib/markdown";
+import { markdownToHtmlSync, extractExcerpt, isMarkdown } from "@/lib/markdown";
 
 describe("markdownToHtmlSync", () => {
   it("converts basic markdown to HTML", () => {

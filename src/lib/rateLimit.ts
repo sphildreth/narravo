@@ -324,7 +324,6 @@ export async function validateAntiAbuse(
     };
     
   } catch (error) {
-    console.error('Anti-abuse validation error:', error);
     return {
       valid: false,
       error: 'Validation failed'

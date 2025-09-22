@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { db } from "./db";
-import { reactions, posts, comments } from "../drizzle/schema";
+import { reactions, posts, comments } from "@/drizzle/schema";
 import { and, eq, count, sql } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 
