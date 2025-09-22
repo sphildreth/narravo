@@ -36,6 +36,20 @@
       "when": 1758490873871,
       "tag": "0004_friendly_master_mold",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1758498573084,
+      "tag": "0005_lying_metal_master",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1758498961198,
+      "tag": "0006_glossy_randall",
+      "breakpoints": true
     }
   ]
 }
