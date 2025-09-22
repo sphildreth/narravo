@@ -83,6 +83,15 @@ export default async function AdminDashboardPage() {
                     <p className="text-xs text-muted-foreground">
                       {comment.author.name}
                     </p>
+                    {comment.postSlug && (
+                      <Link
+                        href={`/${comment.postSlug}#comment-${comment.id}`}
+                        target="_blank"
+                        className="text-xs text-blue-600 hover:underline mt-1 inline-block"
+                      >
+                        View Post
+                      </Link>
+                    )}
                   </div>
                   <div className="flex space-x-2">
                     <ApproveButton commentId={comment.id} />

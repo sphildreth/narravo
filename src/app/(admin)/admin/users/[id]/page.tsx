@@ -95,13 +95,24 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                 {user.recentComments.map((comment) => (
                   <div key={comment.id} className="border border-border rounded-md p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <Link
-                        href={`/${comment.postSlug}`}
-                        target="_blank"
-                        className="text-sm font-medium text-blue-600 hover:underline"
-                      >
-                        {comment.postTitle}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/${comment.postSlug}`}
+                          target="_blank"
+                          className="text-sm font-medium text-blue-600 hover:underline"
+                        >
+                          {comment.postTitle}
+                        </Link>
+                        {comment.postSlug && (
+                          <Link
+                            href={`/${comment.postSlug}#comment-${comment.id}`}
+                            target="_blank"
+                            className="text-xs px-2 py-1 rounded border border-border hover:bg-muted"
+                          >
+                            View Post
+                          </Link>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs px-2 py-1 rounded ${
                           comment.status === "approved" ? "bg-green-100 text-green-800" :

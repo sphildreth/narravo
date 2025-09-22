@@ -261,9 +261,11 @@ export async function countSpamComments(): Promise<number> {
 export async function getRecentComments(limit = 5) {
   const res: any = await db.execute(sql`
     select c.id, c.body_html as "bodyHtml", c.created_at as "createdAt",
-           u.name as "authorName", u.image as "authorImage"
+           u.name as "authorName", u.image as "authorImage",
+           p.slug as "postSlug"
     from comments c
     left join users u on u.id = c.user_id
+    left join posts p on p.id = c.post_id
     order by c.created_at desc
     limit ${limit}
   `);
@@ -274,5 +276,6 @@ export async function getRecentComments(limit = 5) {
     bodyHtml: r.bodyHtml,
     createdAt: new Date(r.createdAt).toISOString(),
     author: { name: r.authorName ?? null, image: r.authorImage ?? null },
+    postSlug: r.postSlug ?? null,
   }));
 }

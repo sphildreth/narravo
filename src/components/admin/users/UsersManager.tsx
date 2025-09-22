@@ -411,13 +411,24 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
                     {selectedUser.recentComments.map((comment) => (
                       <div key={comment.id} className="bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
                         <div className="flex items-center justify-between mb-1">
-                          <Link
-                            href={`/${comment.postSlug}`}
-                            target="_blank"
-                            className="text-sm font-medium text-blue-600 hover:underline"
-                          >
-                            {comment.postTitle}
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/${comment.postSlug}`}
+                              target="_blank"
+                              className="text-sm font-medium text-blue-600 hover:underline"
+                            >
+                              {comment.postTitle}
+                            </Link>
+                            {comment.postSlug && (
+                              <Link
+                                href={`/${comment.postSlug}#comment-${comment.id}`}
+                                target="_blank"
+                                className="text-xs px-2 py-1 rounded border border-border hover:bg-muted"
+                              >
+                                View Post
+                              </Link>
+                            )}
+                          </div>
                           <span className={`text-xs px-2 py-1 rounded ${
                             comment.status === "approved" ? "bg-green-100 text-green-800" :
                             comment.status === "pending" ? "bg-yellow-100 text-yellow-800" :
