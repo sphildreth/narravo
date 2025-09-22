@@ -8,7 +8,6 @@ import DOMPurify from "isomorphic-dompurify";
  */
 export function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, {
-    // Allowed HTML tags - matches requirements from REQ_MARKDOWN_TO_HTML.md
     ALLOWED_TAGS: [
       "p", "a", "strong", "em", "code", "pre", "ul", "ol", "li", 
       "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6"
