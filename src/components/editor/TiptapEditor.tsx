@@ -17,41 +17,6 @@ export type TiptapEditorProps = {
 export default function TiptapEditor({ initialMarkdown = "", onChange, placeholder = "Write your post...", className = "" }: TiptapEditorProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Markdown.configure({ html: false }),
-      Image,
-    ],
-    content: initialMarkdown,
-    onUpdate: ({ editor }) => {
-      try {
-        const md = (editor.storage as any)?.markdown?.getMarkdown?.() ?? "";
-        onChange?.(md);
-      } catch (e) {
-        // no-op
-      }
-    },
-    editorProps: {
-      attributes: {
-        class: "prose prose-sm sm:prose lg:prose-lg focus:outline-none min-h-[220px]",
-        "data-placeholder": placeholder,
-      },
-      handlePaste: (view, event) => handleFileEvent(view, event),
-      handleDrop: (view, event) => handleFileEvent(view, event),
-    },
-  });
-
-  // Update content if initialMarkdown changes
-  useEffect(() => {
-    if (editor && typeof initialMarkdown === "string") {
-      const current = (editor.storage as any)?.markdown?.getMarkdown?.();
-      if (current !== initialMarkdown) {
-        editor.commands.setContent(initialMarkdown);
-      }
-    }
-  }, [editor, initialMarkdown]);
-
   const uploadFile = useCallback(async (file: File): Promise<string | null> => {
     try {
       const kind = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : null;
@@ -90,45 +55,72 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     }
   }, []);
 
-  const handleFileEvent = useCallback(async (view: any, event: any) => {
-    const e = event as ClipboardEvent & DragEvent;
-    const files: File[] = [];
+  const handleFileEvent = useCallback((view: Editor['view'], event: ClipboardEvent | DragEvent, editor: Editor) => {
+    (async () => {
+      const e = event as ClipboardEvent & DragEvent;
+      const files: File[] = [];
 
-    if (e.type === "paste") {
-      const items = (e.clipboardData || (window as any).clipboardData)?.items;
-      if (items) {
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          if (item.kind === "file") {
-            const file = item.getAsFile();
-            if (file) files.push(file);
+      if (e.type === "paste") {
+        const items = (e.clipboardData || (window as any).clipboardData)?.items;
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === "file") {
+              const file = item.getAsFile();
+              if (file) files.push(file);
+            }
           }
         }
+      } else if (e.type === "drop") {
+        const dt = e.dataTransfer;
+        if (dt?.files && dt.files.length > 0) {
+          for (let i = 0; i < dt.files.length; i++) files.push(dt.files[i]!);
+        }
       }
-    } else if (e.type === "drop") {
-      const dt = e.dataTransfer;
-      if (dt?.files && dt.files.length > 0) {
-        for (let i = 0; i < dt.files.length; i++) files.push(dt.files[i]!);
+
+      if (files.length === 0) return false; // let default continue
+
+      // Only handle images here
+      const imageFiles = files.filter(f => f.type.startsWith("image/"));
+      if (imageFiles.length === 0) return false;
+
+      e.preventDefault();
+
+      for (const file of imageFiles) {
+        const url = await uploadFile(file);
+        if (url && editor) {
+          editor.chain().focus().setImage({ src: url }).run();
+        }
       }
-    }
 
-    if (files.length === 0) return false; // let default continue
+      return true;
+    })();
+  }, [uploadFile]);
 
-    // Only handle images here
-    const imageFiles = files.filter(f => f.type.startsWith("image/"));
-    if (imageFiles.length === 0) return false;
-
-    e.preventDefault();
-
-    for (const file of imageFiles) {
-      const url = await uploadFile(file);
-      if (url && editor) {
-        editor.chain().focus().setImage({ src: url }).run();
+  const editor: Editor | null = useEditor({
+    extensions: [
+      StarterKit,
+      Markdown.configure({ html: false }),
+      Image,
+    ],
+    content: initialMarkdown,
+    onUpdate: ({ editor }) => {
+      try {
+        const md = (editor.storage as any)?.markdown?.getMarkdown?.() ?? "";
+        onChange?.(md);
+      } catch (e) {
+        // no-op
       }
-    }
-
-    return true;
-  }, [editor, uploadFile]);
+    },
+    editorProps: {
+      attributes: {
+        class: "prose prose-sm sm:prose lg:prose-lg focus:outline-none min-h-[220px]",
+        "data-placeholder": placeholder,
+      },
+      handlePaste: (view, event) => handleFileEvent(view, event, editor!),
+      handleDrop: (view, event) => handleFileEvent(view, event, editor!),
+    },
+  });
 
   const Toolbar = useMemo(() => function Toolbar({ editor }: { editor: Editor | null }) {
     if (!editor) return null;

@@ -15,6 +15,7 @@ export default async function Page() {
   const revalidateSeconds = await config.getNumber("PUBLIC.HOME.REVALIDATE-SECONDS");
   if (revalidateSeconds == null) throw new Error("Missing required config: PUBLIC.HOME.REVALIDATE-SECONDS");
   const feedCount = await config.getNumber("FEED.LATEST-COUNT");
+  const disclaimerEnabled = await config.getBoolean("SITE.DISCLAIMER.ENABLED");
   if (feedCount == null) throw new Error("Missing required config: FEED.LATEST-COUNT");
 
   const getPosts = cache(
@@ -57,7 +58,12 @@ export default async function Page() {
           <ProseExample html="" />
         </div>
       </div>
-      <footer className="mt-10 border-t border-border px-6 py-6 text-center text-muted">Proudly powered by <a href="https://github.com/sphildreth/narravo" target="_blank">Narravo</a>.</footer>
+      <footer className="mt-10 border-t border-border px-6 py-6 text-center text-muted">
+        Proudly powered by <a href="https://github.com/sphildreth/narravo" target="_blank">Narravo</a>.
+        {disclaimerEnabled && (
+          <><span className="mx-2">|</span><a href="/disclaimer">Disclaimer</a></>
+        )}
+      </footer>
     </>
   );
 }
