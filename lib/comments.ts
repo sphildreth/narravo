@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import { sanitizeHtml } from "./sanitize";
+import { sanitizeCommentHtml } from "./sanitize";
+import { markdownToHtmlSync } from "./markdown";
 import { getMultipleReactionCounts, getUserReactions, type ReactionCounts, type UserReactions } from "./reactions";
 
 export const MAX_COMMENT_DEPTH = 5;
@@ -9,8 +10,9 @@ export const MAX_COMMENT_DEPTH = 5;
 export class CommentError extends Error {}
 
 export function sanitizeMarkdown(input: string): string {
-  // For tests, we treat input as HTML and sanitize it.
-  return sanitizeHtml(input);
+  // Convert markdown to HTML and sanitize for comments
+  const html = markdownToHtmlSync(input);
+  return sanitizeCommentHtml(html);
 }
 
 function pad4(n: number) {

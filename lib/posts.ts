@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import type { PostDTO } from "@/src/types/content";
 import { getReactionCounts, getUserReactions, type ReactionCounts, type UserReactions } from "./reactions";
+import { markdownToHtmlSync, extractExcerpt } from "./markdown";
+import { posts } from "@/drizzle/schema";
 
 function normalizePagination(input?: { page?: number; pageSize?: number }) {
   const pageRaw = input?.page ?? 1;
@@ -79,8 +81,9 @@ export async function getPostBySlug(slug: string) {
     async function run(includeViews: boolean) {
       const selectViews = includeViews ? sql`, p.views_total as "viewsTotal"` : sql``;
       const res: any = await db.execute(sql`
-    select p.id, p.slug, p.title, p.excerpt, p.html as "bodyHtml", 
-           p.published_at as "publishedAt"${selectViews}
+    select p.id, p.slug, p.title, p.excerpt, 
+           p.body_md as "bodyMd", p.body_html as "bodyHtml", 
+           p.html, p.published_at as "publishedAt"${selectViews}
     from posts p
     where p.slug = ${slug}
     limit 1
@@ -88,7 +91,9 @@ export async function getPostBySlug(slug: string) {
       const row = (res.rows ?? [])[0];
       return row ? {
           id: row.id, slug: row.slug, title: row.title, excerpt: row.excerpt ?? null,
-          bodyHtml: row.bodyHtml ?? null,
+          bodyMd: row.bodyMd ?? null,
+          bodyHtml: row.bodyHtml ?? row.html ?? null, // Fall back to legacy html field
+          html: row.html ?? null, // Keep for backward compatibility
           publishedAt: row.publishedAt ? new Date(row.publishedAt).toISOString() : null,
           viewsTotal: row.viewsTotal ?? 0
       } : null;
@@ -128,4 +133,71 @@ export async function countPublishedPosts(): Promise<number> {
     sql`select count(*)::int as c from posts where published_at is not null`
   );
   return Number(rowsRes.rows?.[0]?.c ?? 0);
+}
+
+/**
+ * Create a new post with markdown content
+ */
+export async function createPost(data: {
+  title: string;
+  slug: string;
+  bodyMd: string;
+  excerpt?: string;
+  publishedAt?: Date;
+  guid?: string;
+}) {
+  const bodyHtml = markdownToHtmlSync(data.bodyMd);
+  const excerpt = data.excerpt || extractExcerpt(data.bodyMd);
+  
+  const result = await db.insert(posts).values({
+    title: data.title,
+    slug: data.slug,
+    bodyMd: data.bodyMd,
+    bodyHtml: bodyHtml,
+    html: bodyHtml, // Keep legacy field in sync for now
+    excerpt: excerpt,
+    publishedAt: data.publishedAt || null,
+    guid: data.guid || null,
+  }).returning();
+  
+  return result[0];
+}
+
+/**
+ * Update an existing post with markdown content
+ */
+export async function updatePost(id: string, data: {
+  title?: string;
+  slug?: string;
+  bodyMd?: string;
+  excerpt?: string;
+  publishedAt?: Date;
+}) {
+  const updateData: any = {
+    updatedAt: new Date(),
+  };
+  
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.slug !== undefined) updateData.slug = data.slug;
+  if (data.publishedAt !== undefined) updateData.publishedAt = data.publishedAt;
+  
+  if (data.bodyMd !== undefined) {
+    updateData.bodyMd = data.bodyMd;
+    updateData.bodyHtml = markdownToHtmlSync(data.bodyMd);
+    updateData.html = updateData.bodyHtml; // Keep legacy field in sync
+    
+    // Update excerpt if not explicitly provided
+    if (data.excerpt !== undefined) {
+      updateData.excerpt = data.excerpt;
+    } else if (data.bodyMd) {
+      updateData.excerpt = extractExcerpt(data.bodyMd);
+    }
+  }
+  
+  const result = await db.update(posts)
+    .set(updateData)
+    .where(sql`id = ${id}`)
+    .returning();
+    
+  return result[0];
 }

@@ -8,7 +8,9 @@ export const posts = pgTable("posts", {
   id: uuid("id").primaryKey().defaultRandom(),
   slug: text("slug").notNull().unique(),
   title: text("title").notNull(),
-  html: text("html").notNull(),
+  bodyMd: text("body_md"), // Raw markdown content for editing
+  bodyHtml: text("body_html"), // Rendered and sanitized HTML (nullable for migration)
+  html: text("html").notNull(), // Legacy column - to be deprecated
   excerpt: text("excerpt"),
   guid: text("guid").unique(), // WordPress GUID for import idempotency
   viewsTotal: integer("views_total").notNull().default(0),

@@ -4,8 +4,9 @@ export type PostDTO = {
   slug: string;
   title: string;
   excerpt?: string | null;
-  html?: string | null;
-  bodyHtml?: string | null;
+  bodyMd?: string | null; // Raw markdown content
+  bodyHtml?: string | null; // Rendered HTML content
+  html?: string | null; // Legacy field - deprecated
   publishedAt?: string | null;
   author?: { name?: string | null; image?: string | null } | null;
   viewsTotal?: number;
