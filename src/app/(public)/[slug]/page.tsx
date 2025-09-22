@@ -114,7 +114,7 @@ export default async function PostPage({ params }: Props) {
               <Prose html={post.bodyHtml ?? ""} />
 
               {/* Tags and Category */}
-              {(post.tags && post.tags.length > 0) || post.category && (
+              {(((post.tags?.length ?? 0) > 0) || Boolean(post.category)) && (
                 <div className="mt-6 pt-4 border-t border-border">
                   <div className="flex flex-wrap gap-6">
                     {post.category && (
@@ -128,7 +128,7 @@ export default async function PostPage({ params }: Props) {
                         </Link>
                       </div>
                     )}
-                    {post.tags && post.tags.length > 0 && (
+                    {(post.tags?.length ?? 0) > 0 && (
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide block mb-1">Tags</span>
                         <div className="flex flex-wrap gap-2">
