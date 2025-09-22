@@ -7,6 +7,7 @@ import UserMenu from "@/components/auth/UserMenu";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import Image from "next/image";
+import { cookies } from "next/headers";
 
 export default async function Navbar({ context, variant }: { context?: "admin" | "site"; variant?: "default" | "hero" }) {
     const session = await auth();
@@ -16,6 +17,17 @@ export default async function Navbar({ context, variant }: { context?: "admin" |
     const config = new ConfigServiceImpl({ db });
     const siteName = (await config.getString("SITE.NAME")) ?? "Narravo";
     const borderClass = variant === "hero" ? "border-b-0" : "border-b border-border";
+
+    // Determine initial theme (mirror app/layout.tsx)
+    const themeCookie = cookies().get("theme")?.value;
+    let theme: "light" | "dark" = (themeCookie === "dark" || themeCookie === "light") ? themeCookie : "light";
+    if (!themeCookie) {
+        try {
+            const configured = await config.getString("THEME.DEFAULT");
+            if (configured === "light" || configured === "dark") theme = configured;
+        } catch {}
+    }
+
     return (
         <nav className={`sticky top-0 z-50 bg-bg/80 backdrop-blur ${borderClass}`}>
             <div className="max-w-screen mx-auto px-6 py-2.5 flex items-center justify-between">
@@ -24,7 +36,7 @@ export default async function Navbar({ context, variant }: { context?: "admin" |
                     <span className="font-extrabold tracking-wide text-xs uppercase text-fg">{siteName}</span>
                 </Link>
                 <div className="flex items-center gap-3">
-                    <ThemeToggle />
+                    <ThemeToggle initialTheme={theme} />
                     {context === "admin" && (
                         <Link href="/" className="inline-flex items-center h-9 border border-border px-3 rounded-xl bg-bg text-fg text-sm font-semibold hover:border-accent">View site</Link>
                     )}
