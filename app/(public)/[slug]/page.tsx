@@ -86,6 +86,41 @@ export default async function PostPage({ params }: Props) {
                 dangerouslySetInnerHTML={{ __html: post.bodyHtml ?? "" }}
               />
 
+              {/* Tags and Category */}
+              {(post.tags && post.tags.length > 0) || post.category && (
+                <div className="mt-6 pt-4 border-t border-border">
+                  <div className="flex flex-wrap gap-3">
+                    {post.category && (
+                      <div>
+                        <span className="text-xs text-muted uppercase tracking-wide block mb-1">Category</span>
+                        <Link
+                          href={`/categories/${post.category.slug}`}
+                          className="inline-flex items-center px-3 py-1 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                        >
+                          {post.category.name}
+                        </Link>
+                      </div>
+                    )}
+                    {post.tags && post.tags.length > 0 && (
+                      <div>
+                        <span className="text-xs text-muted uppercase tracking-wide block mb-1">Tags</span>
+                        <div className="flex flex-wrap gap-2">
+                          {post.tags.map((tag) => (
+                            <Link
+                              key={tag.id}
+                              href={`/tags/${tag.slug}`}
+                              className="inline-flex items-center px-2 py-1 rounded-md bg-accent text-accent-foreground text-sm hover:bg-accent/80 transition-colors"
+                            >
+                              #{tag.name}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Post reactions */}
               {post.reactions && (
                 <div className="mt-4 pt-4 border-t border-border">
