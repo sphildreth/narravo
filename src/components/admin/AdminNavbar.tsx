@@ -13,6 +13,7 @@ export default function AdminNavbar() {
         <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-muted">System</div>
         <Link href="/admin/system/configuration" className="rounded-lg px-3 py-2 hover:bg-muted/20">Configuration</Link>
         <Link href="/admin/system/appearance" className="rounded-lg px-3 py-2 hover:bg-muted/20">Appearance</Link>
+        <Link href="/admin/system/about-me" className="rounded-lg px-3 py-2 hover:bg-muted/20">About Me</Link>
       </nav>
     </aside>
   );

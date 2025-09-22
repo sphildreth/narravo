@@ -56,6 +56,11 @@ async function main() {
   await service.setGlobal("VIEW.RESPECT-DNT", true, { type: "boolean", required: true });
   await service.setGlobal("RATE.VIEWS-PER-MINUTE", 120, { type: "integer", required: true });
 
+  // About me
+  await service.setGlobal("SITE.ABOUT-ME.ENABLED", false, { type: "boolean", required: true });
+  await service.setGlobal("SITE.ABOUT-ME.TITLE", "About Me", { type: "string", required: true });
+  await service.setGlobal("SITE.ABOUT-ME.CONTENT", "", { type: "string", required: true });
+
   console.log("Seeded configuration defaults.");
 }
 

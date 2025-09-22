@@ -4,6 +4,7 @@ import { getArchiveMonths, getRecentPosts, type ArchiveMonth, type RecentPost } 
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import ArchiveList from "./SidebarClient";
+import AboutMe from "./about-me/AboutMe";
 
 export default async function Sidebar({ className = "" }: { className?: string }) {
   const config = new ConfigServiceImpl({ db });
@@ -15,6 +16,7 @@ export default async function Sidebar({ className = "" }: { className?: string }
 
   return (
     <aside className={["space-y-6", className].filter(Boolean).join(" ")}>
+      <AboutMe />
       <section className="rounded-2xl border border-border bg-card p-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted mb-2">Recent</h3>
         <ul className="space-y-2">

@@ -146,9 +146,6 @@ scripts/                # Utility scripts (seeding, imports)
 tests/                  # Unit and integration tests
 docs/                   # Project documentation and specifications
 ```
-
-See docs/RESTRUCTURE.md for the detailed rationale and migration plan.
-
 ---
 
 ## 🧪 Testing
@@ -183,3 +180,20 @@ We welcome contributions! Please refer to our [CONTRIBUTING.md](./docs/CONTRIBUT
 ## 📄 License
 
 This project is licensed under the Apache License, Version 2.0. See the [LICENSE](./LICENSE) and [NOTICE](./NOTICE) files for more details.
+
+---
+
+## 🧑 About Me Sidebar
+
+An optional About Me section can appear in the public sidebar.
+
+- Enable/disable: SITE.ABOUT-ME.ENABLED (boolean)
+- Title: SITE.ABOUT-ME.TITLE (string)
+- Content: SITE.ABOUT-ME.CONTENT (string)
+
+You can manage these in the Admin Dashboard:
+
+- Navigate to Admin -> System -> About Me
+- Toggle enable, edit the title and content, then Save Changes
+
+When enabled, the About Me section renders above the Recent posts list.
