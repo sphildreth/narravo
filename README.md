@@ -128,7 +128,6 @@ A quick reference for common development tasks:
 | `pnpm drizzle:push`     | Apply schema changes to the database            |
 | `pnpm seed:config`      | Seed default configuration values               |
 | `pnpm seed:posts`       | Seed demo posts and comments                    |
-| `pnpm wxr:import`       | Import WordPress WXR content (stub)             |
 
 ---
 
@@ -142,7 +141,7 @@ src/components/         # Reusable UI components
 src/lib/                # Server-side services, utilities, and business logic
 src/types/              # TypeScript types (consolidated)
 drizzle/                # Drizzle ORM schema and database migrations
-scripts/                # Utility scripts (seeding, imports)
+scripts/                # Utility scripts (seeding)
 tests/                  # Unit and integration tests
 docs/                   # Project documentation and specifications
 ```
