@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+
 export type PostDTO = {
   id: string;
   slug: string;
@@ -11,4 +12,20 @@ export type PostDTO = {
   author?: { name?: string | null; image?: string | null } | null;
   viewsTotal?: number;
   viewsLastNDays?: number;
+  category?: { id: string; name: string; slug: string } | null;
+  tags?: { id: string; name: string; slug: string }[];
+};
+
+export type TagDTO = {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+};
+
+export type CategoryDTO = {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
 };

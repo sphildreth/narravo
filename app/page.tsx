@@ -2,7 +2,7 @@
 import Navbar from "@/components/Navbar";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
-import ArticleCard from "@/components/ArticleCard";
+import LoadMore from "@/components/LoadMore";
 import ProseExample from "@/components/Prose";
 import TrendingPosts from "@/components/analytics/TrendingPosts";
 import { listPosts } from "@/lib/posts";
@@ -23,7 +23,7 @@ export default async function Page() {
     ["home", `limit:${feedCount}`],
     { revalidate: revalidateSeconds, tags: ["home"] }
   );
-  const { items: posts } = await getPosts();
+  const { items: posts, nextCursor } = await getPosts();
 
   // Get view counts for all posts
   const postIds = posts.map(p => p.id);
@@ -50,10 +50,12 @@ export default async function Page() {
             <TrendingPosts />
           </div>
         </div>
-        <div className="order-1 md:order-2 grid gap-6">
-          {postsWithViews.map((post) => (
-            <ArticleCard key={post.id} post={post} />
-          ))}
+        <div className="order-1 md:order-2">
+          <LoadMore 
+            initialPosts={postsWithViews} 
+            initialCursor={nextCursor}
+            limit={feedCount}
+          />
           <ProseExample html="" />
         </div>
       </div>

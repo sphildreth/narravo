@@ -4,6 +4,26 @@ import { sql } from "drizzle-orm";
 import { pgEnum, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { boolean } from "drizzle-orm/pg-core";
 
+// Categories table (must be defined before posts table)
+export const categories = pgTable("categories", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  categoriesNameIndex: index("categories_name_idx").on(table.name),
+}));
+
+// Tags table
+export const tags = pgTable("tags", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  tagsNameIndex: index("tags_name_idx").on(table.name),
+}));
+
 export const posts = pgTable("posts", {
   id: uuid("id").primaryKey().defaultRandom(),
   slug: text("slug").notNull().unique(),
@@ -14,6 +34,7 @@ export const posts = pgTable("posts", {
   excerpt: text("excerpt"),
   guid: text("guid").unique(), // WordPress GUID for import idempotency
   viewsTotal: integer("views_total").notNull().default(0),
+  categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
@@ -138,3 +159,23 @@ export const postViewEvents = pgTable(
     postIdTsIndex: index("post_view_events_post_id_ts_idx").on(table.postId, table.ts),
   })
 );
+
+// Post-tag junction table
+export const postTags = pgTable("post_tags", {
+  postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }).notNull(),
+  tagId: uuid("tag_id").references(() => tags.id, { onDelete: "cascade" }).notNull(),
+}, (table) => ({
+  postTagsPrimaryKey: { columns: [table.postId, table.tagId] },
+  postTagsPostIdIndex: index("post_tags_post_id_idx").on(table.postId),
+  postTagsTagIdIndex: index("post_tags_tag_id_idx").on(table.tagId),
+}));
+
+// Comment-tag junction table (for admin tag management on comments)
+export const commentTags = pgTable("comment_tags", {
+  commentId: uuid("comment_id").references(() => comments.id, { onDelete: "cascade" }).notNull(),
+  tagId: uuid("tag_id").references(() => tags.id, { onDelete: "cascade" }).notNull(),
+}, (table) => ({
+  commentTagsPrimaryKey: { columns: [table.commentId, table.tagId] },
+  commentTagsCommentIdIndex: index("comment_tags_comment_id_idx").on(table.commentId),
+  commentTagsTagIdIndex: index("comment_tags_tag_id_idx").on(table.tagId),
+}));

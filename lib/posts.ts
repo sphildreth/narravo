@@ -8,6 +8,7 @@ import type { PostDTO } from "@/src/types/content";
 import { getReactionCounts, getUserReactions, type ReactionCounts, type UserReactions } from "./reactions";
 import { markdownToHtmlSync, extractExcerpt } from "./markdown";
 import { posts } from "@/drizzle/schema";
+import { getPostTags, getPostCategory } from "./taxonomy";
 
 function normalizePagination(input?: { page?: number; pageSize?: number }) {
   const pageRaw = input?.page ?? 1;
@@ -83,20 +84,36 @@ export async function getPostBySlug(slug: string) {
       const res: any = await db.execute(sql`
     select p.id, p.slug, p.title, p.excerpt, 
            p.body_md as "bodyMd", p.body_html as "bodyHtml", 
-           p.html, p.published_at as "publishedAt"${selectViews}
+           p.html, p.published_at as "publishedAt",
+           p.category_id as "categoryId"${selectViews}
     from posts p
     where p.slug = ${slug}
     limit 1
   `);
       const row = (res.rows ?? [])[0];
-      return row ? {
+      if (!row) return null;
+      
+      const post = {
           id: row.id, slug: row.slug, title: row.title, excerpt: row.excerpt ?? null,
           bodyMd: row.bodyMd ?? null,
           bodyHtml: row.bodyHtml ?? row.html ?? null, // Fall back to legacy html field
           html: row.html ?? null, // Keep for backward compatibility
           publishedAt: row.publishedAt ? new Date(row.publishedAt).toISOString() : null,
-          viewsTotal: row.viewsTotal ?? 0
-      } : null;
+          viewsTotal: row.viewsTotal ?? 0,
+          categoryId: row.categoryId,
+      };
+      
+      // Get tags and category in parallel
+      const [tags, category] = await Promise.all([
+        getPostTags(post.id),
+        post.categoryId ? getPostCategory(post.categoryId) : Promise.resolve(null)
+      ]);
+      
+      return {
+        ...post,
+        tags,
+        category,
+      };
     }
 
     try {
@@ -200,4 +217,52 @@ export async function updatePost(id: string, data: {
     .returning();
     
   return result[0];
+}
+
+/**
+ * Get the previous post (older) based on publishedAt with id as tie-breaker
+ */
+export async function getPreviousPost(currentId: string): Promise<{ id: string; slug: string; title: string } | null> {
+  const res: any = await db.execute(sql`
+    select p.id, p.slug, p.title, p.published_at as "publishedAt"
+    from posts p
+    where p.published_at is not null
+      and p.id != ${currentId}
+      and (
+        p.published_at < (select published_at from posts where id = ${currentId})
+        or (
+          p.published_at = (select published_at from posts where id = ${currentId})
+          and p.id < ${currentId}
+        )
+      )
+    order by p.published_at desc nulls last, p.id desc
+    limit 1
+  `);
+  
+  const row = (res.rows ?? [])[0];
+  return row ? { id: row.id, slug: row.slug, title: row.title } : null;
+}
+
+/**
+ * Get the next post (newer) based on publishedAt with id as tie-breaker
+ */
+export async function getNextPost(currentId: string): Promise<{ id: string; slug: string; title: string } | null> {
+  const res: any = await db.execute(sql`
+    select p.id, p.slug, p.title, p.published_at as "publishedAt"
+    from posts p
+    where p.published_at is not null
+      and p.id != ${currentId}
+      and (
+        p.published_at > (select published_at from posts where id = ${currentId})
+        or (
+          p.published_at = (select published_at from posts where id = ${currentId})
+          and p.id > ${currentId}
+        )
+      )
+    order by p.published_at asc nulls last, p.id asc
+    limit 1
+  `);
+  
+  const row = (res.rows ?? [])[0];
+  return row ? { id: row.id, slug: row.slug, title: row.title } : null;
 }
