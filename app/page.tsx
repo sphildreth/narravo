@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-import Navbar from "@/components/Navbar";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import LoadMore from "@/components/LoadMore";
@@ -40,8 +39,7 @@ export default async function Page() {
   });
 
   return (
-    <main className="min-h-screen bg-bg text-fg">
-      <Navbar variant="hero" />
+    <>
       <Header />
       <div className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
         <div className="order-2 md:order-1">
@@ -59,7 +57,7 @@ export default async function Page() {
           <ProseExample html="" />
         </div>
       </div>
-        <footer className="mt-10 border-t border-border px-6 py-6 text-center text-muted">Proudly powered by <a href="https://github.com/sphildreth/narravo" target="_blank">Narravo</a>.</footer>
-    </main>
+      <footer className="mt-10 border-t border-border px-6 py-6 text-center text-muted">Proudly powered by <a href="https://github.com/sphildreth/narravo" target="_blank">Narravo</a>.</footer>
+    </>
   );
 }

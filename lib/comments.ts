@@ -97,7 +97,7 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
     select c.id, c.post_id as "postId", c.user_id as "userId", c.path, c.depth, c.body_html as "bodyHtml",
            c.created_at as "createdAt",
            u.name as "authorName", u.image as "authorImage",
-           c.children_count as "childrenCount"
+           (select count(*)::int from comments c2 where c2.parent_id = c.id and c2.status = 'approved') as "childrenCount"
     from comments c
     left join users u on u.id = c.user_id
     where c.post_id = ${postId}

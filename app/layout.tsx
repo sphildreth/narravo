@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
+import Navbar from "@/components/Navbar";
 
 export async function generateMetadata(): Promise<Metadata> {
     try {
@@ -37,7 +38,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
         <html lang="en" data-theme={theme} suppressHydrationWarning>
         <body>
-            {children}
+            <Navbar />
+            <main className="min-h-screen bg-bg text-fg">
+                {children}
+            </main>
         </body>
         </html>
     );

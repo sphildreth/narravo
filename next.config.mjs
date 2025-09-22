@@ -18,6 +18,7 @@ const imgSrc = [
   "avatars.githubusercontent.com",
   "images.unsplash.com",
   "lh3.googleusercontent.com",
+  "i.pravatar.cc",
 ].filter(Boolean).join(" ");
 
 const mediaSrc = [
@@ -67,6 +68,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      { protocol: 'https', hostname: 'i.pravatar.cc' },
       ...(s3Hostname ? [{ protocol: 'https', hostname: s3Hostname }] : []),
     ],
   },

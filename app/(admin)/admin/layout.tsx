@@ -2,7 +2,6 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import AdminNavbar from "@/components/admin/AdminNavbar";
-import Navbar from "@/components/Navbar";
 import AdminHeader from "@/components/admin/AdminHeader";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -13,8 +12,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <main className="min-h-screen bg-bg text-fg">
-      {/* Shared site header with admin context */}
-      <Navbar context="admin" />
       <div className="flex min-h-[calc(100vh-56px)]">
         <AdminNavbar />
         <section className="flex-1">
