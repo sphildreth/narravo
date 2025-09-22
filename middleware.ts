@@ -34,7 +34,12 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  // Inject route context for server components (e.g., Navbar)
+  const requestHeaders = new Headers(request.headers);
+  const isAdmin = pathname.startsWith("/admin");
+  requestHeaders.set("x-app-context", isAdmin ? "admin" : "site");
+
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

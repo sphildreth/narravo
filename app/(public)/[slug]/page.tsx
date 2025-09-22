@@ -67,6 +67,25 @@ export default async function PostPage({ params }: Props) {
       <main className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
         <ViewTracker postId={post.id} />
         <div className="order-1 md:order-2 grid gap-6">
+            {isAdmin && (
+                <div className="px-6 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm text-amber-800 font-medium">Admin Actions</span>
+                        <div className="flex items-center gap-3">
+                            <Link
+                                href={`/admin/posts/${post.id}`}
+                                className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                            >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Edit
+                            </Link>
+                            <DeletePostButton postId={post.id} postTitle={post.title} />
+                        </div>
+                    </div>
+                </div>
+            )}
           <article className="article border border-border rounded-xl bg-card shadow-soft">
             <div className="article__body p-6">
               <header className="mb-3">
@@ -83,28 +102,8 @@ export default async function PostPage({ params }: Props) {
                   <p className="mt-2 text-gray-700">{post.excerpt}</p>
                 )}
               </header>
-              
-              {/* Admin Actions */}
-              {isAdmin && (
-                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-amber-800 font-medium">Admin Actions</span>
-                    <div className="flex items-center gap-3">
-                      <Link
-                        href={`/admin/posts/${post.id}`}
-                        className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-                      >
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Edit
-                      </Link>
-                      <DeletePostButton postId={post.id} postTitle={post.title} />
-                    </div>
-                  </div>
-                </div>
-              )}
-              
+
+
               <div
                 className="prose"
                 dangerouslySetInnerHTML={{ __html: post.bodyHtml ?? "" }}

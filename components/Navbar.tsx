@@ -7,9 +7,14 @@ import UserMenu from "@/components/auth/UserMenu";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import Image from "next/image";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 export default async function Navbar({ context, variant }: { context?: "admin" | "site"; variant?: "default" | "hero" }) {
+    // Auto-detect context from middleware header when not explicitly provided
+    const hdrs = headers();
+    const detectedContext = hdrs.get("x-app-context") === "admin" ? "admin" : "site";
+    const effectiveContext: "admin" | "site" = context ?? detectedContext;
+
     const session = await auth();
     const isAdmin = Boolean(session?.user && (session.user as any).isAdmin);
     const isLoggedIn = Boolean(session?.user);
@@ -24,7 +29,7 @@ export default async function Navbar({ context, variant }: { context?: "admin" |
     if (!themeCookie) {
         try {
             const configured = await config.getString("THEME.DEFAULT");
-            if (configured === "light" || configured === "dark") theme = configured;
+            if (configured === "light" || configured === "dark") theme = configured as typeof theme;
         } catch {}
     }
 
@@ -37,10 +42,10 @@ export default async function Navbar({ context, variant }: { context?: "admin" |
                 </Link>
                 <div className="flex items-center gap-3">
                     <ThemeToggle initialTheme={theme} />
-                    {context === "admin" && (
+                    {effectiveContext === "admin" && (
                         <Link href="/" className="inline-flex items-center h-9 border border-border px-3 rounded-xl bg-bg text-fg text-sm font-semibold hover:border-accent">View site</Link>
                     )}
-                    {context !== "admin" && isAdmin && (
+                    {effectiveContext !== "admin" && isAdmin && (
                         <Link href="/admin/dashboard" className="inline-flex items-center h-9 border border-transparent px-3 rounded-xl bg-brand text-brand-contrast text-sm font-semibold">Admin</Link>
                     )}
                     {isLoggedIn && userForMenu ? (
