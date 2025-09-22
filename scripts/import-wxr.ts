@@ -206,6 +206,38 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
   return null; // Skip other post types
 }
 
+function guessContentType(url: string, fallback: string = 'application/octet-stream'): string {
+  const lower = url.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.svg')) return 'image/svg+xml';
+  if (lower.endsWith('.avif')) return 'image/avif';
+  if (lower.endsWith('.mp4')) return 'video/mp4';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
+  return fallback;
+}
+
+function getExtensionFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const pathname = u.pathname || "";
+    const filename = pathname.substring(pathname.lastIndexOf("/") + 1);
+    const idx = filename.lastIndexOf(".");
+    if (idx > 0 && idx < filename.length - 1) {
+      return filename.substring(idx + 1).toLowerCase();
+    }
+  } catch {
+    // Fallback to naive parsing if URL constructor fails
+    const cleaned = url.split("?")[0]?.split("#")[0] ?? url;
+    const idx = cleaned.lastIndexOf(".");
+    if (idx > -1) return cleaned.substring(idx + 1).toLowerCase();
+  }
+  return "bin";
+}
+
 async function downloadMedia(url: string, s3Service: S3Service | null, allowedHosts: string[]): Promise<string | null> {
   if (!s3Service) {
     return null; // No S3 configured, skip download
@@ -229,30 +261,16 @@ async function downloadMedia(url: string, s3Service: S3Service | null, allowedHo
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const buffer = await response.arrayBuffer();
-    const hash = crypto.createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
-    
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+
     // Use hash as key to avoid duplicates
-    const extension = url.split('.').pop()?.toLowerCase() || 'bin';
+    const extension = getExtensionFromUrl(url);
     const key = `imported-media/${hash}.${extension}`;
     
-    // Check if already exists
-    try {
-      return s3Service.getPublicUrl(key);
-    } catch {
-      // File doesn't exist, upload it
-    }
-
-    // Upload to S3
-    const { PutObjectCommand } = await import("@aws-sdk/client-s3");
-    const putCommand = new PutObjectCommand({
-      Bucket: s3Service['bucket'], // Access private property
-      Key: key,
-      Body: new Uint8Array(buffer), // Convert ArrayBuffer to Uint8Array
-      ContentType: response.headers.get('content-type') || 'application/octet-stream',
-    });
-
-    await s3Service['client'].send(putCommand); // Access private client
+    // Upload to S3 (idempotent overwrite)
+    const contentType = response.headers.get('content-type') || guessContentType(url);
+    await s3Service.putObject(key, buffer, contentType);
     return s3Service.getPublicUrl(key);
   } catch (error) {
     console.error(`Failed to download media ${url}:`, error);
@@ -264,7 +282,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): strin
   let rewritten = html;
   
   for (const [oldUrl, newUrl] of mediaUrlMap) {
-    // Replace both src and href attributes
+    // Replace any occurrence (src, href, srcset, poster, CSS url())
     rewritten = rewritten.replace(
       new RegExp(escapeRegExp(oldUrl), 'g'),
       newUrl
@@ -292,6 +310,66 @@ function generateSlugWithFallback(baseSlug: string, existingSlugs: Set<string>):
   }
   
   return candidateSlug;
+}
+
+function isHttpUrl(u: string): boolean {
+  return u.startsWith("http://") || u.startsWith("https://");
+}
+
+function extractMediaUrlsFromHtml(html: string): Set<string> {
+  const urls = new Set<string>();
+  if (!html) return urls;
+
+  // src, data-src, poster, href on <a> to media files
+  const attrPatterns = [
+    /\s(?:src|data-src|poster)=["']([^"']+)["']/gi,
+    /\shref=["']([^"']+)["']/gi,
+  ];
+
+  for (const re of attrPatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      const u = m?.[1] ?? "";
+      if (u && isHttpUrl(u)) {
+        urls.add(u);
+      }
+    }
+  }
+
+  // srcset handling: URLs separated by commas, with descriptors
+  const srcsetRe = /\ssrcset=["']([^"']+)["']/gi;
+  let sm: RegExpExecArray | null;
+  while ((sm = srcsetRe.exec(html)) !== null) {
+    const raw = sm?.[1] ?? "";
+    if (!raw) continue;
+    const parts = raw.split(',');
+    for (const part of parts) {
+      const urlPart = (part.trim().split(/\s+/)[0] ?? "");
+      if (urlPart && isHttpUrl(urlPart)) {
+        urls.add(urlPart);
+      }
+    }
+  }
+
+  // <source src="...">
+  const sourceRe = /<source\b[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi;
+  let s: RegExpExecArray | null;
+  while ((s = sourceRe.exec(html)) !== null) {
+    const u = s?.[1] ?? "";
+    if (u && isHttpUrl(u)) {
+      urls.add(u);
+    }
+  }
+
+  // CSS url(...) in style attributes
+  const cssUrlRe = /url\(("|')?(https?:[^"')]+)\1?\)/gi;
+  let c: RegExpExecArray | null;
+  while ((c = cssUrlRe.exec(html)) !== null) {
+    const u = c?.[2] ?? "";
+    if (u) urls.add(u);
+  }
+
+  return urls;
 }
 
 export async function importWxr(filePath: string, options: ImportOptions = {}): Promise<ImportResult> {
@@ -464,6 +542,19 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     for (const post of postItems) {
       try {
+        // Proactively download any remote media found in the HTML content
+        if (!skipMedia && s3Service) {
+          const mediaUrls = extractMediaUrlsFromHtml(post.html);
+          for (const mediaUrl of mediaUrls) {
+            if (!result.mediaUrls.has(mediaUrl)) {
+              const newUrl = await downloadMedia(mediaUrl, s3Service, allowedHosts);
+              if (newUrl) {
+                result.mediaUrls.set(mediaUrl, newUrl);
+              }
+            }
+          }
+        }
+
         // Rewrite media URLs in content
         const expanded = expandShortcodes(post.html);
         const sanitized = sanitizeHtml(expanded);
@@ -743,18 +834,24 @@ async function run() {
   const dryRun = args.includes("--dry-run");
   const skipMedia = args.includes("--skip-media");
   const verbose = args.includes("--verbose");
+  const allowedHostsArg = args.find(a => a.startsWith("allowedHosts="))?.split("=")[1] ?? "";
+  const allowedHosts = allowedHostsArg
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
 
   if (!pathArg) {
-    console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose]");
+    console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [allowedHosts=example.com,cdn.example.com]");
     process.exit(1);
   }
 
   console.log(`Starting WXR import from: ${pathArg}`);
   if (dryRun) console.log("🏃 DRY RUN MODE - No changes will be made");
   if (skipMedia) console.log("📷 SKIP MEDIA MODE - Media will not be downloaded");
+  if (allowedHosts.length > 0) console.log(`🔒 Allowed media hosts: ${allowedHosts.join(", ")}`);
 
   const startTime = Date.now();
-  const result = await importWxr(pathArg, { dryRun, skipMedia, verbose });
+  const result = await importWxr(pathArg, { dryRun, skipMedia, verbose, allowedHosts });
   const duration = Date.now() - startTime;
 
   console.log("\n📊 Import Summary:");

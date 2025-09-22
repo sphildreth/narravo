@@ -76,6 +76,17 @@ export class S3Service {
     };
   }
 
+  // New: simple helper to upload a buffer directly
+  async putObject(key: string, body: Uint8Array, contentType: string): Promise<void> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    });
+    await this.client.send(command);
+  }
+
   getPublicUrl(key: string): string {
     if (this.config.endpoint) {
       // For R2 or custom endpoints
