@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+	xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:wp="http://wordpress.org/export/1.2/"
+>
+<channel>
+	<title>Test Blog</title>
+	<link>https://example.com</link>
+	<description>A test blog export</description>
+	<pubDate>Tue, 01 Jan 2024 12:00:00 +0000</pubDate>
+	<language>en-US</language>
+	<wp:wxr_version>1.2</wp:wxr_version>
+	
+	<item>
+		<title>First Post</title>
+		<link>https://example.com/2024/01/first-post/</link>
+		<pubDate>Tue, 01 Jan 2024 12:00:00 +0000</pubDate>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<guid isPermaLink="false">https://example.com/?p=1</guid>
+		<description></description>
+		<content:encoded><![CDATA[<p>This is the first post with some <strong>bold text</strong> and a <a href="https://example.com">link</a>.</p>
+
+<p>It also has an image: <img src="https://example.com/wp-content/uploads/2024/01/test-image.jpg" alt="Test Image" /></p>]]></content:encoded>
+		<excerpt:encoded><![CDATA[This is the excerpt for the first post.]]></excerpt:encoded>
+		<wp:post_id>1</wp:post_id>
+		<wp:post_date>2024-01-01 12:00:00</wp:post_date>
+		<wp:post_date_gmt>2024-01-01 12:00:00</wp:post_date_gmt>
+		<wp:post_name>first-post</wp:post_name>
+		<wp:status>publish</wp:status>
+		<wp:post_type>post</wp:post_type>
+	</item>
+	
+	<item>
+		<title>Second Post</title>
+		<link>https://example.com/2024/01/second-post/</link>
+		<pubDate>Wed, 02 Jan 2024 10:30:00 +0000</pubDate>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<guid isPermaLink="false">https://example.com/?p=2</guid>
+		<description></description>
+		<content:encoded><![CDATA[<p>This is the second post with different content.</p>
+
+<p>It has a video: <video controls><source src="https://example.com/wp-content/uploads/2024/01/sample-video.mp4" type="video/mp4"></video></p>]]></content:encoded>
+		<excerpt:encoded><![CDATA[]]></excerpt:encoded>
+		<wp:post_id>2</wp:post_id>
+		<wp:post_date>2024-01-02 10:30:00</wp:post_date>
+		<wp:post_date_gmt>2024-01-02 10:30:00</wp:post_date_gmt>
+		<wp:post_name>second-post</wp:post_name>
+		<wp:status>publish</wp:status>
+		<wp:post_type>post</wp:post_type>
+	</item>
+	
+	<item>
+		<title>Draft Post</title>
+		<link>https://example.com/?p=3</link>
+		<pubDate>Thu, 03 Jan 2024 09:00:00 +0000</pubDate>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<guid isPermaLink="false">https://example.com/?p=3</guid>
+		<description></description>
+		<content:encoded><![CDATA[<p>This is a draft post that should not be published.</p>]]></content:encoded>
+		<excerpt:encoded><![CDATA[]]></excerpt:encoded>
+		<wp:post_id>3</wp:post_id>
+		<wp:post_date>2024-01-03 09:00:00</wp:post_date>
+		<wp:post_date_gmt>2024-01-03 09:00:00</wp:post_date_gmt>
+		<wp:post_name>draft-post</wp:post_name>
+		<wp:status>draft</wp:status>
+		<wp:post_type>post</wp:post_type>
+	</item>
+
+	<item>
+		<title>Test Image</title>
+		<link>https://example.com/wp-content/uploads/2024/01/test-image.jpg</link>
+		<pubDate>Tue, 01 Jan 2024 12:00:00 +0000</pubDate>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<guid isPermaLink="false">https://example.com/?attachment=4</guid>
+		<description></description>
+		<content:encoded><![CDATA[]]></content:encoded>
+		<excerpt:encoded><![CDATA[]]></excerpt:encoded>
+		<wp:post_id>4</wp:post_id>
+		<wp:post_date>2024-01-01 12:00:00</wp:post_date>
+		<wp:post_date_gmt>2024-01-01 12:00:00</wp:post_date_gmt>
+		<wp:post_name>test-image</wp:post_name>
+		<wp:status>inherit</wp:status>
+		<wp:post_type>attachment</wp:post_type>
+		<wp:post_parent>1</wp:post_parent>
+		<wp:attachment_url>https://example.com/wp-content/uploads/2024/01/test-image.jpg</wp:attachment_url>
+	</item>
+
+</channel>
+</rss>

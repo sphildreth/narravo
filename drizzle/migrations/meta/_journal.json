@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1758319582261,
+      "tag": "0000_lethal_young_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1758371304854,
+      "tag": "0001_sweet_daredevil",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1758457710625,
+      "tag": "0002_eager_giant_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1758459121342,
+      "tag": "0003_nebulous_iceman",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1758490873871,
+      "tag": "0004_friendly_master_mold",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1758498573084,
+      "tag": "0005_lying_metal_master",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1758498961198,
+      "tag": "0006_glossy_randall",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1758506694386,
+      "tag": "0007_living_captain_america",
+      "breakpoints": true
+    }
+  ]
+}

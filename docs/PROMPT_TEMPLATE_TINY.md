@@ -1,1 +1,0 @@
-Implement <feature> exactly per PRD; deliver code + tests + minimal docs; no scope beyond described endpoints/models; verify with dotnet build && dotnet test

@@ -1,137 +1,119 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Contributing to Narravo
 
 Welcome! This document explains how to build, run, test, and contribute code to Narravo.
-It reflects the current repo layout:
+The project uses Next.js 14 with App Router, TypeScript, React, and PostgreSQL.
+
+## Tech Stack Overview
 
 ```
-/brand/                             # Logos, wordmarks, prompts
-/docs/                              # PRD, SPEC, guides
-/scripts/                           # Helper scripts (e.g., create_solution.*)
-/src/
-  Narravo.Core/                     # Domain models & enums
-  Narravo.Infrastructure/           # EF Core DbContext, migrations, import, seed
-  Narravo.Public/                   # Public site (Razor Pages + OutputCache)
-  Narravo.Admin/                    # Admin (Blazor Server + Ant Design Blazor)
-  Narravo.Tools.Export/             # Static export CLI
+/app/                             # Next.js App Router pages and layouts
+  /(admin)/                       # Admin interface routes
+  /(auth)/                        # Authentication routes  
+  /(public)/                      # Public blog routes
+  /api/                           # API routes
+/components/                      # Reusable React components
+/lib/                            # Utility functions and services
+/drizzle/                        # Database schema and migrations
+/tests/                          # Vitest + React Testing Library tests
+/docs/                           # Documentation and guides
+/scripts/                        # Build and utility scripts
 ```
 
 ## Development quickstart
 
 ### 0) Requirements
-- .NET 9 SDK
-- (Optional) ffmpeg for comment-video posters
-- (Optional) Docker + Docker Compose (for reverse proxy later)
+- Node.js 18+ and pnpm
+- Docker and Docker Compose (for PostgreSQL)
 
-### 1) Create the solution
+### 1) Start PostgreSQL with Docker
 ```bash
-cd scripts
-./create_solution.sh    # Windows: .\create_solution.ps1
+docker compose up -d db
+# Wait for container to be healthy
+docker ps
 ```
 
-### 2) Restore & run (SQLite, default)
-Public (seeds a sample post):
+### 2) Environment setup
 ```bash
-cd ../src/Narravo.Public
-dotnet restore
-dotnet run
+cp .env.example .env
+# Edit .env to set DATABASE_URL and auth keys
 ```
 
-Admin (OAuth placeholders are fine for local no-auth pages like /login):
+### 3) Install dependencies & setup database
 ```bash
-cd ../Narravo.Admin
-dotnet restore
-dotnet run
+pnpm install
+pnpm drizzle:push      # Create tables
+pnpm seed:config       # Seed configuration
+pnpm seed:posts        # (Optional) Seed demo content
 ```
 
-> SQLite DB is at `src/Narravo.Public/data/blog.db`. The app enables WAL and uses `busy_timeout` by default.
-
-### 3) Configure OAuth (optional for local)
-Edit `src/Narravo.Admin/appsettings.json`:
-```json
-{
-  "Authentication": {
-    "Google": { "ClientId": "...", "ClientSecret": "..." },
-    "GitHub": { "ClientId": "...", "ClientSecret": "..." }
-  }
-}
-```
-
-### 4) EF Core migrations
-Migrations are currently hand-authored for SQLite. If you modify models:
-
+### 4) Run development server
 ```bash
-# From repo root (after creating Narravo.sln):
-dotnet tool restore
-dotnet ef migrations add <Name> -p src/Narravo.Infrastructure -s src/Narravo.Public
-dotnet ef database update -p src/Narravo.Infrastructure -s src/Narravo.Public
+pnpm dev
+# Open http://localhost:3000
 ```
-
-> Public uses the same DbContext to ensure the DB exists and seeds on first run.
-
----
 
 ## Code style & quality
 
-- **C#**: `nullable enable`, `ImplicitUsings enable`. Prefer records/readonly where appropriate.
-- **Analyzers**: enable .NET analyzers; treat warnings as errors in CI.
-- **Formatting**: `dotnet format` before committing.
-- **Naming**: `PascalCase` for types/properties; `camelCase` for locals/parameters; `_camelCase` for private fields.
-- **Async**: `async/await` end-to-end on I/O; avoid blocking calls.
-- **Security**: never trust client HTML; sanitize on save and render. Add CSP/HSTS headers.
-- **Secrets**: never commit real client IDs or secrets; use `appsettings.Development.json`, `dotnet user-secrets`, or env vars.
+- **TypeScript**: Strict mode with `strictNullChecks`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`
+- **React**: Server Components by default; mark Client Components with `"use client"`
+- **Styling**: Tailwind CSS with custom CSS variables for theming
+- **Formatting**: ESLint + Prettier; run `pnpm lint` before committing
+- **Database**: Use Drizzle ORM; no raw SQL; migrations for schema changes
+- **Security**: Sanitize HTML with DOMPurify; validate inputs with Zod schemas
 
----
+## Testing
 
-## Tests
+- **Unit tests**: Utility functions, components, Server Actions
+- **Integration**: Database operations, API routes, auth flows
+- **Testing tools**: Vitest + React Testing Library + @testing-library/jest-dom
 
-- **Unit tests**: models, sanitization, reaction toggles, archive grouping, banner contrast.
-- **Integration**: WXR import (fixtures), backup/restore roundtrip, OAuth login (mock).
-- **Perf smoke**: simple load of `/posts/{slug}` warm cache to catch regressions.
+Run tests with:
+```bash
+pnpm test         # Run once
+pnpm test:watch   # Watch mode
+```
 
-> Add tests per feature; aim for meaningful coverage instead of raw %.
+## Database changes
 
----
+For schema modifications:
+```bash
+# 1. Edit drizzle/schema.ts
+# 2. Generate migration
+pnpm drizzle:generate
+# 3. Apply to database
+pnpm drizzle:push
+```
 
 ## Commit & PR guidelines
 
-- **Conventional Commits** (examples):
-    - `feat(admin): add post editor with preview`
-    - `fix(public): correct sitemap date format`
-    - `chore(ci): enable dotnet format check`
-- **Small PRs** with focused scope; include:
-    - what changed and why,
-    - screenshots/gifs for UI,
-    - migration notes if schema changed,
-    - how to test locally.
+- **Conventional Commits**:
+  - `feat(admin): add post editor component`
+  - `fix(auth): handle OAuth callback errors`
+  - `docs: update setup instructions`
+- **Small PRs** with focused scope
+- Include screenshots/GIFs for UI changes
+- Update docs for user-facing changes
 
----
+## Verification commands
 
-## Branching & releases
-
-- `main` = latest, green build.
-- Tag releases; publish artifacts (zips/images) from GitHub Actions.
-
----
-
-## Running with Caddy (optional, later)
-
-We will ship `compose.sqlite.yml` and a `Caddyfile` to simplify HTTPS in self-hosted scenarios. For MVP, native `dotnet run` is fine.
-
----
+Before submitting PRs, ensure:
+```bash
+pnpm typecheck    # TypeScript compilation
+pnpm test         # All tests pass
+pnpm build        # Production build works
+```
 
 ## Where to change what
 
-- New entities: `src/Narravo.Core` (models) + `src/Narravo.Infrastructure` (DbContext, migrations).
-- Public routes or SEO: `src/Narravo.Public` (Program.cs, Pages/, Services/Seo.cs).
-- Admin UX: `src/Narravo.Admin` (Pages, Shared, AntDesign components).
-- Static export: `src/Narravo.Tools.Export` (Program.cs).
+- **New database entities**: `drizzle/schema.ts` + migration
+- **Public pages**: `app/(public)/` routes
+- **Admin interface**: `app/(admin)/` routes  
+- **API endpoints**: `app/api/` routes
+- **Shared components**: `components/` directory
+- **Business logic**: `lib/` directory
+- **Documentation**: `docs/` directory
 
 ---
 
-## Issue labels (suggested)
-
-`good-first-issue`, `help-wanted`, `area-admin`, `area-public`, `area-infra`, `import`, `backup-restore`, `seo`, `accessibility`, `performance`, `documentation`.
-
----
-
-Thanks for contributing! Open a discussion before large refactors or datastore/provider changes to keep the roadmap tidy.
+Thanks for contributing! Open a discussion for large architectural changes to keep the roadmap aligned.

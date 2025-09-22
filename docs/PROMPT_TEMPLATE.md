@@ -1,17 +1,19 @@
-Project: Narravo (Blazor Admin + Razor Pages Public, EF Core + SQLite)
-Goal: Implement <feature> per PRD & Implementation Guide.
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+Project: Narravo (Next.js 14 + TypeScript + PostgreSQL + Drizzle ORM)
+Goal: Implement <feature> per requirements & acceptance criteria.
 
 Context
+- Tech stack: Next.js 14 App Router, TypeScript, React 18, PostgreSQL, Drizzle ORM, Auth.js
 - Repo layout:
-  /src/Narravo.Core, /src/Narravo.Infrastructure, /src/Narravo.Public, /src/Narravo.Admin
-  /docs (PRD_SPEC_Narravo_full.md, PRD_SPEC_IMPLEMENTATION_Augmented.md), /brand, /scripts
-- DB: SQLite (WAL enabled), EF Core, migrations in Narravo.Infrastructure, DbContext = BloggingDbContext
-- Security: server-side HTML sanitization; rate limits on write endpoints
-- Caching: OutputCache tags (home, post:{id}, term:{id}, archive:{yyyy-mm})
-- Style: nullable enable, analyzers on, Conventional Commits
+  /app (Next.js routes), /components (React components), /lib (utilities), /drizzle (schema/migrations)
+  /docs (guides), /tests (Vitest + React Testing Library), /scripts (build/seed tools)
+- DB: PostgreSQL with Drizzle ORM, strict TypeScript types, migrations in /drizzle
+- Security: server-side HTML sanitization (DOMPurify); rate limits on write endpoints
+- Caching: Next.js built-in caching with revalidatePath/revalidateTag
+- Style: strict TypeScript, Tailwind CSS, Conventional Commits
 
 Scope (Do exactly this; nothing more)
-1) <bullet list of concrete changes with exact URLs, models, and files to touch>
+1) <bullet list of concrete changes with exact file paths, components, and types to implement>
 2) …
 3) …
 
@@ -19,19 +21,21 @@ Acceptance Criteria (must all pass)
 - <AC #1>
 - <AC #2>
 - <AC #3>
+...
 
 Deliverables
-- Code changes in appropriate projects with unit/integration tests
-- Docs updated in /docs/<topic>.md
-- Screenshots/GIFs for any UI
-- EF migration (if schema changed) and updated seed if needed
+- Code changes in appropriate files with TypeScript types
+- Docs updated in /docs/<topic>.md if user-facing
+- Screenshots/GIFs for any UI changes
+- Database migration (if schema changed) with proper indexes
+- Tests for new functionality
 
 Constraints
-- Keep write transactions small; async EF only
-- No provider-specific SQL; keep compatible with SQLite
-- Sanitize all user HTML on save and render
-- Respect rate limits: comments 5/min/IP, reactions 20/min/IP
-- No secrets committed; placeholders only
+- Keep write operations efficient; use Server Actions for mutations
+- No database-specific SQL; use Drizzle ORM abstractions
+- Sanitize all user HTML on save and render with DOMPurify
+- Respect TypeScript strict mode settings
+- No secrets committed; use environment variables
 
 Files to modify / create (proposed)
 - <path/to/file1> (new or edit)
@@ -40,9 +44,10 @@ Files to modify / create (proposed)
 
 Commands to run (verification)
 ```bash
-    dotnet restore
-    dotnet build -warnaserror
-    dotnet test --collect:"XPlat Code Coverage"
-    # If migrations changed:
-    dotnet ef database update -p src/Narravo.Infrastructure -s src/Narravo.Public
+    pnpm install
+    pnpm typecheck
+    pnpm test
+    pnpm build
+    # If schema changed:
+    pnpm drizzle:push
 ```

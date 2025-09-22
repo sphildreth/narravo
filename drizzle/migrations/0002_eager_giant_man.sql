@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "reactions_unique_constraint" ON "reactions" USING btree ("target_type","target_id","user_id","kind");
