@@ -10,6 +10,7 @@ import {
   generateSlugFromTitle, 
   checkSlugAvailability 
 } from "@/app/(admin)/admin/posts/actions";
+import TiptapEditor from "@/components/editor/TiptapEditor";
 
 interface Post {
   id: string;
@@ -17,6 +18,7 @@ interface Post {
   slug: string;
   excerpt: string | null;
   html: string;
+  bodyMd?: string | null;
   publishedAt: Date | null;
   updatedAt: Date | null;
 }
@@ -37,7 +39,8 @@ export default function PostForm({ post }: PostFormProps) {
     title: post?.title || "",
     slug: post?.slug || "",
     excerpt: post?.excerpt || "",
-    html: post?.html || "",
+    // Prefer Markdown when available; otherwise fall back to existing HTML so editor is populated for legacy posts
+    bodyMd: ((post as any)?.bodyMd ?? (post as any)?.bodyHtml ?? (post as any)?.html) || "",
     publishedAt: post?.publishedAt ? new Date(post.publishedAt).toISOString().slice(0, 16) : "",
   });
 
@@ -108,8 +111,8 @@ export default function PostForm({ post }: PostFormProps) {
       newErrors.slug = "Slug must contain only lowercase letters, numbers, and hyphens";
     }
     
-    if (!formData.html.trim()) {
-      newErrors.html = "Content is required";
+    if (!formData.bodyMd.trim()) {
+      newErrors.bodyMd = "Content is required";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -123,7 +126,7 @@ export default function PostForm({ post }: PostFormProps) {
         submitData.append("title", formData.title);
         submitData.append("slug", formData.slug);
         submitData.append("excerpt", formData.excerpt);
-        submitData.append("html", formData.html);
+        submitData.append("bodyMd", formData.bodyMd);
         
         // Handle publish action
         if (action === "publish") {
@@ -255,25 +258,21 @@ export default function PostForm({ post }: PostFormProps) {
 
         {/* Content */}
         <div>
-          <label htmlFor="html" className="block text-sm font-medium mb-2">
-            Content (HTML) *
+          <label className="block text-sm font-medium mb-2">
+            Content *
           </label>
-          <textarea
-            id="html"
-            value={formData.html}
-            onChange={(e) => setFormData(prev => ({ ...prev, html: e.target.value }))}
-            className={`w-full px-3 py-2 border rounded-md font-mono text-sm ${
-              errors.html ? "border-red-300" : "border-border"
-            }`}
-            rows={20}
-            placeholder="Enter HTML content"
-            disabled={isPending}
-          />
-          {errors.html && (
-            <p className="mt-1 text-sm text-red-600">{errors.html}</p>
+          <div className="rounded-lg overflow-hidden">
+            <TiptapEditor
+              initialMarkdown={formData.bodyMd}
+              onChange={(md) => setFormData(prev => ({ ...prev, bodyMd: md }))}
+              placeholder="Write your post..."
+            />
+          </div>
+          {errors.bodyMd && (
+            <p className="mt-1 text-sm text-red-600">{errors.bodyMd}</p>
           )}
           <p className="mt-1 text-xs text-muted-foreground">
-            HTML content will be sanitized when saved
+            Content is stored as Markdown and safely rendered to HTML.
           </p>
         </div>
 
@@ -323,7 +322,7 @@ export default function PostForm({ post }: PostFormProps) {
           </button>
 
           {/* Preview (future enhancement) */}
-          {formData.title && formData.html && (
+          {formData.title && formData.bodyMd && (
             <Link
               href={`/${formData.slug}?preview=true`}
               target="_blank"

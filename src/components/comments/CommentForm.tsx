@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CommentUpload from "@/components/CommentUpload";
 import { createComment } from "./actions";
@@ -35,6 +35,18 @@ export default function CommentForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Focus the comment textarea when deep-linked with ?comment=1 or #comment
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const wantsFocus = url.searchParams.get("comment") === "1" || url.hash.replace('#','') === "comment";
+      if (wantsFocus && textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    } catch {}
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +95,7 @@ export default function CommentForm({
       {/* Text Area */}
       <div>
         <textarea
+          ref={textareaRef}
           value={bodyMd}
           onChange={(e) => setBodyMd(e.target.value)}
           placeholder={placeholder}

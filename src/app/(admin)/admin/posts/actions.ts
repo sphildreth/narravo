@@ -9,6 +9,7 @@ import { revalidateTag, revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import slugify from "slugify";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { markdownToHtmlSync } from "@/lib/markdown";
 import { z } from "zod";
 
 // Types for post management
@@ -26,15 +27,21 @@ export interface PostsSortOptions {
 }
 
 // Input validation schemas
-const createPostSchema = z.object({
+const createPostBaseSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
   slug: z.string().min(1, "Slug is required").max(255).regex(/^[a-z0-9-]+$/, "Slug must contain only lowercase letters, numbers, and hyphens"),
   excerpt: z.string().max(300).optional(),
-  html: z.string().min(1, "Content is required"),
+  html: z.string().optional(),
+  bodyMd: z.string().optional(),
   publishedAt: z.string().optional().nullable(),
 });
 
-const updatePostSchema = createPostSchema.extend({
+const createPostSchema = createPostBaseSchema.refine((data) => !!(data.bodyMd?.trim() || data.html?.trim()), {
+  message: "Content is required",
+  path: ["content"],
+});
+
+const updatePostSchema = createPostBaseSchema.extend({
   id: z.string().uuid(),
   updatedAt: z.string(), // for optimistic concurrency
 });
@@ -196,7 +203,8 @@ export async function createPost(formData: FormData) {
     title: formData.get("title") as string,
     slug: formData.get("slug") as string,
     excerpt: formData.get("excerpt") as string || undefined,
-    html: formData.get("html") as string,
+    html: (formData.get("html") as string) || undefined,
+    bodyMd: (formData.get("bodyMd") as string) || undefined,
     publishedAt: formData.get("publishedAt") as string || null,
   };
   
@@ -208,7 +216,7 @@ export async function createPost(formData: FormData) {
     };
   }
   
-  const { title, slug, excerpt, html, publishedAt } = parsed.data;
+  const { title, slug, excerpt, html, bodyMd, publishedAt } = parsed.data;
   
   try {
     // Generate slug if not provided or ensure uniqueness
@@ -222,9 +230,10 @@ export async function createPost(formData: FormData) {
       }
     }
     
-    // Sanitize HTML content
-    const sanitizedHtml = sanitizeHtml(html);
-    
+    // Compute final HTML and markdown
+    const fromMd = bodyMd && bodyMd.trim().length > 0;
+    const renderedHtml = fromMd ? markdownToHtmlSync(bodyMd!) : sanitizeHtml(html || "");
+
     // Create post
     const [newPost] = await db
       .insert(posts)
@@ -232,7 +241,9 @@ export async function createPost(formData: FormData) {
         title,
         slug: finalSlug,
         excerpt,
-        html: sanitizedHtml,
+        bodyMd: fromMd ? bodyMd! : null,
+        bodyHtml: fromMd ? renderedHtml : null,
+        html: renderedHtml, // keep legacy column in sync
         publishedAt: publishedAt ? new Date(publishedAt) : null,
       })
       .returning();
@@ -260,7 +271,8 @@ export async function updatePost(formData: FormData) {
     title: formData.get("title") as string,
     slug: formData.get("slug") as string,
     excerpt: formData.get("excerpt") as string || undefined,
-    html: formData.get("html") as string,
+    html: (formData.get("html") as string) || undefined,
+    bodyMd: (formData.get("bodyMd") as string) || undefined,
     publishedAt: formData.get("publishedAt") as string || null,
     updatedAt: formData.get("updatedAt") as string,
   };
@@ -273,7 +285,7 @@ export async function updatePost(formData: FormData) {
     };
   }
   
-  const { id, title, slug, excerpt, html, publishedAt, updatedAt } = parsed.data;
+  const { id, title, slug, excerpt, html, bodyMd, publishedAt, updatedAt } = parsed.data;
   
   try {
     // Check for concurrent updates
@@ -302,9 +314,10 @@ export async function updatePost(formData: FormData) {
       return { error: "Slug is already taken" };
     }
     
-    // Sanitize HTML content
-    const sanitizedHtml = sanitizeHtml(html);
-    
+    // Compute final HTML and markdown
+    const fromMd = bodyMd && bodyMd.trim().length > 0;
+    const renderedHtml = fromMd ? markdownToHtmlSync(bodyMd!) : sanitizeHtml(html || "");
+  
     // Update post
     const [updatedPost] = await db
       .update(posts)
@@ -312,7 +325,9 @@ export async function updatePost(formData: FormData) {
         title,
         slug,
         excerpt,
-        html: sanitizedHtml,
+        bodyMd: fromMd ? bodyMd! : null,
+        bodyHtml: fromMd ? renderedHtml : null,
+        html: renderedHtml,
         publishedAt: publishedAt ? new Date(publishedAt) : null,
         updatedAt: new Date(),
       })

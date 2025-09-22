@@ -73,7 +73,7 @@ export default async function PostPage({ params }: Props) {
                         <span className="text-sm text-amber-800 font-medium">Admin Actions</span>
                         <div className="flex items-center gap-3">
                             <Link
-                                href={`/admin/posts/${post.id}`}
+                                href={`/admin/posts/${post.id}/edit`}
                                 className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
                             >
                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

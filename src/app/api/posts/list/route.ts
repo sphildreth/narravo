@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { listPosts } from "@/lib/posts";
+import { ConfigServiceImpl } from "@/lib/config";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic"; // avoid static prerender; this route depends on request URL
 
@@ -39,6 +41,19 @@ export async function GET(request: NextRequest) {
     }
 
     const { limit, cursor: validatedCursor } = parsed.data;
+
+    // Determine cache TTL from configuration to align with home page ISR
+    let sMaxAge = 60;
+    let swr = 300;
+    try {
+      const config = new ConfigServiceImpl({ db });
+      const revalidateSeconds = await config.getNumber("PUBLIC.HOME.REVALIDATE-SECONDS");
+      if (typeof revalidateSeconds === "number" && !Number.isNaN(revalidateSeconds) && revalidateSeconds > 0) {
+        sMaxAge = revalidateSeconds;
+        swr = Math.max(60, revalidateSeconds * 5);
+      }
+    } catch {}
+
     const result = await listPosts({ 
       limit, 
       cursor: validatedCursor || null, 
@@ -47,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result, {
       headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        "Cache-Control": `public, s-maxage=${sMaxAge}, stale-while-revalidate=${swr}`,
         "Cache-Tags": "home",
       },
     });
