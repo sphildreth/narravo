@@ -1,6 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 import * as React from "react";
+import { useRouter } from "next/navigation";
 
 async function postJSON(path: string, body: any) {
   const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -18,6 +19,7 @@ type AboutMeState = {
 };
 
 export default function AboutMeManager({ initial }: { initial: AboutMeState }) {
+  const router = useRouter();
   const [state, setState] = React.useState<AboutMeState>(initial);
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -31,6 +33,7 @@ export default function AboutMeManager({ initial }: { initial: AboutMeState }) {
         postJSON("/api/admin/config/global", { key: "SITE.ABOUT-ME.CONTENT", value: state.content, type: "string", required: true }),
       ]);
       setMessage("About Me settings saved");
+      router.refresh();
     } catch (e: any) {
       setError(e.message || "Failed to save About Me settings");
     }

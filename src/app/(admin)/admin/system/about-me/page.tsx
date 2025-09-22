@@ -3,6 +3,10 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import AboutMeManager from "@/components/admin/about-me/AboutMeManager";
 
+// Ensure this admin page is always dynamic and not statically cached
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AboutMePage() {
   const config = new ConfigServiceImpl({ db });
   const opts = { bypassCache: true } as const;
