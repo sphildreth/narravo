@@ -16,7 +16,8 @@
     "seed:posts": "tsx scripts/seed-posts.ts",
     "spdx:add": "tsx scripts/add-spdx.ts",
     "backup": "tsx scripts/backup.ts",
-    "restore": "tsx scripts/restore.ts"
+    "restore": "tsx scripts/restore.ts",
+    "wxr:import": "tsx scripts/import-wxr.ts"
   },
   "dependencies": {
     "@auth/core": "^0.40.0",

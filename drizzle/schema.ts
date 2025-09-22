@@ -48,6 +48,7 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   name: text("name"),
   image: text("image"),
+  login: text("login").unique(), // WordPress username for import mapping
 });
 
 export const comments = pgTable(
@@ -181,4 +182,56 @@ export const commentTags = pgTable("comment_tags", {
   commentTagsPrimaryKey: { columns: [table.commentId, table.tagId] },
   commentTagsCommentIdIndex: index("comment_tags_comment_id_idx").on(table.commentId),
   commentTagsTagIdIndex: index("comment_tags_tag_id_idx").on(table.tagId),
+}));
+
+// Import job status enum
+export const importJobStatus = pgEnum("import_job_status", [
+  "queued",
+  "running", 
+  "cancelling",
+  "cancelled",
+  "failed",
+  "completed",
+]);
+
+// Import jobs table for tracking WXR imports
+export const importJobs = pgTable("import_jobs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  status: importJobStatus("status").notNull().default("queued"),
+  fileName: text("file_name").notNull(),
+  filePath: text("file_path").notNull(), // Temporary file path
+  options: jsonb("options").notNull(), // Import options (statuses, purge, etc.)
+  
+  // Progress counters
+  totalItems: integer("total_items").notNull().default(0),
+  postsImported: integer("posts_imported").notNull().default(0),
+  attachmentsProcessed: integer("attachments_processed").notNull().default(0),
+  redirectsCreated: integer("redirects_created").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  
+  // Timestamps
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  
+  // User who started the import
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+}, (table) => ({
+  importJobsStatusIndex: index("import_jobs_status_idx").on(table.status),
+  importJobsCreatedAtIndex: index("import_jobs_created_at_idx").on(table.createdAt),
+}));
+
+// Import job errors table for detailed error logging
+export const importJobErrors = pgTable("import_job_errors", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  jobId: uuid("job_id").references(() => importJobs.id, { onDelete: "cascade" }).notNull(),
+  itemIdentifier: text("item_identifier").notNull(), // Post GUID, attachment URL, etc.
+  errorType: text("error_type").notNull(), // "post_import", "media_download", "redirect_creation", etc.
+  errorMessage: text("error_message").notNull(),
+  itemData: jsonb("item_data"), // Relevant data for debugging
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  importJobErrorsJobIdIndex: index("import_job_errors_job_id_idx").on(table.jobId),
+  importJobErrorsTypeIndex: index("import_job_errors_type_idx").on(table.errorType),
 }));
