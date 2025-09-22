@@ -201,3 +201,51 @@ export async function updatePost(id: string, data: {
     
   return result[0];
 }
+
+/**
+ * Get the previous post (older) based on publishedAt with id as tie-breaker
+ */
+export async function getPreviousPost(currentId: string): Promise<{ id: string; slug: string; title: string } | null> {
+  const res: any = await db.execute(sql`
+    select p.id, p.slug, p.title, p.published_at as "publishedAt"
+    from posts p
+    where p.published_at is not null
+      and p.id != ${currentId}
+      and (
+        p.published_at < (select published_at from posts where id = ${currentId})
+        or (
+          p.published_at = (select published_at from posts where id = ${currentId})
+          and p.id < ${currentId}
+        )
+      )
+    order by p.published_at desc nulls last, p.id desc
+    limit 1
+  `);
+  
+  const row = (res.rows ?? [])[0];
+  return row ? { id: row.id, slug: row.slug, title: row.title } : null;
+}
+
+/**
+ * Get the next post (newer) based on publishedAt with id as tie-breaker
+ */
+export async function getNextPost(currentId: string): Promise<{ id: string; slug: string; title: string } | null> {
+  const res: any = await db.execute(sql`
+    select p.id, p.slug, p.title, p.published_at as "publishedAt"
+    from posts p
+    where p.published_at is not null
+      and p.id != ${currentId}
+      and (
+        p.published_at > (select published_at from posts where id = ${currentId})
+        or (
+          p.published_at = (select published_at from posts where id = ${currentId})
+          and p.id > ${currentId}
+        )
+      )
+    order by p.published_at asc nulls last, p.id asc
+    limit 1
+  `);
+  
+  const row = (res.rows ?? [])[0];
+  return row ? { id: row.id, slug: row.slug, title: row.title } : null;
+}

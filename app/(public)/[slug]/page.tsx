@@ -2,13 +2,14 @@
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getPostBySlug, getPostBySlugWithReactions } from "@/lib/posts";
+import { getPostBySlug, getPostBySlugWithReactions, getPreviousPost, getNextPost } from "@/lib/posts";
 import { getSession } from "@/lib/auth";
 import { getSiteMetadata } from "@/lib/rss";
 import { generatePostMetadata, generatePostJsonLd } from "@/lib/seo";
 import CommentsSection from "@/components/comments/CommentsSection";
 import ReactionButtons from "@/components/reactions/ReactionButtons";
 import { ViewTracker } from "@/components/analytics/ViewTracker";
+import Link from "next/link";
 
 type Props = {
   params: { slug: string };
@@ -34,6 +35,13 @@ export default async function PostPage({ params }: Props) {
   if (!post) {
     notFound();
   }
+  
+  // Get previous and next posts
+  const [previousPost, nextPost] = await Promise.all([
+    getPreviousPost(post.id),
+    getNextPost(post.id),
+  ]);
+  
   const date = post.publishedAt
     ? new Date(post.publishedAt).toLocaleDateString()
     : "";
@@ -92,6 +100,41 @@ export default async function PostPage({ params }: Props) {
               )}
             </div>
           </article>
+          
+          {/* Previous/Next Navigation */}
+          {(previousPost || nextPost) && (
+            <nav className="border border-border rounded-xl bg-card shadow-soft p-6" aria-label="Post navigation">
+              <div className="flex justify-between items-center">
+                <div className="flex-1">
+                  {previousPost && (
+                    <Link 
+                      href={`/${previousPost.slug}`}
+                      className="group block text-left"
+                    >
+                      <div className="text-xs text-muted uppercase tracking-wide mb-1">Previous</div>
+                      <div className="text-sm font-medium text-fg group-hover:text-primary transition-colors">
+                        {previousPost.title}
+                      </div>
+                    </Link>
+                  )}
+                </div>
+                <div className="flex-1 text-right">
+                  {nextPost && (
+                    <Link 
+                      href={`/${nextPost.slug}`}
+                      className="group block text-right"
+                    >
+                      <div className="text-xs text-muted uppercase tracking-wide mb-1">Next</div>
+                      <div className="text-sm font-medium text-fg group-hover:text-primary transition-colors">
+                        {nextPost.title}
+                      </div>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </nav>
+          )}
+          
           <CommentsSection postId={post.id} />
         </div>
       </main>
