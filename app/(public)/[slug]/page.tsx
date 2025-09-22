@@ -9,6 +9,7 @@ import { generatePostMetadata, generatePostJsonLd } from "@/lib/seo";
 import CommentsSection from "@/components/comments/CommentsSection";
 import ReactionButtons from "@/components/reactions/ReactionButtons";
 import { ViewTracker } from "@/components/analytics/ViewTracker";
+import DeletePostButton from "@/components/admin/DeletePostButton";
 import Link from "next/link";
 
 type Props = {
@@ -30,6 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PostPage({ params }: Props) {
   const session = await getSession();
   const userId = session?.user?.id || undefined;
+  const isAdmin = Boolean(session?.user?.isAdmin);
 
   const post = await getPostBySlugWithReactions(params.slug, userId);
   if (!post) {
@@ -81,6 +83,28 @@ export default async function PostPage({ params }: Props) {
                   <p className="mt-2 text-gray-700">{post.excerpt}</p>
                 )}
               </header>
+              
+              {/* Admin Actions */}
+              {isAdmin && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-amber-800 font-medium">Admin Actions</span>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/admin/posts/${post.id}`}
+                        className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Edit
+                      </Link>
+                      <DeletePostButton postId={post.id} postTitle={post.title} />
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div
                 className="prose"
                 dangerouslySetInnerHTML={{ __html: post.bodyHtml ?? "" }}
