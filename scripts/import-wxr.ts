@@ -22,6 +22,8 @@ export interface WxrItem {
   "wp:post_type"?: string;
   "wp:post_parent"?: string;
   "wp:attachment_url"?: string;
+  // For featured images and taxonomy/comments we may need postmeta and categories; we keep minimal typing here
+  "wp:postmeta"?: any;
 }
 
 export interface ParsedPost {
@@ -34,6 +36,8 @@ export interface ParsedPost {
   originalUrl?: string;
   status: string;
   postType: string;
+  featuredImageUrl?: string | null;
+  featuredImageAlt?: string | null;
 }
 
 export interface ParsedAttachment {
@@ -109,6 +113,21 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
     }
   }
 
+  // Featured image: WordPress stores post thumbnail in postmeta (_thumbnail_id) linking to attachment; as a heuristic, also consider <media:content> or first image in content (not implemented here). We parse postmeta if present.
+  let featuredImageUrl: string | null = null;
+  let featuredImageAlt: string | null = null;
+  const metas = (item["wp:postmeta"] && Array.isArray(item["wp:postmeta"]) ? item["wp:postmeta"] : (item["wp:postmeta"] ? [item["wp:postmeta"]] : []));
+  // If exporter included _thumbnail_url, prefer it (some plugins include this). Otherwise, Admin UI can set it later.
+  for (const m of metas) {
+    const k = m["wp:meta_key"]; const v = m["wp:meta_value"]; 
+    if (k === "_thumbnail_url" && typeof v === "string" && v.startsWith("http")) {
+      featuredImageUrl = v;
+    }
+    if ((k === "_thumbnail_alt" || k === "_wp_attachment_image_alt") && typeof v === "string") {
+      featuredImageAlt = v;
+    }
+  }
+
   const returnObj: ParsedPost = {
     guid,
     title,
@@ -118,6 +137,8 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
     publishedAt,
     status: status || "publish",
     postType: postType || "post",
+    featuredImageUrl,
+    featuredImageAlt,
   };
 
   if (item.link) {
@@ -328,6 +349,8 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
             excerpt: post.excerpt,
             guid: post.guid,
             publishedAt: post.publishedAt,
+            featuredImageUrl: post.featuredImageUrl ?? null,
+            featuredImageAlt: post.featuredImageAlt ?? null,
           }).onConflictDoUpdate({
             target: posts.guid,
             set: {
@@ -338,6 +361,8 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               bodyHtml: finalHtml,
               excerpt: post.excerpt,
               publishedAt: post.publishedAt,
+              featuredImageUrl: post.featuredImageUrl ?? null,
+              featuredImageAlt: post.featuredImageAlt ?? null,
               updatedAt: sql`now()`,
             },
           });
@@ -437,26 +462,7 @@ async function run() {
     }
   }
 
-  // Create checkpoint file
-  const checkpointData = {
-    timestamp: new Date().toISOString(),
-    file: pathArg,
-    result: result.summary,
-    errors: result.errors,
-  };
-
-  const checkpointPath = `${pathArg}.checkpoint.json`;
-  await fs.writeFile(checkpointPath, JSON.stringify(checkpointData, null, 2));
-  console.log(`\n💾 Checkpoint saved to: ${checkpointPath}`);
-
-  if (result.errors.length > 0) {
-    process.exit(1);
-  }
+  // Admin-only MVP: the CLI runner is not used; the Admin UI will call importWxr and persist summaries.
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  run().catch(e => {
-    console.error("💥 Import failed:", e);
-    process.exit(1);
-  });
-}
+// Note: No top-level CLI execution in MVP. The Admin portal should import and render summaries.

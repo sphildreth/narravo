@@ -33,6 +33,9 @@ export const posts = pgTable("posts", {
   html: text("html").notNull(), // Legacy column - to be deprecated
   excerpt: text("excerpt"),
   guid: text("guid").unique(), // WordPress GUID for import idempotency
+  // Featured image (post thumbnail)
+  featuredImageUrl: text("featured_image_url"),
+  featuredImageAlt: text("featured_image_alt"),
   viewsTotal: integer("views_total").notNull().default(0),
   categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
