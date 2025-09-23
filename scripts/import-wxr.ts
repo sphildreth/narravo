@@ -240,13 +240,23 @@ function getExtensionFromUrl(url: string): string {
 }
 
 async function downloadMedia(
-  url: string, 
-  s3Service: S3Service | null, 
+  url: string,
+  s3Service: S3Service | null,
   localService: LocalStorageService | null,
-  allowedHosts: string[]
+  allowedHosts: string[],
+  opts?: { dryRun?: boolean; verbose?: boolean }
 ): Promise<string | null> {
+  const dryRun = opts?.dryRun ?? false;
+  const verbose = opts?.verbose ?? false;
+
   if (!s3Service && !localService) {
     return null; // No storage configured, skip download
+  }
+
+  // In dry-run without remote storage configured, avoid making real network calls
+  if (dryRun && !s3Service) {
+    if (verbose) console.log(`⏩ Dry-run without S3 configured, skipping media download: ${url}`);
+    return null;
   }
 
   try {
@@ -287,7 +297,9 @@ async function downloadMedia(
     
     return null;
   } catch (error) {
-    console.error(`Failed to download media ${url}:`, error);
+    if (verbose) {
+      console.warn(`Skipping media ${url}:`, error);
+    }
     return null;
   }
 }
@@ -526,7 +538,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     for (const attachment of attachmentItems) {
       try {
         if (!skipMedia && attachment.attachmentUrl) {
-          const newUrl = await downloadMedia(attachment.attachmentUrl, s3Service, localService, allowedHosts);
+          const newUrl = await downloadMedia(attachment.attachmentUrl, s3Service, localService, allowedHosts, { dryRun, verbose });
           if (newUrl) {
             result.mediaUrls.set(attachment.attachmentUrl, newUrl);
           }
@@ -567,7 +579,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           const mediaUrls = extractMediaUrlsFromHtml(post.html);
           for (const mediaUrl of mediaUrls) {
             if (!result.mediaUrls.has(mediaUrl)) {
-              const newUrl = await downloadMedia(mediaUrl, s3Service, localService, allowedHosts);
+              const newUrl = await downloadMedia(mediaUrl, s3Service, localService, allowedHosts, { dryRun, verbose });
               if (newUrl) {
                 result.mediaUrls.set(mediaUrl, newUrl);
               }
