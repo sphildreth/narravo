@@ -266,3 +266,35 @@ export async function retryImportJob(jobId: string): Promise<ImportJobResult> {
     return { error: error instanceof Error ? error.message : "Failed to retry import job" };
   }
 }
+
+export async function deleteImportJob(jobId: string): Promise<ImportJobResult> {
+  try {
+    const session = await auth();
+    if (!session?.user || !(session.user as any).isAdmin) {
+      return { error: "Unauthorized" };
+    }
+
+    // Get existing job to check file path
+    const existingJobResult = await db.select().from(importJobs).where(eq(importJobs.id, jobId));
+    const existingJob = existingJobResult[0];
+    if (!existingJob) {
+      return { error: "Job not found" };
+    }
+
+    // Clean up file if it exists
+    try {
+      await fs.unlink(existingJob.filePath);
+    } catch {
+      // Ignore file cleanup errors (file may not exist)
+    }
+
+    // Delete job record (this will cascade delete related errors due to FK constraint)
+    await db.delete(importJobs).where(eq(importJobs.id, jobId));
+
+    revalidatePath("/admin/system/import");
+    return { job: existingJob };
+  } catch (error) {
+    console.error("Delete import job error:", error);
+    return { error: error instanceof Error ? error.message : "Failed to delete import job" };
+  }
+}
