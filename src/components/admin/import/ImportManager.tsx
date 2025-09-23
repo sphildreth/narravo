@@ -20,6 +20,7 @@ interface ImportOptions {
   allowedStatuses: string[];
   concurrency: number;
   allowedHosts: string[];
+  rebuildExcerpts?: boolean;
 }
 
 const defaultOptions: ImportOptions = {
@@ -29,6 +30,7 @@ const defaultOptions: ImportOptions = {
   allowedStatuses: ["publish"],
   concurrency: 4,
   allowedHosts: [],
+  rebuildExcerpts: false,
 };
 
 const statusColors = {
@@ -289,6 +291,18 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
                   className="rounded border-border"
                 />
                 <span className="text-sm text-red-600">Purge all data before import (destructive!)</span>
+              </label>
+
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={!!options.rebuildExcerpts}
+                  onChange={(e) =>
+                    setOptions(prev => ({ ...prev, rebuildExcerpts: e.target.checked }))
+                  }
+                  className="rounded border-border"
+                />
+                <span className="text-sm">Rebuild excerpts (recompute post excerpts)</span>
               </label>
             </div>
 

@@ -10,6 +10,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import crypto from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import { expandShortcodes } from "@/lib/markdown";
+import { generateExcerpt } from "@/lib/excerpts/ExcerptService";
 
 /**
  * Gutenberg block wrapper remover.
@@ -198,6 +199,7 @@ export interface ImportOptions {
   concurrency?: number;
   allowedHosts?: string[];
   jobId?: string;
+  rebuildExcerpts?: boolean; // new flag
 }
 
 export interface ImportResult {
@@ -555,7 +557,8 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     purgeBeforeImport = false,
     concurrency = 4,
     allowedHosts = [],
-    jobId
+    jobId,
+    rebuildExcerpts = false,
   } = options;
   
   const result: ImportResult = {
@@ -570,6 +573,11 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     dryRun,
     mediaUrls: new Map(),
   };
+
+  // Excerpt configuration
+  const EXCERPT_MAX = Number(process.env.EXCERPT_MAX_CHARS ?? 220);
+  const EXCERPT_ELLIPSIS = process.env.EXCERPT_ELLIPSIS ?? "…";
+  const INCLUDE_BLOCK_CODE = String(process.env.EXCERPT_INCLUDE_BLOCK_CODE ?? "false").toLowerCase() === "true";
 
   // Initialize S3 service if not skipping media
   let s3Service: S3Service | null = null;
@@ -758,6 +766,14 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         const expanded = expandShortcodes(post.html);
         const withIframes = transformIframeVideos(expanded);
         const normalized = normalizeWpLists(withIframes);
+
+        // Compute excerpt BEFORE sanitize to preserve <!--more--> markers if any
+        let computedExcerpt = generateExcerpt(normalized, {
+          maxChars: EXCERPT_MAX,
+          ellipsis: EXCERPT_ELLIPSIS,
+          dropBlockCode: !INCLUDE_BLOCK_CODE,
+        });
+
         const sanitized = sanitizeHtml(normalized);
         const finalHtml = rewriteMediaUrls(sanitized, result.mediaUrls);
 
@@ -815,6 +831,19 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               }
             }
 
+            // Determine whether to recompute excerpt on update by checking existing row
+            const existing = await tx.select({ id: posts.id, html: posts.html, excerpt: posts.excerpt })
+              .from(posts)
+              .where(eq(posts.guid, post.guid))
+              .limit(1);
+            const existingRow = existing[0];
+
+            const htmlChanged = !!existingRow && (existingRow.html ?? "") !== finalHtml;
+            const hadExcerpt = !!(existingRow?.excerpt && existingRow.excerpt.trim().length > 0);
+            const shouldRecompute = rebuildExcerpts || !hadExcerpt || htmlChanged;
+
+            const excerptToUse = shouldRecompute ? (computedExcerpt || null) : (existingRow?.excerpt ?? computedExcerpt ?? null);
+
             // Insert or update post using GUID for idempotency
             const insertedPost = await tx.insert(posts).values({
               slug: post.slug,
@@ -822,7 +851,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               html: finalHtml,
               bodyHtml: finalHtml,
               bodyMd: null,
-              excerpt: post.excerpt || null,
+              excerpt: excerptToUse,
               guid: post.guid,
               publishedAt: post.publishedAt || null,
               categoryId: primaryCategoryId,
@@ -834,7 +863,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
                 title: post.title,
                 html: finalHtml,
                 bodyHtml: finalHtml,
-                excerpt: post.excerpt || null,
+                excerpt: excerptToUse,
                 publishedAt: post.publishedAt || null,
                 categoryId: primaryCategoryId,
                 featuredImageUrl,
@@ -1048,6 +1077,7 @@ async function run() {
   const dryRun = args.includes("--dry-run");
   const skipMedia = args.includes("--skip-media");
   const verbose = args.includes("--verbose");
+  const rebuildExcerpts = args.includes("--rebuild-excerpts");
   const allowedHostsArg = args.find(a => a.startsWith("allowedHosts="))?.split("=")[1] ?? "";
   const concurrencyArg = args.find(a => a.startsWith("concurrency="))?.split("=")[1] ?? "";
   const allowedHosts = allowedHostsArg
@@ -1059,7 +1089,7 @@ async function run() {
     : undefined;
 
   if (!pathArg) {
-    console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [allowedHosts=example.com,cdn.example.com] [concurrency=8]");
+    console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [--rebuild-excerpts] [allowedHosts=example.com,cdn.example.com] [concurrency=8]");
     process.exit(1);
   }
 
@@ -1068,9 +1098,10 @@ async function run() {
   if (skipMedia) console.log("📷 SKIP MEDIA MODE - Media will not be downloaded");
   if (allowedHosts.length > 0) console.log(`🔒 Allowed media hosts: ${allowedHosts.join(", ")}`);
   if (concurrency) console.log(`🧵 Concurrency: ${concurrency}`);
+  if (rebuildExcerpts) console.log("📝 Rebuilding excerpts for all posts");
 
   const startTime = Date.now();
-  const opts: ImportOptions = { dryRun, skipMedia, verbose, allowedHosts };
+  const opts: ImportOptions = { dryRun, skipMedia, verbose, allowedHosts, rebuildExcerpts };
   if (typeof concurrency === "number") {
     opts.concurrency = concurrency;
   }
@@ -1125,167 +1156,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
-/**
- * Transform [audio], [video], + [playlist] shortcodes into semantic placeholders.
- * We avoid raw <audio>/<video> (sanitizers can strip sources/posters) + instead emit
- * a minimal container your renderer can hydrate.
- * Supported attrs: src, poster, loop, autoplay, preload, width, height; playlist: ids.
- */
-function transformAvShortcodes(html: string): string {
-  if (!html) return html;
-
-  // [audio src="..."]
-  html = html.replace(/\[audio\b([^\]]*)\]/gi, (_m, attrs) => {
-    const src = (attrs.match(/src="([^"]+)"/i)?.[1]) || "";
-    const preload = attrs.match(/preload="(auto|metadata|none)"/i)?.[1];
-    const loop = /(?:^|\s)loop(?:\s|$|=|")/i.test(attrs);
-    const autoplay = /(?:^|\s)autoplay(?:\s|$|=|")/i.test(attrs);
-    const meta = [
-      src ? `data-src="${src.replace(/"/g, "&quot;")}"` : "",
-      preload ? `data-preload="${preload}"` : "",
-      loop ? `data-loop="true"` : "",
-      autoplay ? `data-autoplay="true"` : ""
-    ].filter(Boolean).join(" ");
-    return `<div class="wp-audio"${meta ? " " + meta : ""}></div>`;
-  });
-
-  // [video src="..." poster="..."]
-  html = html.replace(/\[video\b([^\]]*)\]/gi, (_m, attrs) => {
-    const src = (attrs.match(/src="([^"]+)"/i)?.[1]) || "";
-    const poster = (attrs.match(/poster="([^"]+)"/i)?.[1]) || "";
-    const width = (attrs.match(/width="(\d+)"/i)?.[1]) || "";
-    const height = (attrs.match(/height="(\d+)"/i)?.[1]) || "";
-    const preload = attrs.match(/preload="(auto|metadata|none)"/i)?.[1];
-    const loop = /(?:^|\s)loop(?:\s|$|=|")/i.test(attrs);
-    const autoplay = /(?:^|\s)autoplay(?:\s|$|=|")/i.test(attrs);
-    const meta = [
-      src ? `data-src="${src.replace(/"/g, "&quot;")}"` : "",
-      poster ? `data-poster="${poster.replace(/"/g, "&quot;")}"` : "",
-      width ? `data-width="${width}"` : "",
-      height ? `data-height="${height}"` : "",
-      preload ? `data-preload="${preload}"` : "",
-      loop ? `data-loop="true"` : "",
-      autoplay ? `data-autoplay="true"` : ""
-    ].filter(Boolean).join(" ");
-    return `<div class="wp-video"${meta ? " " + meta : ""}></div>`;
-  });
-
-  // [playlist ids="1,2,3" type="audio|video"]
-  html = html.replace(/\[playlist\b([^\]]*)\]/gi, (_m, attrs) => {
-    const ids = (attrs.match(/ids="([^"]+)"/i)?.[1] || "")
-      .split(",").map((s: string) => s.trim()).filter(Boolean);
-    const type = (attrs.match(/type="(audio|video)"/i)?.[1]) || "audio";
-    const meta = [
-      ids.length ? `data-ids="${ids.join(",")}"` : "",
-      `data-type="${type}"`
-    ].filter(Boolean).join(" ");
-    return `<div class="wp-playlist"${meta ? " " + meta : ""}></div>`;
-  });
-
-  return html;
-}
-
-/**
- * Minimal parser for a few high-value Gutenberg blocks:
- * - wp:image {...} innerHTML -> <figure class="wp-image" data-id="ID" data-size="SIZE">innerHTML</figure>
- * - wp:embed {"url":"..."}   -> <p><a class="wp-embed" data-embed="provider" href="url">url</a></p>
- * - wp:gallery {"ids":[...]} -> <div class="wp-gallery-placeholder" data-wp-gallery-ids="..."></div>
- * We read JSON attributes from the opening comment and preserve inner HTML when useful.
- */
-function transformCoreBlocks(html: string): string {
-  if (!html) return html;
-
-  // General matcher: <!-- wp:TYPE {JSON}? --> ... <!-- /wp:TYPE -->
-  return html.replace(/<!--\s*wp:([a-z\/-]+)(\s+(\{[\s\S]*?\}))?\s*-->([\s\S]*?)<!--\s*\/wp:\1\s*-->/gi,
-    (_m, type, _jsonAll, jsonStr, inner) => {
-      const json = (() => { try { return jsonStr ? JSON.parse(jsonStr) : {}; } catch { return {}; } })();
-      const t = String(type).toLowerCase();
-
-      if (t === "image") {
-        const id = json?.id ?? json?.attachmentId;
-        const size = json?.sizeSlug || json?.size;
-        const meta = [
-          id ? `data-id="${id}"` : "",
-          size ? `data-size="${size}"` : ""
-        ].filter(Boolean).join(" ");
-        return `<figure class="wp-image"${meta ? " " + meta : ""}>${inner}</figure>`;
-      }
-
-      if (t === "embed") {
-        const url = json?.url || inner.trim();
-        if (!url) return inner;
-        let provider: string | null = null;
-        if (/youtube\.com|youtu\.be/i.test(url)) provider = "youtube";
-        else if (/vimeo\.com/i.test(url)) provider = "vimeo";
-        else if (/soundcloud\.com|w\.soundcloud\.com/i.test(url)) provider = "soundcloud";
-        const escaped = String(url).replace(/"/g, "&quot;");
-        if (provider) return `<p><a class="wp-embed" data-embed="${provider}" href="${escaped}">${escaped}</a></p>`;
-        return `<p><a class="wp-embed" href="${escaped}">${escaped}</a></p>`;
-      }
-
-      if (t === "gallery") {
-        const ids = Array.isArray(json?.ids) ? json.ids : [];
-        const columns = json?.columns;
-        const meta = [
-          ids.length ? `data-wp-gallery-ids="${ids.join(",")}"` : "",
-          columns ? `data-wp-gallery-columns="${columns}"` : ""
-        ].filter(Boolean).join(" ");
-        return `<div class="wp-gallery-placeholder"${meta ? " " + meta : ""}></div>`;
-      }
-
-      // Unknown core block: drop wrappers but keep inner
-      return inner;
-    }
-  );
-}
-
-/**
- * Post-save resolver: replace internal-ID annotations with final URLs once all slugs/media URLs exist.
- * Provide maps: postIdToSlug: { [id: string]: "slug" }, attachmentIdToUrl: { [id: string]: "https://..." }
- */
-export function resolveInternalLinks(html: string, postIdToSlug: Record<string, string>, attachmentIdToUrl: Record<string, string>): string {
-  if (!html) return html;
-  // Replace data-wp-post-id
-  html = html.replace(/<a([^>]+)data-wp-post-id="(\d+)"([^>]*)>/gi, (m, pre, id, post) => {
-    const slug = postIdToSlug[String(id)];
-    if (!slug) return m;
-    const newHref = `/posts/${slug}`;
-    return `<a${pre}href="${newHref}"${post}>`;
-  });
-  // Replace data-wp-attachment-id
-  html = html.replace(/<a([^>]+)data-wp-attachment-id="(\d+)"([^>]*)>/gi, (m, pre, id, post) => {
-    const url = attachmentIdToUrl[String(id)];
-    if (!url) return m;
-    return `<a${pre}href="${url}"${post}>`;
-  });
-  return html;
-}
-
-/**
- * Allowlist iframe hosts by converting matching iframes into placeholders
- * your renderer can hydrate back to iframes post-sanitization.
- */
-function allowlistIframes(html: string, hosts: string[] = []): string {
-  if (!html || hosts.length === 0) return html;
-  const hostRe = new RegExp("(" + hosts.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")", "i");
-  return html.replace(/<iframe[^>]*src="([^"]+)"[^>]*>\s*<\/iframe>/gi, (m, src) => {
-    try {
-      const u = new URL(src, "https://example.com");
-      if (hostRe.test(u.hostname)) {
-        const escaped = src.replace(/"/g, "&quot;");
-        return `<div class="wp-iframe" data-src="${escaped}"></div>`;
-      }
-      return m;
-    } catch {
-      return m;
-    }
-  });
-}
-
-/**
- * Extract attachment alt text from a subset of WXR-like items for later hydration.
- * Pass in an array of { id: string, meta: Record<string,string> } where meta['_wp_attachment_image_alt'] may exist.
- */
 function transformIframeVideos(html: string): string {
   if (!html) return html;
   return html.replace(/<iframe([^>]*)>\s*<\/iframe>/gi, (m, attrs) => {
@@ -1311,40 +1181,5 @@ function transformIframeVideos(html: string): string {
     } catch {
       return m;
     }
-  });
-}
-
-export function buildAttachmentAltMap(items: Array<{ id: string; meta?: Record<string, string> }>): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const it of items || []) {
-    const alt = it?.meta?.["_wp_attachment_image_alt"];
-    if (it?.id && alt) map[it.id] = alt;
-  }
-  return map;
-}
-
-/**
- * Hydrate gallery placeholders into concrete <figure><img/></figure> markup using your asset DB.
- * Provide an id->asset map where asset has at least url and optional alt/width/height/srcset.
- */
-export function hydrateGalleries(html: string, assetsById: Record<string, { url: string; alt?: string; width?: number; height?: number; srcset?: string }>): string {
-  if (!html) return html;
-  return html.replace(/<div class="wp-gallery-placeholder"([^>]*)><\/div>/gi, (m, attrs) => {
-    const idsMatch = attrs.match(/data-wp-gallery-ids="([^"]+)"/i);
-    const colsMatch = attrs.match(/data-wp-gallery-columns="(\d+)"/i);
-    const ids = idsMatch ? idsMatch[1].split(",").map((s: string) => s.trim()).filter(Boolean) : [];
-    const columns = colsMatch ? parseInt(colsMatch[1], 10) : undefined;
-    const figures: string[] = [];
-    for (const id of ids) {
-      const asset = assetsById[id];
-      if (!asset?.url) continue;
-      const alt = (asset.alt || "").replace(/"/g, "&quot;");
-      const w = asset.width ? ` width="${asset.width}"` : "";
-      const h = asset.height ? ` height="${asset.height}"` : "";
-      const ss = asset.srcset ? ` srcset="${asset.srcset.replace(/"/g, "&quot;")}"` : "";
-      figures.push(`<figure class="wp-gallery-item"><img src="${asset.url.replace(/"/g, "&quot;")}" alt="${alt}"${w}${h}${ss} /></figure>`);
-    }
-    const style = columns ? ` style="--wp-gallery-columns:${columns}"` : "";
-    return `<div class="wp-gallery"${style}>${figures.join("")}</div>`;
   });
 }

@@ -163,6 +163,23 @@ Narravo includes a powerful and resilient WordPress import tool to migrate your 
 
 For a complete guide, see the [**WordPress Import Documentation**](./docs/wordpress-import.md).
 
+### Excerpts: configuration and rebuild
+
+During import, Narravo auto-generates short HTML-safe post excerpts. You can control excerpt generation and optionally rebuild them.
+
+- Environment variables (optional):
+  - `EXCERPT_MAX_CHARS` (default: `220`)
+  - `EXCERPT_ELLIPSIS` (default: `…`)
+  - `EXCERPT_INCLUDE_BLOCK_CODE` (default: `false` — when `true`, preserves `<pre>` block code)
+- Admin UI: toggle “Rebuild excerpts” in Admin → System → Import to force recomputing excerpts for this job.
+- CLI: pass `--rebuild-excerpts` to the importer.
+
+Example CLI run:
+
+```bash
+pnpm wxr:import -- path=./export.xml --rebuild-excerpts --verbose
+```
+
 ---
 
 ## 🧪 Testing
