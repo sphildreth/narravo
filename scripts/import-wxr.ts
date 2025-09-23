@@ -11,6 +11,112 @@ import crypto from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import { expandShortcodes } from "@/lib/markdown";
 
+/**
+ * Gutenberg block wrapper remover.
+ * Strips <!-- wp:* --> and <!-- /wp:* --> comments while preserving inner HTML.
+ * Safe fallback for importers that don't interpret blocks semantically.
+ */
+function stripGutenbergBlockComments(html: string): string {
+  if (!html) return html;
+  return html
+    // Remove opening/closing block comments but keep everything between them
+    .replace(/<!--\s*\/?wp:[\s\S]*?-->\s*/g, "");
+}
+
+/**
+ * Quicktags handler.
+ * - <!--more-->: returns excerpt (text before) if none provided, removes the marker from HTML.
+ * - <!--nextpage-->: replaces with a marker <hr data-wp-nextpage="true" /> to preserve intent.
+ */
+
+function applyQuicktags(html: string): { html: string; excerptFromMore?: string; pageBreaks: number } {
+  if (!html) return { html, pageBreaks: 0 };
+  let excerptFromMoreValue: string | undefined;
+  let pageBreaks = 0;
+
+  if (html.includes("<!--more-->")) {
+    const idx = html.indexOf("<!--more-->");
+    const before = idx >= 0 ? html.slice(0, idx) : "";
+    const after = idx >= 0 ? html.slice(idx + "<!--more-->".length) : "";
+    excerptFromMoreValue = before.trim();
+    html = (before + after);
+  }
+
+  html = html.replace(/<!--\s*nextpage\s*-->/gi, () => {
+    pageBreaks += 1;
+    return '<hr data-wp-nextpage="true" />';
+  });
+
+  const base = { html, pageBreaks };
+  return excerptFromMoreValue !== undefined ? { ...base, excerptFromMore: excerptFromMoreValue } : base;
+}
+
+/**
+ * Minimal auto-embed detection.
+ * Converts standalone YouTube/Vimeo URLs (or [embed]URL[/embed]) on their own line into
+ * <a class="wp-embed" data-embed="provider" href="...">...</a>
+ * This avoids sanitizer iframe stripping while preserving intent for the renderer.
+ */
+function transformAutoEmbeds(html: string): string {
+  if (!html) return html;
+
+  const lineEmbed = (url: string) => {
+    const u = url.trim();
+    let provider: string | null = null;
+    if (/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(u)) provider = "youtube";
+    else if (/^(https?:\/\/)?(player\.)?vimeo\.com\//i.test(u)) provider = "vimeo";
+    else provider = null;
+    if (!provider) return url;
+    const escaped = u.replace(/"/g, "&quot;");
+    return `<p><a class="wp-embed" data-embed="${provider}" href="${escaped}">${escaped}</a></p>`;
+  };
+
+  // [embed]URL[/embed] -> embedded anchor
+  html = html.replace(/\[embed\]([\s\S]*?)\[\/embed\]/gi, (_, url) => lineEmbed(url));
+
+  // Standalone provider URLs: detect URLs that are in their own paragraph or on separate lines.
+  html = html.replace(
+    /(?:^|\n|\r|\r\n)\s*(https?:\/\/[^\s<>"']+)\s*(?=$|\n|\r|\r\n)/g,
+    (m, url) => "\n" + lineEmbed(url)
+  );
+
+  return html;
+}
+
+/**
+ * Minimal shortcode helpers.
+ * - [caption] <img ... /> Caption text [/caption] -> <figure><img ... /><figcaption>Caption text</figcaption></figure>
+ * Leaves unknown shortcodes intact to avoid data loss.
+ */
+function transformBasicShortcodes(html: string): string {
+  if (!html) return html;
+  // naive [caption] transform
+  html = html.replace(/\[caption[^\]]*\]([\s\S]*?)\[\/caption\]/gi, (_m, inner) => {
+    // Try to split out the first <img ...>
+    const imgMatch = inner.match(/<img[\s\S]*?>/i);
+    if (!imgMatch) return inner; // fallback
+    const img = imgMatch[0];
+    const rest = inner.replace(img, "").trim();
+    const caption = rest ? `<figcaption>${rest}</figcaption>` : "";
+    return `<figure class="wp-caption">${img}${caption}</figure>`;
+  });
+  return html;
+}
+
+/**
+ * Utility to safely set excerpt if missing.
+ */
+function chooseExcerpt(existing: string | undefined, excerptFromMore?: string): string | undefined {
+  if (existing && existing.trim().length > 0) return existing;
+  if (excerptFromMore && excerptFromMore.trim().length > 0) return excerptFromMore;
+  return existing;
+}
+
+// --- Enhanced content processing pipeline additions ---
+interface EmbedOptions {
+  allowedEmbedHosts?: string[]; // informational for renderers; sanitization still happens downstream
+}
+
 export interface WxrItem {
   title?: string;
   link?: string;
@@ -912,7 +1018,7 @@ async function run() {
   const allowedHostsArg = args.find(a => a.startsWith("allowedHosts="))?.split("=")[1] ?? "";
   const allowedHosts = allowedHostsArg
     .split(",")
-    .map(s => s.trim())
+    .map((s: string) => s.trim())
     .filter(Boolean);
 
   if (!pathArg) {
@@ -974,5 +1080,204 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   run().catch(e => {
     console.error("💥 Import failed:", e);
     process.exit(1);
+  });
+}
+
+/**
+ * Transform [audio], [video], + [playlist] shortcodes into semantic placeholders.
+ * We avoid raw <audio>/<video> (sanitizers can strip sources/posters) + instead emit
+ * a minimal container your renderer can hydrate.
+ * Supported attrs: src, poster, loop, autoplay, preload, width, height; playlist: ids.
+ */
+function transformAvShortcodes(html: string): string {
+  if (!html) return html;
+
+  // [audio src="..."]
+  html = html.replace(/\[audio\b([^\]]*)\]/gi, (_m, attrs) => {
+    const src = (attrs.match(/src="([^"]+)"/i)?.[1]) || "";
+    const preload = attrs.match(/preload="(auto|metadata|none)"/i)?.[1];
+    const loop = /(?:^|\s)loop(?:\s|$|=|")/i.test(attrs);
+    const autoplay = /(?:^|\s)autoplay(?:\s|$|=|")/i.test(attrs);
+    const meta = [
+      src ? `data-src="${src.replace(/"/g, "&quot;")}"` : "",
+      preload ? `data-preload="${preload}"` : "",
+      loop ? `data-loop="true"` : "",
+      autoplay ? `data-autoplay="true"` : ""
+    ].filter(Boolean).join(" ");
+    return `<div class="wp-audio"${meta + " " + meta}></div>`;
+  });
+
+  // [video src="..." poster="..."]
+  html = html.replace(/\[video\b([^\]]*)\]/gi, (_m, attrs) => {
+    const src = (attrs.match(/src="([^"]+)"/i)?.[1]) || "";
+    const poster = (attrs.match(/poster="([^"]+)"/i)?.[1]) || "";
+    const width = (attrs.match(/width="(\d+)"/i)?.[1]) || "";
+    const height = (attrs.match(/height="(\d+)"/i)?.[1]) || "";
+    const preload = attrs.match(/preload="(auto|metadata|none)"/i)?.[1];
+    const loop = /(?:^|\s)loop(?:\s|$|=|")/i.test(attrs);
+    const autoplay = /(?:^|\s)autoplay(?:\s|$|=|")/i.test(attrs);
+    const meta = [
+      src ? `data-src="${src.replace(/"/g, "&quot;")}"` : "",
+      poster ? `data-poster="${poster.replace(/"/g, "&quot;")}"` : "",
+      width ? `data-width="${width}"` : "",
+      height ? `data-height="${height}"` : "",
+      preload ? `data-preload="${preload}"` : "",
+      loop ? `data-loop="true"` : "",
+      autoplay ? `data-autoplay="true"` : ""
+    ].filter(Boolean).join(" ");
+    return `<div class="wp-video"${meta + " " + meta}></div>`;
+  });
+
+  // [playlist ids="1,2,3" type="audio|video"]
+  html = html.replace(/\[playlist\b([^\]]*)\]/gi, (_m, attrs) => {
+    const ids = (attrs.match(/ids="([^"]+)"/i)?.[1] || "")
+      .split(",").map((s: string) => s.trim()).filter(Boolean);
+    const type = (attrs.match(/type="(audio|video)"/i)?.[1]) || "audio";
+    const meta = [
+      ids.length ? `data-ids="${ids.join(",")}"` : "",
+      `data-type="${type}"`
+    ].filter(Boolean).join(" ");
+    return `<div class="wp-playlist"${meta + " " + meta}></div>`;
+  });
+
+  return html;
+}
+
+/**
+ * Minimal parser for a few high-value Gutenberg blocks:
+ * - wp:image {...} innerHTML -> <figure class="wp-image" data-id="ID" data-size="SIZE">innerHTML</figure>
+ * - wp:embed {"url":"..."}   -> <p><a class="wp-embed" data-embed="provider" href="url">url</a></p>
+ * - wp:gallery {"ids":[...]} -> <div class="wp-gallery-placeholder" data-wp-gallery-ids="..."></div>
+ * We read JSON attributes from the opening comment and preserve inner HTML when useful.
+ */
+function transformCoreBlocks(html: string): string {
+  if (!html) return html;
+
+  // General matcher: <!-- wp:TYPE {JSON}? --> ... <!-- /wp:TYPE -->
+  return html.replace(/<!--\s*wp:([a-z\/-]+)(\s+(\{[\s\S]*?\}))?\s*-->([\s\S]*?)<!--\s*\/wp:\1\s*-->/gi,
+    (_m, type, _jsonAll, jsonStr, inner) => {
+      const json = (() => { try { return jsonStr ? JSON.parse(jsonStr) : {}; } catch { return {}; } })();
+      const t = String(type).toLowerCase();
+
+      if (t === "image") {
+        const id = json?.id ?? json?.attachmentId;
+        const size = json?.sizeSlug || json?.size;
+        const meta = [
+          id ? `data-id="${id}"` : "",
+          size ? `data-size="${size}"` : ""
+        ].filter(Boolean).join(" ");
+        return `<figure class="wp-image"${meta ? " " + meta : ""}>${inner}</figure>`;
+      }
+
+      if (t === "embed") {
+        const url = json?.url || inner.trim();
+        if (!url) return inner;
+        let provider: string | null = null;
+        if (/youtube\.com|youtu\.be/i.test(url)) provider = "youtube";
+        else if (/vimeo\.com/i.test(url)) provider = "vimeo";
+        else if (/soundcloud\.com|w\.soundcloud\.com/i.test(url)) provider = "soundcloud";
+        const escaped = String(url).replace(/"/g, "&quot;");
+        if (provider) return `<p><a class="wp-embed" data-embed="${provider}" href="${escaped}">${escaped}</a></p>`;
+        return `<p><a class="wp-embed" href="${escaped}">${escaped}</a></p>`;
+      }
+
+      if (t === "gallery") {
+        const ids = Array.isArray(json?.ids) ? json.ids : [];
+        const columns = json?.columns;
+        const meta = [
+          ids.length ? `data-wp-gallery-ids="${ids.join(",")}"` : "",
+          columns ? `data-wp-gallery-columns="${columns}"` : ""
+        ].filter(Boolean).join(" ");
+        return `<div class="wp-gallery-placeholder"${meta ? " " + meta : ""}></div>`;
+      }
+
+      // Unknown core block: drop wrappers but keep inner
+      return inner;
+    }
+  );
+}
+
+/**
+ * Post-save resolver: replace internal-ID annotations with final URLs once all slugs/media URLs exist.
+ * Provide maps: postIdToSlug: { [id: string]: "slug" }, attachmentIdToUrl: { [id: string]: "https://..." }
+ */
+export function resolveInternalLinks(html: string, postIdToSlug: Record<string, string>, attachmentIdToUrl: Record<string, string>): string {
+  if (!html) return html;
+  // Replace data-wp-post-id
+  html = html.replace(/<a([^>]+)data-wp-post-id="(\d+)"([^>]*)>/gi, (m, pre, id, post) => {
+    const slug = postIdToSlug[String(id)];
+    if (!slug) return m;
+    // find existing href
+    const hrefMatch = m.match(/href="([^"]+)"/i);
+    const href = hrefMatch ? hrefMatch[1] : "";
+    const newHref = `/posts/${slug}`;
+    return `<a${pre}href="${newHref}"${post}>`;
+  });
+  // Replace data-wp-attachment-id
+  html = html.replace(/<a([^>]+)data-wp-attachment-id="(\d+)"([^>]*)>/gi, (m, pre, id, post) => {
+    const url = attachmentIdToUrl[String(id)];
+    if (!url) return m;
+    return `<a${pre}href="${url}"${post}>`;
+  });
+  return html;
+}
+
+/**
+ * Allowlist iframe hosts by converting matching iframes into placeholders
+ * your renderer can hydrate back to iframes post-sanitization.
+ */
+function allowlistIframes(html: string, hosts: string[] = []): string {
+  if (!html || hosts.length === 0) return html;
+  const hostRe = new RegExp("(" + hosts.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")", "i");
+  return html.replace(/<iframe[^>]*src="([^"]+)"[^>]*>\s*<\/iframe>/gi, (m, src) => {
+    try {
+      const u = new URL(src, "https://example.com");
+      if (hostRe.test(u.hostname)) {
+        const escaped = src.replace(/"/g, "&quot;");
+        return `<div class="wp-iframe" data-src="${escaped}"></div>`;
+      }
+      return m;
+    } catch {
+      return m;
+    }
+  });
+}
+
+/**
+ * Extract attachment alt text from a subset of WXR-like items for later hydration.
+ * Pass in an array of { id: string, meta: Record<string,string> } where meta['_wp_attachment_image_alt'] may exist.
+ */
+export function buildAttachmentAltMap(items: Array<{ id: string; meta?: Record<string, string> }>): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const it of items || []) {
+    const alt = it?.meta?.["_wp_attachment_image_alt"];
+    if (it?.id && alt) map[it.id] = alt;
+  }
+  return map;
+}
+
+/**
+ * Hydrate gallery placeholders into concrete <figure><img/></figure> markup using your asset DB.
+ * Provide an id->asset map where asset has at least url and optional alt/width/height/srcset.
+ */
+export function hydrateGalleries(html: string, assetsById: Record<string, { url: string; alt?: string; width?: number; height?: number; srcset?: string }>): string {
+  if (!html) return html;
+  return html.replace(/<div class="wp-gallery-placeholder"([^>]*)><\/div>/gi, (m, attrs) => {
+    const idsMatch = attrs.match(/data-wp-gallery-ids="([^"]+)"/i);
+    const colsMatch = attrs.match(/data-wp-gallery-columns="(\d+)"/i);
+    const ids = idsMatch ? idsMatch[1].split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+    const columns = colsMatch ? parseInt(colsMatch[1], 10) : undefined;
+    const figures: string[] = [];
+    for (const id of ids) {
+      const asset = assetsById[id];
+      if (!asset?.url) continue;
+      const alt = (asset.alt || "").replace(/"/g, "&quot;");
+      const w = asset.width ? ` width="${asset.width}"` : "";
+      const h = asset.height ? ` height="${asset.height}"` : "";
+      const ss = asset.srcset ? ` srcset="${asset.srcset.replace(/"/g, "&quot;")}"` : "";
+      figures.push(`<figure class="wp-gallery-item"><img src="${asset.url.replace(/"/g, "&quot;")}" alt="${alt}"${w}${h}${ss} /></figure>`);
+    }
+    const style = columns ? ` style="--wp-gallery-columns:${columns}"` : "";
+    return `<div class="wp-gallery"${style}>${figures.join("")}</div>`;
   });
 }
