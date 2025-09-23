@@ -13,6 +13,10 @@ export function sanitizeHtml(html: string): string {
       "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6",
       // Allow safe media tags
       "video", "source",
+      // Allow figures from WordPress blocks
+      "figure",
+      // Allow safe iframes (we'll restrict by host post-sanitize)
+      "iframe",
       // Allow tables (needed for WordPress imports)
       "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col"
     ],
@@ -21,8 +25,9 @@ export function sanitizeHtml(html: string): string {
       "href", "src", "alt", "title", "target", "rel", "controls", "poster",
       // Responsive image attributes
       "srcset", "sizes",
-      // Video-related safe attributes
+      // Video/iframe-related safe attributes
       "muted", "loop", "playsinline", "preload", "width", "height", "type",
+      "frameborder", "allow", "allowfullscreen", "referrerpolicy",
       // Table-related safe attributes
       "colspan", "rowspan", "scope",
       // Code highlighting attributes - allow class for pre/code tags only
@@ -34,7 +39,21 @@ export function sanitizeHtml(html: string): string {
     SANITIZE_DOM: true, // Sanitize DOM nodes
     KEEP_CONTENT: true, // Keep text content even if tags are removed
     // Ensure external links are safe
-    FORBID_TAGS: ["script", "object", "embed", "iframe", "form", "input"],
+    FORBID_TAGS: ["script", "object", "embed", "form", "input"],
+  });
+
+  // Post-process: allow only YouTube iframes, strip others entirely
+  sanitized = sanitized.replace(/<iframe([^>]*)>(.*?)<\/iframe>/gi, (m, attrs) => {
+    const srcMatch = String(attrs).match(/\ssrc=["']([^"']+)["']/i);
+    const src = srcMatch?.[1] || "";
+    try {
+      const u = new URL(src, "https://example.com");
+      const host = u.hostname.toLowerCase();
+      const allowed = /(^|\.)youtube\.com$/.test(host) || /(^|\.)youtu\.be$/.test(host) || /(^|\.)youtube-nocookie\.com$/.test(host);
+      return allowed ? `<iframe${attrs}></iframe>` : "";
+    } catch {
+      return "";
+    }
   });
 
   // Post-process to filter dangerous class names on code elements
