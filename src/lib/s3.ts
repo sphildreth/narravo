@@ -118,6 +118,15 @@ export function getS3Config(): S3Config | null {
   };
 }
 
+// Get storage service (S3 or local filesystem fallback)
+export function getStorageService(): S3Service | null {
+  const s3Config = getS3Config();
+  if (s3Config) {
+    return new S3Service(s3Config);
+  }
+  return null; // Use local storage fallback in import script
+}
+
 // Helper function to validate file size from magic numbers
 export function validateFileType(buffer: ArrayBuffer, expectedMime: string): boolean {
   const bytes = new Uint8Array(buffer.slice(0, 16));

@@ -7,7 +7,7 @@ import DOMPurify from "isomorphic-dompurify";
  * and allows common formatting elements while blocking dangerous content.
  */
 export function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
+  let sanitized = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       "p", "a", "strong", "em", "code", "pre", "ul", "ol", "li", 
       "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6",
@@ -22,21 +22,39 @@ export function sanitizeHtml(html: string): string {
       // Video-related safe attributes
       "muted", "loop", "playsinline", "preload", "width", "height", "type",
       // Table-related safe attributes
-      "colspan", "rowspan", "scope"
-    ],
-    // Explicitly forbidden attributes (security-critical)
-    FORBID_ATTR: [
-      "onerror", "onclick", "onload", "onmouseover", "onfocus", 
-      "onblur", "onchange", "onsubmit", "style", "class"
+      "colspan", "rowspan", "scope",
+      // Code highlighting attributes - allow class for pre/code tags only
+      "class", "data-lang"
     ],
     // Additional security options
-    ALLOW_DATA_ATTR: false, // No data-* attributes
+    ALLOW_DATA_ATTR: false, // No data-* attributes except those explicitly allowed
     ALLOW_UNKNOWN_PROTOCOLS: false, // Only allow known URL protocols
     SANITIZE_DOM: true, // Sanitize DOM nodes
     KEEP_CONTENT: true, // Keep text content even if tags are removed
     // Ensure external links are safe
     FORBID_TAGS: ["script", "object", "embed", "iframe", "form", "input"],
   });
+
+  // Post-process to filter dangerous class names on code elements
+  sanitized = sanitized.replace(
+    /<(pre|code)([^>]*?)\sclass=["']([^"']*?)["']/gi,
+    (match, tagName, attrs, className) => {
+      // Only allow safe syntax highlighting classes
+      const safeClasses = className
+        .split(/\s+/)
+        .filter((cls: string) => /^(prism|language|lang|hljs|undefined|numbers|line)[\w-]*$/i.test(cls))
+        .join(' ');
+      
+      if (safeClasses) {
+        return `<${tagName}${attrs} class="${safeClasses}"`;
+      } else {
+        // Remove class attribute if no safe classes found
+        return `<${tagName}${attrs}`;
+      }
+    }
+  );
+
+  return sanitized;
 }
 
 /**

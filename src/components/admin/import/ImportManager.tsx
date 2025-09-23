@@ -2,8 +2,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Upload, Play, Square, RotateCcw, FileText, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
-import { startImportJob, cancelImportJob, retryImportJob } from "@/app/actions/import";
+import { Upload, Play, Square, RotateCcw, FileText, AlertTriangle, CheckCircle, XCircle, Trash2 } from "lucide-react";
+import { startImportJob, cancelImportJob, retryImportJob, deleteImportJob } from "@/app/actions/import";
 import { useRouter } from "next/navigation";
 import type { importJobs } from "@/drizzle/schema";
 
@@ -55,6 +55,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [options, setOptions] = useState<ImportOptions>(defaultOptions);
   const [allowedHostsInput, setAllowedHostsInput] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -118,6 +119,21 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
       }
     } catch (error) {
       console.error('Failed to retry job:', error);
+    }
+  };
+
+  const handleDelete = async (jobId: string) => {
+    try {
+      const result = await deleteImportJob(jobId);
+      if (result.error) {
+        setUploadError(result.error);
+      } else {
+        setJobs(prev => prev.filter(job => job.id !== jobId));
+        setDeleteConfirm(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete job:', error);
+      setUploadError(error instanceof Error ? error.message : 'Failed to delete job');
     }
   };
 
@@ -307,6 +323,16 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
                         Retry
                       </button>
                     )}
+                    {/* Only allow deleting completed, failed, or cancelled jobs */}
+                    {(job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') && (
+                      <button
+                        onClick={() => setDeleteConfirm(job.id)}
+                        className="px-3 py-1 text-sm border border-red-300 text-red-600 rounded hover:bg-red-50 flex items-center"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
+                      </button>
+                    )}
                     <button
                       onClick={() => router.push(`/admin/system/import/${job.id}`)}
                       className="px-3 py-1 text-sm border border-border rounded hover:bg-muted/20 flex items-center"
@@ -364,6 +390,32 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-4">Delete Import Job</h3>
+            <p className="text-muted mb-6">
+              Are you sure you want to delete this import job? This will permanently remove the job record and all associated error logs. This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 text-sm border border-border rounded hover:bg-muted/20"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Delete Job
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

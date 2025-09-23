@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { posts, redirects, categories, tags, postTags, comments, users, importJobs, importJobErrors } from "@/drizzle/schema";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { getS3Config, S3Service } from "@/lib/s3";
+import { localStorageService, LocalStorageService } from "@/lib/local-storage";
 import slugify from "slugify";
 import { readFile, writeFile } from "node:fs/promises";
 import crypto from "node:crypto";
@@ -238,9 +239,14 @@ function getExtensionFromUrl(url: string): string {
   return "bin";
 }
 
-async function downloadMedia(url: string, s3Service: S3Service | null, allowedHosts: string[]): Promise<string | null> {
-  if (!s3Service) {
-    return null; // No S3 configured, skip download
+async function downloadMedia(
+  url: string, 
+  s3Service: S3Service | null, 
+  localService: LocalStorageService | null,
+  allowedHosts: string[]
+): Promise<string | null> {
+  if (!s3Service && !localService) {
+    return null; // No storage configured, skip download
   }
 
   try {
@@ -268,10 +274,18 @@ async function downloadMedia(url: string, s3Service: S3Service | null, allowedHo
     const extension = getExtensionFromUrl(url);
     const key = `imported-media/${hash}.${extension}`;
     
-    // Upload to S3 (idempotent overwrite)
+    // Upload to S3 or local storage
     const contentType = response.headers.get('content-type') || guessContentType(url);
-    await s3Service.putObject(key, buffer, contentType);
-    return s3Service.getPublicUrl(key);
+    
+    if (s3Service) {
+      await s3Service.putObject(key, buffer, contentType);
+      return s3Service.getPublicUrl(key);
+    } else if (localService) {
+      await localService.putObject(key, buffer, contentType);
+      return localService.getPublicUrl(key);
+    }
+    
+    return null;
   } catch (error) {
     console.error(`Failed to download media ${url}:`, error);
     return null;
@@ -399,10 +413,16 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
   // Initialize S3 service if not skipping media
   let s3Service: S3Service | null = null;
+  let localService: LocalStorageService | null = null;
+  
   if (!skipMedia) {
     const s3Config = getS3Config();
     if (s3Config) {
       s3Service = new S3Service(s3Config);
+    } else {
+      // Use local storage as fallback for development
+      localService = localStorageService;
+      if (verbose) console.log("📁 Using local filesystem storage (no S3/R2 configured)");
     }
   }
 
@@ -506,7 +526,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     for (const attachment of attachmentItems) {
       try {
         if (!skipMedia && attachment.attachmentUrl) {
-          const newUrl = await downloadMedia(attachment.attachmentUrl, s3Service, allowedHosts);
+          const newUrl = await downloadMedia(attachment.attachmentUrl, s3Service, localService, allowedHosts);
           if (newUrl) {
             result.mediaUrls.set(attachment.attachmentUrl, newUrl);
           }
@@ -543,11 +563,11 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     for (const post of postItems) {
       try {
         // Proactively download any remote media found in the HTML content
-        if (!skipMedia && s3Service) {
+        if (!skipMedia && (s3Service || localService)) {
           const mediaUrls = extractMediaUrlsFromHtml(post.html);
           for (const mediaUrl of mediaUrls) {
             if (!result.mediaUrls.has(mediaUrl)) {
-              const newUrl = await downloadMedia(mediaUrl, s3Service, allowedHosts);
+              const newUrl = await downloadMedia(mediaUrl, s3Service, localService, allowedHosts);
               if (newUrl) {
                 result.mediaUrls.set(mediaUrl, newUrl);
               }
