@@ -318,6 +318,25 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): strin
   return rewritten;
 }
 
+// Normalize common WordPress list markup issues prior to sanitization
+function normalizeWpLists(html: string): string {
+  if (!html) return html;
+  let out = html;
+
+  // Unwrap <p> that directly wraps <ul> or <ol>
+  out = out.replace(/<p>\s*(<(?:ul|ol)\b[^>]*>)/gi, "$1");
+  out = out.replace(/(<\/(?:ul|ol)>\s*)<\/p>/gi, "$1");
+
+  // Unwrap <p> inside list items: <li><p>text</p></li> -> <li>text</li>
+  out = out.replace(/<li>\s*<p>/gi, "<li>");
+  out = out.replace(/<\/p>\s*<\/li>/gi, "</li>");
+
+  // Sometimes editors place lists inside blockquotes incorrectly wrapped
+  // Keep minimal transformations: do not modify nested structures beyond above rules
+
+  return out;
+}
+
 function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -346,10 +365,23 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   const urls = new Set<string>();
   if (!html) return urls;
 
-  // src, data-src, poster, href on <a> to media files
+  // Helper to decide if an href should be considered a media asset
+  const isLikelyMediaExtension = (url: string): boolean => {
+    const ext = getExtensionFromUrl(url);
+    // Images
+    const image = ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"];
+    // Video
+    const video = ["mp4", "webm", "mov", "m4v"];
+    // Audio
+    const audio = ["mp3", "ogg", "oga", "wav", "m4a", "aac"];
+    // Docs/archives commonly linked for download
+    const docs = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "zip", "rar", "7z", "tar", "gz"];
+    return [...image, ...video, ...audio, ...docs].includes(ext);
+  };
+
+  // src, data-src, poster on media tags
   const attrPatterns = [
     /\s(?:src|data-src|poster)=["']([^"']+)["']/gi,
-    /\shref=["']([^"']+)["']/gi,
   ];
 
   for (const re of attrPatterns) {
@@ -393,6 +425,16 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   while ((c = cssUrlRe.exec(html)) !== null) {
     const u = c?.[2] ?? "";
     if (u) urls.add(u);
+  }
+
+  // Anchor hrefs: only consider as media if the href looks like a media/document file
+  const hrefRe = /\shref=["']([^"']+)["']/gi;
+  let hm: RegExpExecArray | null;
+  while ((hm = hrefRe.exec(html)) !== null) {
+    const u = hm?.[1] ?? "";
+    if (u && isHttpUrl(u) && isLikelyMediaExtension(u)) {
+      urls.add(u);
+    }
   }
 
   return urls;
@@ -589,7 +631,8 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
         // Rewrite media URLs in content
         const expanded = expandShortcodes(post.html);
-        const sanitized = sanitizeHtml(expanded);
+        const normalized = normalizeWpLists(expanded);
+        const sanitized = sanitizeHtml(normalized);
         const finalHtml = rewriteMediaUrls(sanitized, result.mediaUrls);
 
         // Get or create author
@@ -624,7 +667,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               target: categories.slug,
               set: { name: category.name },
             }).returning();
-            
+
             if (!primaryCategoryId && cat[0]) {
               primaryCategoryId = cat[0].id; // First category is primary
             }
@@ -639,7 +682,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               target: tags.slug,
               set: { name: tag.name },
             }).returning();
-            
+
             if (tagRecord[0]) {
               tagIds.push(tagRecord[0].id);
             }
@@ -692,7 +735,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           if (tagIds.length > 0 && insertedPost[0]) {
             // Delete existing tags for this post
             await db.delete(postTags).where(eq(postTags.postId, insertedPost[0].id));
-            
+
             // Insert new tags
             for (const tagId of tagIds) {
               await db.insert(postTags).values({
@@ -731,7 +774,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           // Process comments
           if (post.comments.length > 0 && insertedPost[0]) {
             const commentMap = new Map<string, string>(); // original ID -> new ID
-            
+
             // Sort comments by parent hierarchy (parents first)
             const sortedComments = [...post.comments].sort((a, b) => {
               if (!a.parentId && b.parentId) return -1;
@@ -801,7 +844,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           item: post.guid,
           error: `Post import failed: ${errorMsg}`
         });
-        
+
         if (jobId && !dryRun) {
           await db.insert(importJobErrors).values({
             jobId,
@@ -817,7 +860,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     // Update job completion
     if (jobId && !dryRun) {
       await db.update(importJobs)
-        .set({ 
+        .set({
           status: result.errors.length > 0 ? "failed" : "completed",
           finishedAt: sql`now()`,
           updatedAt: sql`now()`,
@@ -840,7 +883,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     if (jobId && !dryRun) {
       await db.update(importJobs)
-        .set({ 
+        .set({
           status: "failed",
           finishedAt: sql`now()`,
           updatedAt: sql`now()`,
