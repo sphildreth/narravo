@@ -494,7 +494,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
     let m: RegExpExecArray | null;
     while ((m = re.exec(html)) !== null) {
       const u = m?.[1] ?? "";
-      if (u && isHttpUrl(u)) {
+      if (u && isHttpUrl(u) && isLikelyMediaExtension(u)) {
         urls.add(u);
       }
     }
@@ -530,7 +530,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   let c: RegExpExecArray | null;
   while ((c = cssUrlRe.exec(html)) !== null) {
     const u = c?.[2] ?? "";
-    if (u) urls.add(u);
+    if (u && isLikelyMediaExtension(u)) urls.add(u);
   }
 
   // Anchor hrefs: only consider as media if the href looks like a media/document file
@@ -756,7 +756,8 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       try {
         // Prepare HTML: expand shortcodes, normalize lists, sanitize, then rewrite media URLs
         const expanded = expandShortcodes(post.html);
-        const normalized = normalizeWpLists(expanded);
+        const withIframes = transformIframeVideos(expanded);
+        const normalized = normalizeWpLists(withIframes);
         const sanitized = sanitizeHtml(normalized);
         const finalHtml = rewriteMediaUrls(sanitized, result.mediaUrls);
 
@@ -1285,6 +1286,34 @@ function allowlistIframes(html: string, hosts: string[] = []): string {
  * Extract attachment alt text from a subset of WXR-like items for later hydration.
  * Pass in an array of { id: string, meta: Record<string,string> } where meta['_wp_attachment_image_alt'] may exist.
  */
+function transformIframeVideos(html: string): string {
+  if (!html) return html;
+  return html.replace(/<iframe([^>]*)>\s*<\/iframe>/gi, (m, attrs) => {
+    const srcMatch = attrs.match(/\ssrc=["']([^"']+)["']/i);
+    const src = srcMatch?.[1] || "";
+    if (!src) return m;
+    try {
+      const u = new URL(src, "https://example.com");
+      const host = u.hostname.toLowerCase();
+      const isYouTube = /(^|\.)youtube\.com$/.test(host) || /(^|\.)youtu\.be$/.test(host) || /(^|\.)youtube-nocookie\.com$/.test(host);
+      if (isYouTube) {
+        // Keep YouTube iframe as-is so it plays from YouTube directly
+        return m;
+      }
+      const ext = getExtensionFromUrl(src);
+      const videoExts = new Set(["mp4", "webm", "mov", "m4v"]);
+      if (videoExts.has(ext)) {
+        const escaped = src.replace(/"/g, "&quot;");
+        return `<video controls preload="metadata" src="${escaped}"></video>`;
+      }
+      // Not a direct video file; leave as-is (sanitizer may drop non-YouTube iframes)
+      return m;
+    } catch {
+      return m;
+    }
+  });
+}
+
 export function buildAttachmentAltMap(items: Array<{ id: string; meta?: Record<string, string> }>): Record<string, string> {
   const map: Record<string, string> = {};
   for (const it of items || []) {
