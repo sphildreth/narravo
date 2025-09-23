@@ -19,6 +19,7 @@ Narravo is a sleek, minimal, and feature-rich blog engine designed for developer
 *   **Tailwind CSS:** Rapidly build beautiful, responsive UIs with a utility-first CSS framework.
 *   **PostgreSQL + Drizzle ORM:** A modern, type-safe ORM for seamless database interactions.
 *   **Auth.js (NextAuth):** Secure authentication with GitHub and Google OAuth providers out-of-the-box.
+*   **WordPress WXR Import:** Robustly import posts, comments, media, tags, and more from WordPress via the Admin UI or CLI.
 *   **Nested Comments & Reactions:** Engage your audience with threaded comments, attachments (image/video), and emoji-like reactions.
 *   **Admin Dashboard:** A powerful moderation queue to manage comments, attachments, and user content.
 *   **S3/R2 Media Uploads:** Scalable media storage with presigned URLs for AWS S3 or Cloudflare R2.
@@ -145,6 +146,23 @@ scripts/                # Utility scripts (seeding)
 tests/                  # Unit and integration tests
 docs/                   # Project documentation and specifications
 ```
+
+---
+
+## 🔄 WordPress WXR Import
+
+Narravo includes a powerful and resilient WordPress import tool to migrate your content from a WordPress WXR export file.
+
+**Import Capabilities:**
+
+*   **Comprehensive Content:** Imports posts, comments (with threading), categories, and tags.
+*   **Flexible Statuses:** Choose which post statuses to import (e.g., `publish`, `draft`).
+*   **Media & SEO:** Downloads media to S3/R2, rewrites content URLs, and creates 301 redirects from old WordPress post URLs.
+*   **Resilient Process:** Features include dry-runs, real-time progress, job cancellation, and detailed error logging.
+*   **Admin UI & CLI:** Manage imports through the Admin Dashboard or automate them with a CLI script.
+
+For a complete guide, see the [**WordPress Import Documentation**](./docs/wordpress-import.md).
+
 ---
 
 ## 🧪 Testing

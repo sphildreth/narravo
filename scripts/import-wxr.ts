@@ -586,6 +586,26 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     }
   }
 
+  // Simple concurrency limiter
+  const runWithConcurrency = async <T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> => {
+    const results: R[] = new Array(items.length) as R[];
+    let i = 0;
+    const runners: Promise<void>[] = [];
+    const runNext = async () => {
+      const idx = i++;
+      if (idx >= items.length) return;
+      try {
+        results[idx] = await worker(items[idx]!, idx);
+      } finally {
+        await runNext();
+      }
+    };
+    const n = Math.max(1, Math.min(limit, items.length));
+    for (let k = 0; k < n; k++) runners.push(runNext());
+    await Promise.all(runners);
+    return results;
+  };
+
   try {
     // Update job status if provided
     if (jobId && !dryRun) {
@@ -632,13 +652,13 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     // Parse all items first
     const parsedItems: Array<ParsedPost | ParsedAttachment> = [];
     const existingSlugs = new Set<string>();
-    const attachmentMap = new Map<string, string>(); // attachment ID -> URL
+    const attachmentIdToUrl = new Map<string, string>(); // attachment ID -> URL
 
     // Get existing slugs to avoid conflicts
     if (!dryRun) {
       const existingPosts = await db.execute(sql`SELECT slug FROM posts`);
       (existingPosts.rows || []).forEach((row: any) => {
-        existingSlugs.add(row.slug);
+        if (row?.slug) existingSlugs.add(row.slug);
       });
     }
 
@@ -660,11 +680,11 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           existingSlugs.add(parsed.slug);
         }
         
-        // Build attachment map for featured images
+        // Build attachment map for featured images (post_id -> url)
         if (parsed.type === "attachment") {
-          const postId = item["wp:post_id"];
+          const postId = (item as any)["wp:post_id"];
           if (postId) {
-            attachmentMap.set(postId, parsed.attachmentUrl);
+            attachmentIdToUrl.set(postId, parsed.attachmentUrl);
           }
         }
         
@@ -674,273 +694,262 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       }
     }
 
-    // Process attachments first (for media downloads)
-    const attachmentItems = parsedItems.filter((item): item is ParsedAttachment => 
-      item.type === "attachment"
-    );
+    // Split items
+    const attachmentItems = parsedItems.filter((i): i is ParsedAttachment => i.type === "attachment");
+    const postItems = parsedItems.filter((i): i is ParsedPost => i.type === "post");
 
-    if (verbose && attachmentItems.length > 0) {
-      console.log(`📷 Processing ${attachmentItems.length} attachments...`);
-    }
+    // Mark attachments processed (for summary)
+    result.summary.attachmentsProcessed = attachmentItems.length;
 
-    for (const attachment of attachmentItems) {
-      try {
-        if (!skipMedia && attachment.attachmentUrl) {
-          const newUrl = await downloadMedia(attachment.attachmentUrl, s3Service, localService, allowedHosts, { dryRun, verbose });
-          if (newUrl) {
-            result.mediaUrls.set(attachment.attachmentUrl, newUrl);
-          }
-        }
-        result.summary.attachmentsProcessed++;
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        result.errors.push({
-          item: attachment.guid,
-          error: `Attachment processing failed: ${errorMsg}`
-        });
-        
-        if (jobId && !dryRun) {
-          await db.insert(importJobErrors).values({
-            jobId,
-            itemIdentifier: attachment.guid,
-            errorType: "media_download",
-            errorMessage: errorMsg,
-            itemData: { url: attachment.attachmentUrl }
-          });
+    // Pre-collect all media URLs (attachments + referenced in posts), then download with concurrency & dedupe
+    if (!skipMedia && (s3Service || localService)) {
+      const allMedia = new Set<string>();
+      // Attachment direct URLs
+      for (const a of attachmentItems) {
+        if (a.attachmentUrl) allMedia.add(a.attachmentUrl);
+      }
+      // Media referenced in posts
+      for (const p of postItems) {
+        for (const u of extractMediaUrlsFromHtml(p.html)) {
+          allMedia.add(u);
         }
       }
-    }
 
-    // Process posts
-    const postItems = parsedItems.filter((item): item is ParsedPost => 
-      item.type === "post"
-    );
+      const medias = Array.from(allMedia);
+      if (verbose && medias.length) console.log(`📥 Downloading ${medias.length} media files (concurrency=${concurrency})...`);
+
+      await runWithConcurrency(medias, concurrency, async (url) => {
+        try {
+          if (!result.mediaUrls.has(url)) {
+            const newUrl = await downloadMedia(url, s3Service, localService, allowedHosts, { dryRun, verbose });
+            if (newUrl) result.mediaUrls.set(url, newUrl);
+          }
+        } catch (e) {
+          if (verbose) console.warn("Media download failed:", url, e);
+        }
+        return undefined as unknown as void;
+      });
+    }
 
     if (verbose && postItems.length > 0) {
       console.log(`📄 Processing ${postItems.length} posts...`);
     }
 
+    // In-memory caches to reduce DB chatter
+    const authorCache = new Map<string, string>(); // author login/name -> userId
+    const categoryCache = new Map<string, string>(); // slug -> id
+    const tagCache = new Map<string, string>(); // slug -> id
+
     for (const post of postItems) {
       try {
-        // Proactively download any remote media found in the HTML content
-        if (!skipMedia && (s3Service || localService)) {
-          const mediaUrls = extractMediaUrlsFromHtml(post.html);
-          for (const mediaUrl of mediaUrls) {
-            if (!result.mediaUrls.has(mediaUrl)) {
-              const newUrl = await downloadMedia(mediaUrl, s3Service, localService, allowedHosts, { dryRun, verbose });
-              if (newUrl) {
-                result.mediaUrls.set(mediaUrl, newUrl);
-              }
-            }
-          }
-        }
-
-        // Rewrite media URLs in content
+        // Prepare HTML: expand shortcodes, normalize lists, sanitize, then rewrite media URLs
         const expanded = expandShortcodes(post.html);
         const normalized = normalizeWpLists(expanded);
         const sanitized = sanitizeHtml(normalized);
         const finalHtml = rewriteMediaUrls(sanitized, result.mediaUrls);
 
-        // Get or create author
-        let authorId: string | null = null;
-        if (!dryRun) {
-          const author = await db.insert(users).values({
-            login: post.author,
-            name: post.author,
-            email: `${post.author}@imported.local`, // Placeholder email
-          }).onConflictDoUpdate({
-            target: users.login,
-            set: {
-              name: post.author,
-            },
-          }).returning();
-          if (author[0]) {
-            authorId = author[0].id;
-          }
-        }
-
-        // Process categories and tags
-        let primaryCategoryId: string | null = null;
-        const tagIds: string[] = [];
-
-        if (!dryRun) {
-          // Create categories
-          for (const category of post.categories) {
-            const cat = await db.insert(categories).values({
-              name: category.name,
-              slug: category.slug,
-            }).onConflictDoUpdate({
-              target: categories.slug,
-              set: { name: category.name },
-            }).returning();
-
-            if (!primaryCategoryId && cat[0]) {
-              primaryCategoryId = cat[0].id; // First category is primary
-            }
-          }
-
-          // Create tags
-          for (const tag of post.tags) {
-            const tagRecord = await db.insert(tags).values({
-              name: tag.name,
-              slug: tag.slug,
-            }).onConflictDoUpdate({
-              target: tags.slug,
-              set: { name: tag.name },
-            }).returning();
-
-            if (tagRecord[0]) {
-              tagIds.push(tagRecord[0].id);
-            }
-          }
-        }
-
         // Handle featured image
         let featuredImageUrl: string | undefined;
         let featuredImageAlt: string | undefined = undefined;
-        if (post.featuredImageId && attachmentMap.has(post.featuredImageId)) {
-          const originalUrl = attachmentMap.get(post.featuredImageId)!;
+        if (post.featuredImageId && attachmentIdToUrl.has(post.featuredImageId)) {
+          const originalUrl = attachmentIdToUrl.get(post.featuredImageId)!;
           featuredImageUrl = result.mediaUrls.get(originalUrl) || originalUrl;
-          // Alt text would need to be extracted from attachment parsing - simplified for now
         }
 
         if (!dryRun) {
-          // Insert or update post using GUID for idempotency
-          const insertedPost = await db.insert(posts).values({
-            slug: post.slug,
-            title: post.title,
-            // Store sanitized HTML in both legacy html and new bodyHtml
-            html: finalHtml,
-            bodyHtml: finalHtml,
-            // No markdown available from WXR exports
-            bodyMd: null,
-            excerpt: post.excerpt || null,
-            guid: post.guid,
-            publishedAt: post.publishedAt || null,
-            categoryId: primaryCategoryId,
-            featuredImageUrl,
-            featuredImageAlt,
-          }).onConflictDoUpdate({
-            target: posts.guid,
-            set: {
+          await db.transaction(async (tx) => {
+            // Get or create author (cache by login/name)
+            let authorId: string | undefined = authorCache.get(post.author);
+            if (!authorId) {
+              const authorRows = await tx.insert(users).values({
+                login: post.author,
+                name: post.author,
+                email: `${post.author}@imported.local`,
+              }).onConflictDoUpdate({ target: users.login, set: { name: post.author } }).returning();
+              authorId = authorRows?.[0]?.id;
+              if (authorId) authorCache.set(post.author, authorId);
+            }
+
+            // Upsert categories (use cache per slug)
+            let primaryCategoryId: string | null = null;
+            if (post.categories.length > 0) {
+              // Resolve from cache first
+              const missingCats = post.categories.filter(c => !categoryCache.has(c.slug));
+              for (const c of missingCats) {
+                const catRows = await tx.insert(categories).values({ name: c.name, slug: c.slug })
+                  .onConflictDoUpdate({ target: categories.slug, set: { name: c.name } })
+                  .returning();
+                if (catRows?.[0]?.id) categoryCache.set(c.slug, catRows[0].id);
+              }
+              // Determine primary as first declared
+              const firstSlug = post.categories[0]?.slug;
+              primaryCategoryId = firstSlug ? (categoryCache.get(firstSlug) ?? null) : null;
+            }
+
+            // Upsert tags (use cache per slug)
+            const tagIds: string[] = [];
+            if (post.tags.length > 0) {
+              const missingTags = post.tags.filter(t => !tagCache.has(t.slug));
+              for (const t of missingTags) {
+                const tagRows = await tx.insert(tags).values({ name: t.name, slug: t.slug })
+                  .onConflictDoUpdate({ target: tags.slug, set: { name: t.name } })
+                  .returning();
+                if (tagRows?.[0]?.id) tagCache.set(t.slug, tagRows[0].id);
+              }
+              for (const t of post.tags) {
+                const id = tagCache.get(t.slug);
+                if (id) tagIds.push(id);
+              }
+            }
+
+            // Insert or update post using GUID for idempotency
+            const insertedPost = await tx.insert(posts).values({
+              slug: post.slug,
               title: post.title,
-              // Keep legacy html in sync
               html: finalHtml,
-              // Update rendered HTML; do not overwrite bodyMd to preserve later edits
               bodyHtml: finalHtml,
+              bodyMd: null,
               excerpt: post.excerpt || null,
+              guid: post.guid,
               publishedAt: post.publishedAt || null,
               categoryId: primaryCategoryId,
               featuredImageUrl,
               featuredImageAlt,
-              updatedAt: sql`now()`,
-            },
-          }).returning();
+            }).onConflictDoUpdate({
+              target: posts.guid,
+              set: {
+                title: post.title,
+                html: finalHtml,
+                bodyHtml: finalHtml,
+                excerpt: post.excerpt || null,
+                publishedAt: post.publishedAt || null,
+                categoryId: primaryCategoryId,
+                featuredImageUrl,
+                featuredImageAlt,
+                updatedAt: sql`now()`,
+              },
+            }).returning();
 
-          // Create post-tag relationships
-          if (tagIds.length > 0 && insertedPost[0]) {
-            // Delete existing tags for this post
-            await db.delete(postTags).where(eq(postTags.postId, insertedPost[0].id));
+            const postId = insertedPost?.[0]?.id;
+            if (!postId) throw new Error("Failed to upsert post");
 
-            // Insert new tags
+            // Refresh post-tags: replace associations
+            await tx.delete(postTags).where(eq(postTags.postId, postId));
             for (const tagId of tagIds) {
-              await db.insert(postTags).values({
-                postId: insertedPost[0].id,
-                tagId,
-              }).onConflictDoNothing();
+              await tx.insert(postTags).values({ postId, tagId }).onConflictDoNothing();
             }
-          }
 
-          // Create redirect if we have an original URL
-          if (post.originalUrl) {
-            try {
-              const url = new URL(post.originalUrl);
-              const fromPath = url.pathname;
-              const toPath = `/posts/${post.slug}`;
-
-              if (fromPath !== toPath) {
-                await db.insert(redirects).values({
-                  fromPath,
-                  toPath,
-                  status: 301,
-                }).onConflictDoUpdate({
-                  target: redirects.fromPath,
-                  set: {
-                    toPath,
-                    status: 301,
-                  },
-                });
-                result.summary.redirectsCreated++;
-              }
-            } catch (urlError) {
-              // Invalid URL, skip redirect
-            }
-          }
-
-          // Process comments
-          if (post.comments.length > 0 && insertedPost[0]) {
-            const commentMap = new Map<string, string>(); // original ID -> new ID
-
-            // Sort comments by parent hierarchy (parents first)
-            const sortedComments = [...post.comments].sort((a, b) => {
-              if (!a.parentId && b.parentId) return -1;
-              if (a.parentId && !b.parentId) return 1;
-              return 0;
-            });
-
-            for (const comment of sortedComments) {
-              if (!comment.approved) continue; // Only import approved comments
-
-              // Get or create comment author
-              let commentAuthorId: string | null = null;
-              if (comment.authorEmail) {
-                const commentAuthor = await db.insert(users).values({
-                  email: comment.authorEmail,
-                  name: comment.author,
-                }).onConflictDoUpdate({
-                  target: users.email,
-                  set: { name: comment.author },
-                }).returning();
-                if (commentAuthor[0]) {
-                  commentAuthorId = commentAuthor[0].id;
+            // Create redirect if we have an original URL
+            if (post.originalUrl) {
+              try {
+                const url = new URL(post.originalUrl);
+                const fromPath = url.pathname;
+                const toPath = `/posts/${post.slug}`;
+                if (fromPath !== toPath) {
+                  await tx.insert(redirects).values({ fromPath, toPath, status: 301 })
+                    .onConflictDoUpdate({ target: redirects.fromPath, set: { toPath, status: 301 } });
+                  result.summary.redirectsCreated++;
                 }
-              }
-
-              // Determine parent and path
-              let parentId: string | null = null;
-              let path = "";
-              let depth = 0;
-
-              if (comment.parentId && commentMap.has(comment.parentId)) {
-                parentId = commentMap.get(comment.parentId)!;
-                // Get parent path
-                const parent = await db.select({ path: comments.path, depth: comments.depth })
-                  .from(comments)
-                  .where(eq(comments.id, parentId));
-                if (parent[0]) {
-                  depth = parent[0].depth + 1;
-                  path = parent[0].path;
-                }
-              }
-
-              // Insert comment
-              const insertedComment = await db.insert(comments).values({
-                postId: insertedPost[0].id,
-                userId: commentAuthorId,
-                parentId,
-                path: path + (path ? "." : "") + comment.id, // Use original comment ID in path
-                depth,
-                bodyHtml: sanitizeHtml(comment.content),
-                bodyMd: null,
-                status: "approved",
-                createdAt: comment.date || null,
-              }).returning();
-
-              if (insertedComment[0]) {
-                commentMap.set(comment.id, insertedComment[0].id);
+              } catch {
+                // ignore invalid redirect URL
               }
             }
-          }
+
+            // Process comments with idempotency and parent caching
+            if (post.comments.length > 0) {
+              // Build set of existing paths to avoid duplicates on re-import
+              const existing = await tx.select({ id: comments.id, path: comments.path, depth: comments.depth })
+                .from(comments)
+                .where(eq(comments.postId, postId));
+              const existingPaths = new Set(existing.map(r => r.path));
+              const existingByPath = new Map(existing.map(r => [r.path, { id: r.id, depth: r.depth, path: r.path }]));
+
+              // Map original comment id -> inserted { id, path, depth }
+              const insertedMap = new Map<string, { id: string; path: string; depth: number }>();
+
+              // We'll iteratively insert comments whose parents are resolved
+              const remaining = post.comments.filter(c => c.approved).slice();
+              const maxIterations = remaining.length + 5;
+              let iterations = 0;
+              while (remaining.length > 0 && iterations < maxIterations) {
+                iterations++;
+                let progressed = false;
+
+                for (let idx = 0; idx < remaining.length; ) {
+                  const c = remaining[idx]!;
+
+                  // Resolve parent if any
+                  let parentInfo: { id: string; path: string; depth: number } | null = null;
+                  if (c.parentId) {
+                    // If parent inserted in this run
+                    const ins = insertedMap.get(c.parentId);
+                    if (ins) parentInfo = ins;
+                    else {
+                      // If parent existed already, its path ends with the parent's original ID
+                      // We can find by scanning existing paths for those that end with `.${parentId}` or equal to parentId
+                      const parentPath = Array.from(existingPaths).find(p => p === c.parentId || p.endsWith(`.${c.parentId}`));
+                      if (parentPath) {
+                        const e = existingByPath.get(parentPath);
+                        if (e) parentInfo = e;
+                      }
+                    }
+
+                    // If parent unresolved yet, skip this round
+                    if (!parentInfo) { idx++; continue; }
+                  }
+
+                  // Compute this comment path/depth
+                  const basePath = parentInfo?.path ?? "";
+                  const path = basePath ? `${basePath}.${c.id}` : c.id;
+                  const depth = (parentInfo?.depth ?? 0) + (parentInfo ? 1 : 0);
+
+                  // Idempotency: skip if path already exists
+                  if (existingPaths.has(path)) {
+                    // Map to existing id for children
+                    const e = existingByPath.get(path);
+                    if (e) insertedMap.set(c.id, e);
+                    remaining.splice(idx, 1);
+                    progressed = true;
+                    continue;
+                  }
+
+                  // Upsert/create comment author if available
+                  let commentUserId: string | null = null;
+                  if (c.authorEmail) {
+                    const userRows = await tx.insert(users).values({ email: c.authorEmail, name: c.author })
+                      .onConflictDoUpdate({ target: users.email, set: { name: c.author } })
+                      .returning();
+                    commentUserId = userRows?.[0]?.id ?? null;
+                  }
+
+                  // Insert comment
+                  const inserted = await tx.insert(comments).values({
+                    postId,
+                    userId: commentUserId,
+                    parentId: parentInfo?.id ?? null,
+                    path,
+                    depth,
+                    bodyHtml: sanitizeHtml(c.content),
+                    bodyMd: null,
+                    status: "approved",
+                    createdAt: c.date || null,
+                  }).returning();
+
+                  if (inserted?.[0]) {
+                    const info = { id: inserted[0].id, path, depth };
+                    insertedMap.set(c.id, info);
+                    existingPaths.add(path);
+                    existingByPath.set(path, info);
+                  }
+
+                  remaining.splice(idx, 1);
+                  progressed = true;
+                }
+
+                if (!progressed) break; // Avoid infinite loop on malformed trees
+              }
+            }
+          });
         }
 
         result.summary.postsImported++;
@@ -1016,13 +1025,17 @@ async function run() {
   const skipMedia = args.includes("--skip-media");
   const verbose = args.includes("--verbose");
   const allowedHostsArg = args.find(a => a.startsWith("allowedHosts="))?.split("=")[1] ?? "";
+  const concurrencyArg = args.find(a => a.startsWith("concurrency="))?.split("=")[1] ?? "";
   const allowedHosts = allowedHostsArg
     .split(",")
     .map((s: string) => s.trim())
     .filter(Boolean);
+  const concurrency = Number.isFinite(Number(concurrencyArg)) && Number(concurrencyArg) > 0
+    ? Number(concurrencyArg)
+    : undefined;
 
   if (!pathArg) {
-    console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [allowedHosts=example.com,cdn.example.com]");
+    console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [allowedHosts=example.com,cdn.example.com] [concurrency=8]");
     process.exit(1);
   }
 
@@ -1030,9 +1043,14 @@ async function run() {
   if (dryRun) console.log("🏃 DRY RUN MODE - No changes will be made");
   if (skipMedia) console.log("📷 SKIP MEDIA MODE - Media will not be downloaded");
   if (allowedHosts.length > 0) console.log(`🔒 Allowed media hosts: ${allowedHosts.join(", ")}`);
+  if (concurrency) console.log(`🧵 Concurrency: ${concurrency}`);
 
   const startTime = Date.now();
-  const result = await importWxr(pathArg, { dryRun, skipMedia, verbose, allowedHosts });
+  const opts: ImportOptions = { dryRun, skipMedia, verbose, allowedHosts };
+  if (typeof concurrency === "number") {
+    opts.concurrency = concurrency;
+  }
+  const result = await importWxr(pathArg, opts);
   const duration = Date.now() - startTime;
 
   console.log("\n📊 Import Summary:");
@@ -1104,7 +1122,7 @@ function transformAvShortcodes(html: string): string {
       loop ? `data-loop="true"` : "",
       autoplay ? `data-autoplay="true"` : ""
     ].filter(Boolean).join(" ");
-    return `<div class="wp-audio"${meta + " " + meta}></div>`;
+    return `<div class="wp-audio"${meta ? " " + meta : ""}></div>`;
   });
 
   // [video src="..." poster="..."]
@@ -1125,7 +1143,7 @@ function transformAvShortcodes(html: string): string {
       loop ? `data-loop="true"` : "",
       autoplay ? `data-autoplay="true"` : ""
     ].filter(Boolean).join(" ");
-    return `<div class="wp-video"${meta + " " + meta}></div>`;
+    return `<div class="wp-video"${meta ? " " + meta : ""}></div>`;
   });
 
   // [playlist ids="1,2,3" type="audio|video"]
@@ -1137,7 +1155,7 @@ function transformAvShortcodes(html: string): string {
       ids.length ? `data-ids="${ids.join(",")}"` : "",
       `data-type="${type}"`
     ].filter(Boolean).join(" ");
-    return `<div class="wp-playlist"${meta + " " + meta}></div>`;
+    return `<div class="wp-playlist"${meta ? " " + meta : ""}></div>`;
   });
 
   return html;
@@ -1207,9 +1225,6 @@ export function resolveInternalLinks(html: string, postIdToSlug: Record<string, 
   html = html.replace(/<a([^>]+)data-wp-post-id="(\d+)"([^>]*)>/gi, (m, pre, id, post) => {
     const slug = postIdToSlug[String(id)];
     if (!slug) return m;
-    // find existing href
-    const hrefMatch = m.match(/href="([^"]+)"/i);
-    const href = hrefMatch ? hrefMatch[1] : "";
     const newHref = `/posts/${slug}`;
     return `<a${pre}href="${newHref}"${post}>`;
   });
