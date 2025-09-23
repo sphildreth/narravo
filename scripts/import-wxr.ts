@@ -701,6 +701,18 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     // Mark attachments processed (for summary)
     result.summary.attachmentsProcessed = attachmentItems.length;
 
+    // Persist initial job totals for progress (so UI can show a total baseline)
+    if (jobId && !dryRun) {
+      await db.update(importJobs)
+        .set({
+          totalItems: result.summary.totalItems,
+          attachmentsProcessed: result.summary.attachmentsProcessed,
+          skipped: result.summary.skipped,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(importJobs.id, jobId));
+    }
+
     // Pre-collect all media URLs (attachments + referenced in posts), then download with concurrency & dedupe
     if (!skipMedia && (s3Service || localService)) {
       const allMedia = new Set<string>();
@@ -953,6 +965,17 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         }
 
         result.summary.postsImported++;
+
+        // Persist incremental progress so UI polling updates the bar
+        if (jobId && !dryRun) {
+          await db.update(importJobs)
+            .set({
+              postsImported: result.summary.postsImported,
+              redirectsCreated: result.summary.redirectsCreated,
+              updatedAt: sql`now()`,
+            })
+            .where(eq(importJobs.id, jobId));
+        }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         result.errors.push({

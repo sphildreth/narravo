@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Upload, Play, Square, RotateCcw, FileText, AlertTriangle, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import { startImportJob, cancelImportJob, retryImportJob, deleteImportJob } from "@/app/actions/import";
 import { useRouter } from "next/navigation";
@@ -51,7 +51,8 @@ const statusIcons = {
 
 export default function ImportManager({ initialJobs }: ImportManagerProps) {
   const [jobs, setJobs] = useState(initialJobs);
-  const [isUploading, setIsUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [options, setOptions] = useState<ImportOptions>(defaultOptions);
   const [allowedHostsInput, setAllowedHostsInput] = useState("");
@@ -59,40 +60,72 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const handleFileUpload = async (file: File) => {
+  // Polling to refresh jobs list every few seconds
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchJobs() {
+      try {
+        const res = await fetch("/api/import-jobs", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data?.jobs)) {
+          setJobs(data.jobs);
+        }
+      } catch {
+        // ignore transient errors
+      }
+    }
+    const id = setInterval(fetchJobs, 4000);
+    // Also do an initial refresh shortly after mount to catch any new jobs
+    const t = setTimeout(fetchJobs, 500);
+    return () => { cancelled = true; clearInterval(id); clearTimeout(t); };
+  }, []);
+
+  const handleFileSelect = (file: File) => {
     if (!file.name.endsWith('.xml')) {
       setUploadError("Please select a .xml file");
+      setSelectedFile(null);
+      return;
+    }
+    setUploadError(null);
+    setSelectedFile(file);
+  };
+
+  const handleStartImport = async () => {
+    if (!selectedFile) {
+      setUploadError("Please select a .xml file to import");
       return;
     }
 
-    setIsUploading(true);
+    setIsStarting(true);
     setUploadError(null);
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', selectedFile);
       formData.append('options', JSON.stringify({
         ...options,
-        allowedHosts: allowedHostsInput.split('\n').filter(h => h.trim().length > 0).map(h => h.trim()),
+        allowedHosts: allowedHostsInput.split('\n').map(h => h.trim()).filter(Boolean),
       }));
 
       const result = await startImportJob(formData);
-      
       if (result.error) {
         setUploadError(result.error);
       } else if (result.job) {
-        setJobs(prev => [result.job!, ...prev]);
-        // Reset form
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+        // Prepend new job to list and clear form
+        setJobs(prev => {
+          const existing = prev.filter(j => j.id !== result.job!.id);
+          return [result.job!, ...existing].slice(0, 10);
+        });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setSelectedFile(null);
         setOptions(defaultOptions);
         setAllowedHostsInput("");
       }
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Upload failed');
+      setUploadError(error instanceof Error ? error.message : 'Failed to start import');
     } finally {
-      setIsUploading(false);
+      setIsStarting(false);
     }
   };
 
@@ -140,7 +173,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
   const formatDate = (date: Date | null) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleString();
-  };
+    };
 
   const getProgress = (job: ImportJob) => {
     if (job.totalItems === 0) return 0;
@@ -154,7 +187,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
       <div className="border border-border rounded-lg p-6 bg-bg">
         <h2 className="text-lg font-semibold mb-4">Upload WXR File</h2>
         <p className="text-muted mb-4">
-          Select a WordPress export (.xml) file and configure import options.
+          Select a WordPress export (.xml) file, configure options, then click Start Import.
         </p>
 
         {uploadError && (
@@ -175,12 +208,15 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
                 type="file"
                 accept=".xml"
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileUpload(file);
+                  const file = e.target.files?.[0] || null;
+                  if (file) handleFileSelect(file);
                 }}
-                disabled={isUploading}
+                disabled={isStarting}
                 className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               />
+              {selectedFile && (
+                <div className="mt-2 text-sm text-muted">Selected: <span className="font-medium">{selectedFile.name}</span></div>
+              )}
             </div>
 
             <div>
@@ -209,7 +245,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
                 max="10"
                 value={options.concurrency}
                 onChange={(e) => 
-                  setOptions(prev => ({ ...prev, concurrency: parseInt(e.target.value) || 4 }))
+                  setOptions(prev => ({ ...prev, concurrency: Math.max(1, Math.min(10, parseInt(e.target.value) || 4)) }))
                 }
                 className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               />
@@ -271,12 +307,32 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
           </div>
         </div>
 
-        {isUploading && (
-          <div className="text-center py-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
-            <p className="text-sm text-muted">Uploading and starting import...</p>
-          </div>
-        )}
+        {/* Actions */}
+        <div className="mt-6 flex items-center gap-3">
+          <button
+            onClick={handleStartImport}
+            disabled={!selectedFile || isStarting}
+            className="px-4 py-2 text-sm bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isStarting ? (
+              <span className="flex items-center">
+                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                Starting Import...
+              </span>
+            ) : (
+              <span className="flex items-center">
+                <Play className="h-4 w-4 mr-2" /> Start Import
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => { if (fileInputRef.current) fileInputRef.current.value = ''; setSelectedFile(null); setUploadError(null); }}
+            disabled={isStarting}
+            className="px-4 py-2 text-sm border border-border rounded hover:bg-muted/20 disabled:opacity-50"
+          >
+            Clear File
+          </button>
+        </div>
       </div>
 
       {/* Job List */}
@@ -288,7 +344,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
 
         {jobs.length === 0 ? (
           <p className="text-muted text-center py-8">
-            No import jobs yet. Upload a WXR file to get started.
+            No import jobs yet. Select a file and click Start Import.
           </p>
         ) : (
           <div className="space-y-4">
@@ -323,7 +379,6 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
                         Retry
                       </button>
                     )}
-                    {/* Only allow deleting completed, failed, or cancelled jobs */}
                     {(job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') && (
                       <button
                         onClick={() => setDeleteConfirm(job.id)}
@@ -343,7 +398,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
                   </div>
                 </div>
 
-                {job.status === 'running' && job.totalItems > 0 && (
+                {(job.status === 'running' || job.status === 'queued') && job.totalItems > 0 && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Progress</span>

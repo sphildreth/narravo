@@ -19,6 +19,8 @@ export function sanitizeHtml(html: string): string {
     // Allowed attributes
     ALLOWED_ATTR: [
       "href", "src", "alt", "title", "target", "rel", "controls", "poster",
+      // Responsive image attributes
+      "srcset", "sizes",
       // Video-related safe attributes
       "muted", "loop", "playsinline", "preload", "width", "height", "type",
       // Table-related safe attributes
