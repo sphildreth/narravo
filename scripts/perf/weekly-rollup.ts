@@ -43,8 +43,9 @@ async function generateWeeklyRollup(): Promise<WeeklyReport> {
   const recommendations = generateRecommendations(trends);
 
   return {
-    weekStart: oneWeekAgo.toISOString().split('T')[0],
-    weekEnd: now.toISOString().split('T')[0],
+    // Use substring to avoid potential undefined from array indexing under strict settings
+    weekStart: oneWeekAgo.toISOString().slice(0, 10),
+    weekEnd: now.toISOString().slice(0, 10),
     benchmarkCount: currentWeekData.length,
     trends,
     highlights,
@@ -323,5 +324,6 @@ async function main() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
-
-export { generateWeeklyRollup, WeeklyReport };
+// Export value and type separately for isolatedModules compliance
+export { generateWeeklyRollup };
+export type { WeeklyReport };

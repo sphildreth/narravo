@@ -5,23 +5,24 @@ import { useEffect, useState } from "react";
 
 interface RenderTimeBadgeProps {
   serverMs?: number;
+  showBadge?: boolean;
 }
 
 /**
  * Displays a small render time badge for Post pages showing server render time.
  * Features:
  * - Reads from Server-Timing header or server-provided prop
- * - Feature-flagged with NEXT_PUBLIC_SHOW_RENDER_BADGE
+ * - Controlled by a configuration setting
  * - Hidden for crawlers and print
  * - Positioned subtly at bottom-right
  */
-export function RenderTimeBadge({ serverMs }: RenderTimeBadgeProps) {
+export function RenderTimeBadge({ serverMs, showBadge }: RenderTimeBadgeProps) {
   const [ms, setMs] = useState<number | undefined>(serverMs);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    // Check if badge should be shown via environment flag
-    if (!process.env.NEXT_PUBLIC_SHOW_RENDER_BADGE) return;
+    // Check if badge should be shown via prop
+    if (!showBadge) return;
 
     // Try to parse Server-Timing from navigation entries if no serverMs provided
     if (ms == null) {
@@ -44,10 +45,10 @@ export function RenderTimeBadge({ serverMs }: RenderTimeBadgeProps) {
     if (ms != null && ms >= 0) {
       setIsVisible(true);
     }
-  }, [ms]);
+  }, [ms, showBadge]);
 
   // Don't render if flag is off, no timing data, or likely crawler
-  if (!process.env.NEXT_PUBLIC_SHOW_RENDER_BADGE || !isVisible || ms == null) {
+  if (!showBadge || !isVisible || ms == null) {
     return null;
   }
 
@@ -59,7 +60,7 @@ export function RenderTimeBadge({ serverMs }: RenderTimeBadgeProps) {
 
   return (
     <div
-      className="fixed bottom-3 right-3 z-50 print:hidden"
+      className="fixed bottom-3 right-3 z-50 print-hidden"
       style={{
         fontSize: "12px",
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",

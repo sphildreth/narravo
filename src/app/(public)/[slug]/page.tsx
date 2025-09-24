@@ -45,6 +45,7 @@ export default async function PostPage({ params }: Props) {
   );
   
   const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;
+  const showRenderBadge = await config.getBoolean("VIEW.PUBLIC-SHOW-RENDER-BADGE") ?? false;
   
   // Measure session loading
   const { result: session, duration: sessionDuration } = await measureAsync(
@@ -236,7 +237,7 @@ export default async function PostPage({ params }: Props) {
           <CommentsSection postId={post.id} />
         </div>
       </main>
-      <RenderTimeBadge serverMs={Math.round(totalRenderTime)} />
+      <RenderTimeBadge serverMs={Math.round(totalRenderTime)} showBadge={showRenderBadge} />
     </>
   );
 }

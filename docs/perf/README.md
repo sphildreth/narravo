@@ -17,11 +17,7 @@ The performance monitoring system provides:
 
 ### Enable Render Time Badge
 
-Set environment variable to show render times on post pages:
-
-```bash
-NEXT_PUBLIC_SHOW_RENDER_BADGE=true
-```
+Set the configuration setting `VIEW.PUBLIC-SHOW-RENDER-BADGE` to `true` in the admin settings.
 
 ### Run Performance Benchmarks
 
@@ -73,7 +69,7 @@ const { result, duration } = await measureAsync('operation-name', async () => {
 
 Shows server render time on post pages when enabled:
 
-- **Environment flag**: `NEXT_PUBLIC_SHOW_RENDER_BADGE=true`
+- **Configuration**: `VIEW.PUBLIC-SHOW-RENDER-BADGE` (boolean)
 - **Position**: Fixed bottom-right corner
 - **Styling**: Subtle, non-intrusive, hidden for print/crawlers
 - **Data source**: Server-provided timing or Server-Timing header
@@ -145,7 +141,6 @@ Add to your CI pipeline:
 
 ### Client-Side
 
-- `NEXT_PUBLIC_SHOW_RENDER_BADGE`: Enable render time badge (`true`/`false`)
 - `NEXT_PUBLIC_RUM_SAMPLING_RATE`: RUM sampling rate (`0.0`-`1.0`, default: `0.1`)
 
 ### Server-Side
@@ -201,7 +196,7 @@ Add to your CI pipeline:
 ### Common Issues
 
 **Badge not showing:**
-- Check `NEXT_PUBLIC_SHOW_RENDER_BADGE=true`
+- Check `VIEW.PUBLIC-SHOW-RENDER-BADGE` is `true` in admin settings.
 - Verify not in crawler/bot user agent
 - Check browser console for errors
 
