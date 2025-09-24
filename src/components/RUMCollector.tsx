@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useEffect } from "react";
+import { useReportWebVitals } from 'next/web-vitals';
+import { useEffect, useRef } from 'react';
 
 interface WebVitalMetric {
   name: string;
@@ -21,14 +22,29 @@ interface WebVitalMetric {
  * - Batches metrics for efficiency
  */
 export function RUMCollector() {
-  useEffect(() => {
+  const metrics = useRef<WebVitalMetric[]>([]);
+  const sendTimeout = useRef<NodeJS.Timeout>();
+
+  const handleMetric = (metric: WebVitalMetric) => {
+    metrics.current.push(metric);
+    
+    // Debounce sending metrics to batch them
+    if (sendTimeout.current) {
+      clearTimeout(sendTimeout.current);
+    }
+    sendTimeout.current = setTimeout(() => {
+      if (metrics.current.length > 0) {
+        sendMetrics([...metrics.current]);
+        metrics.current = []; // Clear the array
+      }
+    }, 1000);
+  };
+
+  useReportWebVitals((metric) => {
     // Check if RUM collection should be disabled
     if (
-      // Respect Do Not Track
       navigator.doNotTrack === '1' ||
-      // Skip in preview mode
       window.location.search.includes('preview=') ||
-      // Skip if explicitly disabled
       localStorage.getItem('rum-disabled') === 'true'
     ) {
       return;
@@ -40,54 +56,37 @@ export function RUMCollector() {
       return;
     }
 
-    // Import web-vitals dynamically to avoid increasing bundle size for all users
-    import('web-vitals').then(({ onCLS, onINP, onLCP, onTTFB, onFCP }) => {
-      const metrics: WebVitalMetric[] = [];
-      let sendTimeout: NodeJS.Timeout;
+    handleMetric(metric);
+  });
 
-      const handleMetric = (metric: WebVitalMetric) => {
-        metrics.push(metric);
-        
-        // Debounce sending metrics to batch them
-        clearTimeout(sendTimeout);
-        sendTimeout = setTimeout(() => {
-          sendMetrics([...metrics]);
-          metrics.length = 0; // Clear the array
-        }, 1000);
-      };
+  useEffect(() => {
+    const sendRemainingMetrics = () => {
+      if (metrics.current.length > 0) {
+        sendMetrics([...metrics.current], true);
+        metrics.current = [];
+      }
+    };
 
-      // Collect Core Web Vitals
-      onLCP(handleMetric);
-      onINP(handleMetric);
-      onCLS(handleMetric);
-      onTTFB(handleMetric);
-      onFCP(handleMetric);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        sendRemainingMetrics();
+      }
+    };
 
-      // Send any remaining metrics when the page is about to unload
-      const sendRemainingMetrics = () => {
-        if (metrics.length > 0) {
-          sendMetrics([...metrics], true);
-        }
-      };
+    window.addEventListener('beforeunload', sendRemainingMetrics);
+    window.addEventListener('visibilitychange', handleVisibilityChange);
 
-      window.addEventListener('beforeunload', sendRemainingMetrics);
-      window.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') {
-          sendRemainingMetrics();
-        }
-      });
-
-      return () => {
-        clearTimeout(sendTimeout);
-        window.removeEventListener('beforeunload', sendRemainingMetrics);
-        window.removeEventListener('visibilitychange', sendRemainingMetrics);
-      };
-    }).catch(error => {
-      console.warn('Failed to load web-vitals library:', error);
-    });
+    return () => {
+      if (sendTimeout.current) {
+        clearTimeout(sendTimeout.current);
+      }
+      window.removeEventListener('beforeunload', sendRemainingMetrics);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      sendRemainingMetrics(); // Final send on unmount
+    };
   }, []);
 
-  return null; // This is a data collection component, no UI
+  return null;
 }
 
 /**

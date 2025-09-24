@@ -18,10 +18,12 @@ export default function CodeBlock({
   language = "", 
   showLineNumbers = false 
 }: CodeBlockProps) {
-  // Use a simple dark mode detection since next-themes may not be configured
-  const isDark = typeof window !== 'undefined' && 
-    window.matchMedia && 
-    window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const [isDark, setIsDark] = React.useState(false);
+  React.useEffect(() => {
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark' ||
+      (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.getAttribute('data-theme') !== 'light');
+    setIsDark(isDarkMode);
+  }, []);
   
   // Extract language from className if provided (e.g., "lang-javascript" or "language-javascript")
   const detectedLanguage = language || 
