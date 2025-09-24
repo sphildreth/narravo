@@ -15,7 +15,7 @@ import { createLowlight } from "lowlight";
 
 // Create lowlight instance
 const lowlight = createLowlight();
-import DOMPurify from "dompurify";
+import DOMPurify from "isomorphic-dompurify";
 
 // Language loading for code blocks
 const SUPPORTED_LANGUAGES = [

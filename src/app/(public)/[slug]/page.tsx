@@ -132,6 +132,18 @@ export default async function PostPage({ params }: Props) {
                     </div>
                 </div>
             )}
+            {/* Featured Image Display - below admin actions as requested */}
+            {post.featuredImageUrl && (
+                <div className="border border-border rounded-xl bg-card shadow-soft overflow-hidden">
+                    <img
+                        src={post.featuredImageUrl}
+                        alt={post.featuredImageAlt || post.title}
+                        className="w-full h-auto object-cover"
+                        loading="eager"
+                        style={{ maxHeight: '500px' }}
+                    />
+                </div>
+            )}
           <article className="article border border-border rounded-xl bg-card shadow-soft">
             <div className="article__body p-6">
               <header className="mb-3">

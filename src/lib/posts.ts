@@ -47,6 +47,7 @@ export async function listPosts(opts: { cursor?: { publishedAt: string; id: stri
     from posts p
     where true
       and p.deleted_at is null
+      and p.published_at is not null
       ${c ? sql`and (p.published_at, p.id) < (${c.publishedAt}::timestamptz, ${c.id}::uuid)` : sql``}
     order by p.published_at desc nulls last, p.id desc
     limit ${limit + 1}
@@ -86,7 +87,9 @@ export async function getPostBySlug(slug: string) {
     select p.id, p.slug, p.title, p.excerpt, 
            p.body_md as "bodyMd", p.body_html as "bodyHtml", 
            p.html, p.published_at as "publishedAt",
-           p.category_id as "categoryId"${selectViews}
+           p.category_id as "categoryId",
+           p.featured_image_url as "featuredImageUrl",
+           p.featured_image_alt as "featuredImageAlt"${selectViews}
     from posts p
     where p.slug = ${slug}
       and p.deleted_at is null
@@ -103,6 +106,8 @@ export async function getPostBySlug(slug: string) {
           publishedAt: row.publishedAt ? new Date(row.publishedAt).toISOString() : null,
           viewsTotal: row.viewsTotal ?? 0,
           categoryId: row.categoryId,
+          featuredImageUrl: row.featuredImageUrl ?? null,
+          featuredImageAlt: row.featuredImageAlt ?? null,
       };
       
       // Get tags and category in parallel
@@ -163,7 +168,7 @@ export async function createPost(data: {
   bodyMd: string;
   excerpt?: string;
   publishedAt?: Date;
-  guid?: string;
+  importedSystemId?: string;
 }) {
   const bodyHtml = markdownToHtmlSync(data.bodyMd);
   const excerpt = data.excerpt || extractExcerpt(data.bodyMd);
@@ -176,7 +181,7 @@ export async function createPost(data: {
     html: bodyHtml, // Keep legacy field in sync for now
     excerpt: excerpt,
     publishedAt: data.publishedAt || null,
-    guid: data.guid || null,
+    importedSystemId: data.importedSystemId || null,
   }).returning();
   
   return result[0];

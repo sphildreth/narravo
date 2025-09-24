@@ -76,7 +76,7 @@ describe("WXR Import", () => {
 
       expect(result).toEqual({
         type: "post",
-        guid: "https://example.com/?p=1",
+        importedSystemId: "https://example.com/?p=1",
         title: "Test Post",
         slug: "test-post",
         html: "<p>Test content</p>",
@@ -108,7 +108,7 @@ describe("WXR Import", () => {
       const result = parseWxrItem(item);
 
       expect(result).toEqual({
-        guid: "https://example.com/?attachment=4",
+        importedSystemId: "https://example.com/?attachment=4",
         title: "Test Image",
         attachmentUrl: "https://example.com/wp-content/uploads/2024/01/test.jpg",
         alt: "Test image alt text",

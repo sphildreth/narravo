@@ -14,6 +14,8 @@ export type PostDTO = {
   viewsLastNDays?: number;
   category?: { id: string; name: string; slug: string } | null;
   tags?: { id: string; name: string; slug: string }[];
+  featuredImageUrl?: string | null;
+  featuredImageAlt?: string | null;
 };
 
 export type TagDTO = {
