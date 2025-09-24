@@ -648,7 +648,27 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       await db.delete(categories);
       await db.delete(tags);
       await db.delete(redirects);
-      
+
+      // Also purge previously imported media from storage
+      try {
+        const prefix = "imported-media/";
+        // Initialize a storage service if not already prepared (e.g., when skipMedia was true)
+        if (!s3Service && !localService) {
+          const s3cfg = getS3Config();
+          if (s3cfg) s3Service = new S3Service(s3cfg);
+          else localService = localStorageService;
+        }
+        if (s3Service) {
+          await s3Service.deletePrefix(prefix);
+          if (verbose) console.log("🧹 S3/R2 storage purged:", prefix);
+        } else if (localService) {
+          await localService.deletePrefix(prefix);
+          if (verbose) console.log("🧹 Local storage purged:", prefix);
+        }
+      } catch (e) {
+        if (verbose) console.warn("Warning: failed to purge imported media prefix:", e);
+      }
+
       if (verbose) console.log("✅ Purge completed");
     }
 
