@@ -20,6 +20,7 @@ Narravo is a sleek, minimal, and feature-rich blog engine designed for developer
 *   **PostgreSQL + Drizzle ORM:** A modern, type-safe ORM for seamless database interactions.
 *   **Auth.js (NextAuth):** Secure authentication with GitHub and Google OAuth providers out-of-the-box.
 *   **WordPress WXR Import:** Robustly import posts, comments, media, tags, and more from WordPress via the Admin UI or CLI.
+*   **Data Operations:** Complete backup/export, restore, and purge functionality with audit logging and confirmation flows.
 *   **Nested Comments & Reactions:** Engage your audience with threaded comments, attachments (image/video), and emoji-like reactions.
 *   **Admin Dashboard:** A powerful moderation queue to manage comments, attachments, and user content.
 *   **S3/R2 Media Uploads:** Scalable media storage with presigned URLs for AWS S3 or Cloudflare R2.
