@@ -32,7 +32,7 @@ export const posts = pgTable("posts", {
   bodyHtml: text("body_html"), // Rendered and sanitized HTML (nullable for migration)
   html: text("html").notNull(), // Legacy column - to be deprecated
   excerpt: text("excerpt"),
-  guid: text("guid").unique(), // WordPress GUID for import idempotency
+  importedSystemId: text("imported_system_id").unique(), // WordPress GUID for import idempotency
   // Featured image (post thumbnail)
   featuredImageUrl: text("featured_image_url"),
   featuredImageAlt: text("featured_image_alt"),

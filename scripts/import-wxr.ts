@@ -160,7 +160,7 @@ export interface WxrItem {
 
 export interface ParsedPost {
   type: "post";
-  guid: string;
+  importedSystemId: string;
   title: string;
   slug: string;
   html: string;
@@ -184,7 +184,7 @@ export interface ParsedPost {
 
 export interface ParsedAttachment {
   type: "attachment";
-  guid: string;
+  importedSystemId: string;
   title: string;
   attachmentUrl: string;
   alt?: string | undefined;
@@ -218,14 +218,14 @@ export interface ImportResult {
 export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | null {
   const postType = item["wp:post_type"];
 
-  // Extract GUID
-  let guid: string;
+  // Extract importedSystemId (WordPress GUID)  
+  let importedSystemId: string;
   if (typeof item.guid === "string") {
-    guid = item.guid;
+    importedSystemId = item.guid;
   } else if (item.guid && typeof item.guid === "object" && item.guid._) {
-    guid = item.guid._;
+    importedSystemId = item.guid._;
   } else {
-    return null; // No GUID, skip
+    return null; // No guid, skip
   }
 
   if (postType === "post") {
@@ -279,7 +279,7 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
 
     return {
       type: "post",
-      guid,
+      importedSystemId,
       title: item.title || "Untitled",
       slug: item["wp:post_name"] || slugify(item.title || "untitled", { lower: true, strict: true }),
       html: item["content:encoded"] || "",
@@ -305,7 +305,7 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
 
     return {
       type: "attachment",
-      guid,
+      importedSystemId,
       title: item.title || "Untitled",
       attachmentUrl: item["wp:attachment_url"] || "",
       alt,
@@ -784,7 +784,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       // Then process posts: expand shortcodes, store the result, and collect media URLs
       for (const p of postItems) {
         const expandedHtml = expandShortcodes(p.html);
-        processedPostContent.set(p.guid, expandedHtml);
+        processedPostContent.set(p.importedSystemId, expandedHtml);
         for (const u of extractMediaUrlsFromHtml(expandedHtml)) {
           allMedia.add(u);
         }
@@ -808,7 +808,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       // If skipping media, we still need to expand shortcodes for consistent processing in the main loop.
       if (verbose) console.log("🔍 Expanding shortcodes for all posts (media download skipped)...");
       for (const p of postItems) {
-        processedPostContent.set(p.guid, expandShortcodes(p.html));
+        processedPostContent.set(p.importedSystemId, expandShortcodes(p.html));
       }
     }
 
@@ -824,7 +824,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     for (const post of postItems) {
       try {
         // Prepare HTML: expand shortcodes, normalize lists, sanitize, then rewrite media URLs
-        const expanded = processedPostContent.get(post.guid) || "";
+        const expanded = processedPostContent.get(post.importedSystemId) || "";
         const withIframes = transformIframeVideos(expanded);
         const normalized = normalizeWpLists(withIframes);
 
@@ -921,7 +921,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
             // Determine whether to recompute excerpt on update by checking existing row
             const existing = await tx.select({ id: posts.id, html: posts.html, excerpt: posts.excerpt })
               .from(posts)
-              .where(eq(posts.guid, post.guid))
+              .where(eq(posts.importedSystemId, post.importedSystemId))
               .limit(1);
             const existingRow = existing[0];
 
@@ -931,7 +931,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
             const excerptToUse = shouldRecompute ? (computedExcerpt || null) : (existingRow?.excerpt ?? computedExcerpt ?? null);
 
-            // Insert or update post using GUID for idempotency
+            // Insert or update post using importedSystemId for idempotency
             const insertedPost = await tx.insert(posts).values({
               slug: post.slug,
               title: post.title,
@@ -939,13 +939,13 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               bodyHtml: finalHtml,
               bodyMd: null,
               excerpt: excerptToUse,
-              guid: post.guid,
+              importedSystemId: post.importedSystemId,
               publishedAt: post.publishedAt || null,
               categoryId: primaryCategoryId,
               featuredImageUrl,
               featuredImageAlt,
             }).onConflictDoUpdate({
-              target: posts.guid,
+              target: posts.importedSystemId,
               set: {
                 title: post.title,
                 html: finalHtml,
@@ -1096,14 +1096,14 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         result.errors.push({
-          item: post.guid,
+          item: post.importedSystemId,
           error: `Post import failed: ${errorMsg}`
         });
 
         if (jobId && !dryRun) {
           await db.insert(importJobErrors).values({
             jobId,
-            itemIdentifier: post.guid,
+            itemIdentifier: post.importedSystemId,
             errorType: "post_import",
             errorMessage: errorMsg,
             itemData: { title: post.title, slug: post.slug }

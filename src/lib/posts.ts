@@ -163,7 +163,7 @@ export async function createPost(data: {
   bodyMd: string;
   excerpt?: string;
   publishedAt?: Date;
-  guid?: string;
+  importedSystemId?: string;
 }) {
   const bodyHtml = markdownToHtmlSync(data.bodyMd);
   const excerpt = data.excerpt || extractExcerpt(data.bodyMd);
@@ -176,7 +176,7 @@ export async function createPost(data: {
     html: bodyHtml, // Keep legacy field in sync for now
     excerpt: excerpt,
     publishedAt: data.publishedAt || null,
-    guid: data.guid || null,
+    importedSystemId: data.importedSystemId || null,
   }).returning();
   
   return result[0];
