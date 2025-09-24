@@ -58,34 +58,39 @@ Wish me luck getting Rusty!
 
       const result = parseWxrItem(item);
 
-      expect(result).toEqual({
-        type: "post",
-        importedSystemId: "https://www.sphildreth.com/?p=503",
-        title: "Getting Rusty",
-        slug: "getting-rusty",
-        html: expect.stringContaining("With the continued impressive industry reception"),
-        excerpt: undefined,
-        author: "steven",
-        publishedAt: new Date("2022-10-26 18:39:40"),
-        originalUrl: "https://www.shildreth.com/2022/10/26/getting-rusty/",
-        featuredImageId: undefined,
-        categories: [{ name: "development", slug: "development" }],
-        tags: [
-          { name: "development", slug: "development" },
-          { name: "rust", slug: "rust" }
-        ],
-        comments: [],
-      });
+      expect(result).toBeDefined();
+      expect(result?.type).toBe("post");
+      
+      if (result?.type === "post") {
+        expect(result).toEqual({
+          type: "post",
+          importedSystemId: "https://www.sphildreth.com/?p=503",
+          title: "Getting Rusty",
+          slug: "getting-rusty",
+          html: expect.stringContaining("With the continued impressive industry reception"),
+          excerpt: undefined,
+          author: "steven",
+          publishedAt: new Date("2022-10-26 18:39:40"),
+          originalUrl: "https://www.shildreth.com/2022/10/26/getting-rusty/",
+          featuredImageId: undefined,
+          categories: [{ name: "development", slug: "development" }],
+          tags: [
+            { name: "development", slug: "development" },
+            { name: "rust", slug: "rust" }
+          ],
+          comments: [],
+        });
 
-      // Verify the content contains proper list structure
-      expect(result?.html).toContain("<ul>");
-      expect(result?.html).toContain("<li>Statically compiled");
-      expect(result?.html).toContain("<li>Performance is almost");
-      expect(result?.html).toContain("<li>Memory-safety and thread-safety");
+        // Verify the content contains proper list structure
+        expect(result.html).toContain("<ul>");
+        expect(result.html).toContain("<li>Statically compiled");
+        expect(result.html).toContain("<li>Performance is almost");
+        expect(result.html).toContain("<li>Memory-safety and thread-safety");
 
-      // Verify YouTube iframe is preserved
-      expect(result?.html).toContain('<iframe width="560" height="315"');
-      expect(result?.html).toContain('src="https://www.youtube.com/embed/TJTDTyNdJdY"');
+        // Verify YouTube iframe is preserved
+        expect(result.html).toContain('<iframe width="560" height="315"');
+        expect(result.html).toContain('src="https://www.youtube.com/embed/TJTDTyNdJdY"');
+      }
 
       // Note: The actual transformation functions would be applied during importWxr,
       // not in parseWxrItem, so the syntax highlighting transformation
@@ -136,8 +141,13 @@ Wish me luck getting Rusty!
 
       const result = parseWxrItem(item);
 
-      expect(result?.featuredImageId).toBe("123");
-      expect(result?.importedSystemId).toBe("https://example.com/?p=456");
+      expect(result).toBeDefined();
+      expect(result?.type).toBe("post");
+      
+      if (result?.type === "post") {
+        expect(result.featuredImageId).toBe("123");
+        expect(result.importedSystemId).toBe("https://example.com/?p=456");
+      }
     });
   });
 
