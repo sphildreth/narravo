@@ -21,7 +21,8 @@
     "perf:lighthouse": "lhci autorun --config=lighthouserc.json",
     "perf:loadtest": "tsx scripts/perf/smoke.autocannon.ts",
     "perf:benchmark": "tsx scripts/perf/report.ts",
-    "perf:analyze": "ANALYZE=true npm run build"
+    "perf:analyze": "ANALYZE=true npm run build",
+    "perf:weekly": "tsx scripts/perf/weekly-rollup.ts"
   },
   "dependencies": {
     "@auth/core": "^0.40.0",
