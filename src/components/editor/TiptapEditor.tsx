@@ -352,7 +352,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
           rel: 'noopener noreferrer',
           target: '_blank',
         },
-        validate: href => {
+        validate: (href: string) => {
           // Reject javascript: and data: URLs for security
           return !/^(javascript:|data:)/i.test(href);
         },
@@ -481,8 +481,8 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       
       const url = await uploadFile(file);
       if (url && editor) {
-        editor.chain().focus().setImage({ 
-          src: url, 
+        (editor as any).chain().focus().setImage({
+          src: url,
           alt: altText,
           title: altText 
         }).run();
@@ -502,7 +502,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       if (SUPPORTED_LANGUAGES.includes(lang as any)) {
         await loadLanguage(lang);
       }
-      editor.chain().focus().updateAttributes('codeBlock', { language: lang }).run();
+      (editor as any).chain().focus().updateAttributes('codeBlock', { language: lang }).run();
       setCurrentLanguage(lang);
     };
 
@@ -514,7 +514,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     const toggleLink = () => {
       const url = window.prompt('Enter URL:');
       if (url) {
-        editor.chain().focus().setLink({ href: url }).run();
+        (editor as any).chain().focus().setLink({ href: url }).run();
       }
     };
 
@@ -537,7 +537,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
           {btn({ 
             label: "U", 
             active: editor.isActive("underline"), 
-            onClick: () => editor.chain().focus().toggleUnderline().run(),
+            onClick: () => (editor as any).chain().focus().toggleUnderline().run(),
             title: "Underline"
           })}
           {btn({ 
@@ -585,19 +585,19 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
           {btn({ 
             label: "←", 
             active: editor.isActive({ textAlign: 'left' }),
-            onClick: () => editor.chain().focus().setTextAlign('left').run(),
+            onClick: () => (editor as any).chain().focus().setTextAlign('left').run(),
             title: "Align Left"
           })}
           {btn({ 
             label: "↔", 
             active: editor.isActive({ textAlign: 'center' }),
-            onClick: () => editor.chain().focus().setTextAlign('center').run(),
+            onClick: () => (editor as any).chain().focus().setTextAlign('center').run(),
             title: "Align Center"
           })}
           {btn({ 
             label: "→", 
             active: editor.isActive({ textAlign: 'right' }),
-            onClick: () => editor.chain().focus().setTextAlign('right').run(),
+            onClick: () => (editor as any).chain().focus().setTextAlign('right').run(),
             title: "Align Right"
           })}
         </div>
