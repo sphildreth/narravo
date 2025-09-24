@@ -24,7 +24,7 @@
 
 /* Code block styling */
 .prose pre { @apply bg-card border border-border rounded-lg overflow-x-auto; }
-.prose code { @apply text-sm bg-muted/20 px-1 py-0.5 rounded; }
+.prose code { @apply text-sm bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded; }
 
 /* TipTap editor specific styles */
 .ProseMirror {
