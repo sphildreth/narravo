@@ -14,7 +14,7 @@ interface ModerationQueueProps {
 }
 
 export default function ModerationQueue({ initialData, filter, page }: ModerationQueueProps) {
-  const [data, setData] = useState(initialData);
+  const data = initialData;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -101,7 +101,7 @@ export default function ModerationQueue({ initialData, filter, page }: Moderatio
 
       {/* Bulk Actions */}
       {selectedIds.length > 0 && (
-        <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="border border-brand/30 rounded-lg p-4 bg-brand/10">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">
               {selectedIds.length} comment{selectedIds.length !== 1 ? "s" : ""} selected
@@ -209,7 +209,7 @@ function ModerationFilters({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+    <div className="border border-border rounded-xl bg-card shadow-soft p-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
           <form onSubmit={handleSearchSubmit} className="flex gap-2">
@@ -218,11 +218,11 @@ function ModerationFilters({
               placeholder="Search comments, authors, or posts..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm"
             />
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="px-4 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:opacity-90"
             >
               Search
             </button>
@@ -237,9 +237,9 @@ function ModerationFilters({
             id="status"
             value={filter.status || ""}
             onChange={(e) => onFilterChange({ 
-              status: e.target.value as any || undefined 
+              status: (e.target.value as any) || undefined
             })}
-            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm"
           >
             <option value="">All Status</option>
             <option value="pending">Pending</option>
@@ -258,7 +258,7 @@ function ModerationFilters({
             type="date"
             value={(filter as any).dateFrom || ""}
             onChange={(e) => onFilterChange({ dateFrom: e.target.value || undefined } as any)}
-            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm"
           />
         </div>
       </div>
@@ -348,14 +348,14 @@ function CommentCard({
   };
 
   const statusBadgeClass = {
-    pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-    approved: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200", 
-    spam: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-    deleted: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
-  }[comment.status] || "bg-gray-100 text-gray-800";
+    pending: "border border-brand/30 bg-brand/10 text-brand",
+    approved: "border border-accent/30 bg-accent/10 text-accent",
+    spam: "border border-red-600/30 bg-red-600/10 text-red-700",
+    deleted: "border border-border bg-bg text-muted",
+  }[comment.status] || "border border-border bg-bg text-muted";
 
   return (
-    <div className={`border border-gray-200 dark:border-gray-700 rounded-lg p-4 ${isSelected ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950/20" : "bg-white dark:bg-gray-800"}`}>
+    <div className={`border border-border rounded-lg p-4 ${isSelected ? "ring-2 ring-brand bg-brand/10" : "bg-card"}`}>
       <div className="flex items-start gap-3">
         <input
           type="checkbox"
@@ -367,7 +367,7 @@ function CommentCard({
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm text-muted">
               <span className="font-medium">
                 {comment.author.name || comment.author.email || "Anonymous"}
               </span>
@@ -378,7 +378,7 @@ function CommentCard({
                 href={`/${comment.postSlug}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-brand hover:underline"
               >
                 {comment.postTitle}
               </a>
@@ -389,7 +389,7 @@ function CommentCard({
               </span>
               <button
                 onClick={() => setShowDetails(!showDetails)}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-sm text-brand hover:underline"
               >
                 {showDetails ? "Hide Details" : "Show Details"}
               </button>
@@ -403,13 +403,13 @@ function CommentCard({
                 <textarea
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
-                  className="w-full p-2 border rounded-md min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 rounded-md min-h-[100px] border border-border bg-bg"
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={handleEdit}
                     disabled={isPending}
-                    className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+                    className="px-3 py-1 bg-brand text-brand-contrast rounded text-sm hover:opacity-90 disabled:opacity-50"
                   >
                     Save
                   </button>
@@ -418,7 +418,7 @@ function CommentCard({
                       setIsEditing(false);
                       setEditText(comment.bodyMd || "");
                     }}
-                    className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                    className="px-3 py-1 bg-card text-fg border border-border rounded text-sm hover:bg-bg"
                   >
                     Cancel
                   </button>
@@ -426,7 +426,7 @@ function CommentCard({
               </div>
             ) : (
               <div 
-                className={`prose prose-sm max-w-none dark:prose-invert ${!isExpanded && comment.bodyHtml.length > 300 ? "line-clamp-3" : ""}`}
+                className={`prose prose-sm max-w-none ${!isExpanded && comment.bodyHtml.length > 300 ? "line-clamp-3" : ""}`}
                 dangerouslySetInnerHTML={{ __html: comment.bodyHtml }}
               />
             )}
@@ -434,7 +434,7 @@ function CommentCard({
             {!isEditing && comment.bodyHtml.length > 300 && (
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                className="mt-2 text-sm text-brand hover:underline"
               >
                 {isExpanded ? "Show less" : "Show more"}
               </button>
@@ -447,9 +447,9 @@ function CommentCard({
               <h4 className="text-sm font-medium mb-2">Attachments:</h4>
               <div className="space-y-2">
                 {comment.attachments.map((attachment) => (
-                  <div key={attachment.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-2 rounded">
+                  <div key={attachment.id} className="flex items-center justify-between bg-bg border border-border p-2 rounded">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
+                      <span className="text-xs font-medium px-2 py-1 bg-card border border-border rounded">
                         {attachment.kind}
                       </span>
                       <span className="text-sm truncate">{attachment.url.split("/").pop()}</span>
@@ -459,7 +459,7 @@ function CommentCard({
                     </div>
                     <button
                       onClick={() => handleRemoveAttachment(attachment.id)}
-                      className="text-xs px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 rounded hover:bg-red-200 dark:hover:bg-red-800"
+                      className="text-xs px-2 py-1 border border-red-600/30 bg-red-600/10 text-red-700 rounded hover:bg-red-600/20"
                       title="Remove attachment"
                     >
                       Remove
@@ -472,19 +472,19 @@ function CommentCard({
 
           {/* Admin Reply Form */}
           {showReplyForm && (
-            <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md">
+            <div className="mb-3 p-3 rounded-md bg-brand/10">
               <h4 className="text-sm font-medium mb-2">Reply as Admin:</h4>
               <textarea
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 placeholder="Write your admin reply..."
-                className="w-full p-2 border rounded-md min-h-[80px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 rounded-md min-h-[80px] border border-border bg-bg"
               />
               <div className="flex gap-2 mt-2">
                 <button
                   onClick={handleReply}
                   disabled={!replyText.trim() || isPending}
-                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+                  className="px-3 py-1 bg-brand text-brand-contrast rounded text-sm hover:opacity-90 disabled:opacity-50"
                 >
                   Post Reply
                 </button>
@@ -493,7 +493,7 @@ function CommentCard({
                     setShowReplyForm(false);
                     setReplyText("");
                   }}
-                  className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                  className="px-3 py-1 bg-card text-fg border border-border rounded text-sm hover:bg-bg"
                 >
                   Cancel
                 </button>
@@ -527,7 +527,7 @@ function CommentCard({
             <button
               onClick={() => setIsEditing(true)}
               disabled={isPending || isEditing}
-              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+              className="px-3 py-1 bg-brand text-brand-contrast rounded text-sm hover:opacity-90 disabled:opacity-50"
             >
               Edit
             </button>
@@ -550,7 +550,7 @@ function CommentCard({
 
           {/* Additional Details (when expanded) */}
           {showDetails && (
-            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="mt-3 pt-3 border-t border-border">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="font-medium">Comment ID:</span> <code className="text-xs">{comment.id}</code>
@@ -591,7 +591,7 @@ function ModerationPagination({
   const endItem = Math.min(currentPage * pageSize, totalCount);
 
   return (
-    <div className="flex items-center justify-between border-t pt-4">
+    <div className="flex items-center justify-between border-t border-border pt-4">
       <div className="text-sm text-muted-foreground">
         Showing {startItem}-{endItem} of {totalCount} comments
       </div>
@@ -600,7 +600,7 @@ function ModerationPagination({
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage <= 1}
-          className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1 border border-border rounded bg-card hover:bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Previous
         </button>
@@ -613,10 +613,10 @@ function ModerationPagination({
             <button
               key={page}
               onClick={() => onPageChange(page)}
-              className={`px-3 py-1 border rounded ${
+              className={`px-3 py-1 border border-border rounded ${
                 page === currentPage 
-                  ? "bg-blue-600 text-white border-blue-600" 
-                  : "hover:bg-gray-50"
+                  ? "bg-brand text-brand-contrast border-brand" 
+                  : "bg-card hover:bg-bg"
               }`}
             >
               {page}
@@ -627,7 +627,7 @@ function ModerationPagination({
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={!hasMore}
-          className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1 border border-border rounded bg-card hover:bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Next
         </button>
