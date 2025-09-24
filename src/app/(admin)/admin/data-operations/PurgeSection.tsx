@@ -14,7 +14,10 @@ export function PurgeSection() {
   const [confirmationPhrase, setConfirmationPhrase] = useState("");
   const [dryRun, setDryRun] = useState(true);
 
-  const expectedPhrase = `DELETE ${purgeType} ${targetId || targetSlug || "BULK"}`;
+  const isUuid = (v: string) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v.trim());
+  const validId = targetId && isUuid(targetId);
+  const effectiveTarget = validId ? targetId : (targetSlug || "BULK");
+  const expectedPhrase = `DELETE ${purgeType} ${effectiveTarget}`;
 
   const handlePurge = async () => {
     setIsPurging(true);
@@ -27,8 +30,8 @@ export function PurgeSection() {
         dryRun,
       };
 
-      if (targetId) body.id = targetId;
-      if (targetSlug) body.slug = targetSlug;
+      if (validId) body.id = targetId.trim();
+      if (!validId && targetSlug) body.slug = targetSlug.trim();
       if (purgeMode === "hard" && !dryRun) {
         body.confirmationPhrase = confirmationPhrase;
       }
@@ -53,7 +56,7 @@ export function PurgeSection() {
     }
   };
 
-  const canPurge = targetId || targetSlug;
+  const canPurge = Boolean(validId || targetSlug);
   const needsConfirmation = purgeMode === "hard" && !dryRun;
 
   return (
@@ -119,6 +122,9 @@ export function PurgeSection() {
             placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000"
             className="block w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
           />
+          {targetId && !validId && (
+            <p className="mt-1 text-xs text-red-600">Not a valid UUID — slug will be used instead.</p>
+          )}
         </div>
 
         {purgeType === "post" && (

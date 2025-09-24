@@ -7,13 +7,21 @@ import { eq, and, isNull, sql, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 
+// Accept id when valid UUID; otherwise drop it so slug/BULK paths can proceed
+const idOptionalUuid = z.preprocess((v) => {
+  if (typeof v !== "string") return undefined;
+  // Basic UUID v4-ish check; final validation is done by z.string().uuid()
+  const looksUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v.trim());
+  return looksUuid ? v.trim() : undefined;
+}, z.string().uuid().optional());
+
 const purgeRequestSchema = z.object({
   type: z.enum(["post", "comment", "comment_attachment"]),
   mode: z.enum(["soft", "hard"]),
   dryRun: z.boolean().default(true),
   
   // Identifiers
-  id: z.string().uuid().optional(),
+  id: idOptionalUuid,
   slug: z.string().optional(),
   ids: z.array(z.string().uuid()).optional(),
   
@@ -32,8 +40,10 @@ type PurgeRequest = z.infer<typeof purgeRequestSchema>;
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
-    
+    const session = await requireAdmin();
+    // Derive a safe user id for audit/deletedBy, even if tests mock requireAdmin() as boolean
+    const currentUserId = (session && typeof session === "object" && (session as any).user && (session as any).user.id) ? (session as any).user.id : null;
+
     const body = await req.json();
     const parsed = purgeRequestSchema.safeParse(body);
     
@@ -52,9 +62,10 @@ export async function POST(req: NextRequest) {
 
     const { type, mode, dryRun, id, slug, ids, filter, confirmationPhrase } = parsed.data;
 
-    // Validate hard delete confirmation
+    // Validate hard delete confirmation — compute effective target the same way UI should
     if (mode === "hard" && !dryRun) {
-      const expectedPhrase = `DELETE ${type} ${id || slug || "BULK"}`;
+      const effectiveTarget = id || slug || "BULK";
+      const expectedPhrase = `DELETE ${type} ${effectiveTarget}`;
       if (confirmationPhrase !== expectedPhrase) {
         return new Response(JSON.stringify({
           ok: false,
@@ -73,8 +84,8 @@ export async function POST(req: NextRequest) {
     const operationType = mode === "soft" ? "purge_soft" : "purge_hard";
     const logEntry = await db.insert(dataOperationLogs).values({
       operationType,
-      userId: null, // TODO: Get from session when auth is implemented
-      details: { 
+      userId: currentUserId,
+      details: {
         type,
         mode,
         dryRun,
@@ -100,8 +111,8 @@ export async function POST(req: NextRequest) {
 
       if (type === "post") {
         // Build query conditions
-        let whereConditions = [];
-        
+        let whereConditions: any[] = [];
+
         if (id) {
           whereConditions.push(eq(posts.id, id));
         } else if (slug) {
@@ -110,7 +121,7 @@ export async function POST(req: NextRequest) {
           whereConditions.push(inArray(posts.id, ids));
         } else if (filter) {
           if (filter.createdBefore) {
-            whereConditions.push(sql`created_at < ${filter.createdBefore}`);
+            whereConditions.push(sql`${posts.createdAt} < ${filter.createdBefore}`);
           }
           // Add other filter conditions as needed
         }
@@ -165,7 +176,7 @@ export async function POST(req: NextRequest) {
                 .update(posts)
                 .set({
                   deletedAt: new Date(),
-                  deletedBy: null, // TODO: Get from session
+                  deletedBy: currentUserId,
                 })
                 .where(whereClause);
             } else {
@@ -177,15 +188,15 @@ export async function POST(req: NextRequest) {
 
       } else if (type === "comment") {
         // Similar logic for comments
-        let whereConditions = [];
-        
+        let whereConditions: any[] = [];
+
         if (id) {
           whereConditions.push(eq(comments.id, id));
         } else if (ids?.length) {
           whereConditions.push(inArray(comments.id, ids));
         } else if (filter) {
           if (filter.createdBefore) {
-            whereConditions.push(sql`created_at < ${filter.createdBefore}`);
+            whereConditions.push(sql`${comments.createdAt} < ${filter.createdBefore}`);
           }
           if (filter.status) {
             whereConditions.push(eq(comments.status, filter.status));
@@ -231,7 +242,7 @@ export async function POST(req: NextRequest) {
               .update(comments)
               .set({
                 deletedAt: new Date(),
-                deletedBy: null, // TODO: Get from session
+                deletedBy: currentUserId,
               })
               .where(whereClause);
           } else {
