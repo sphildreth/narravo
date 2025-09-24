@@ -1,142 +1,61 @@
 // SPDX-License-Identifier: Apache-2.0
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { z } from "zod";
 import { recordView } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
-import { db } from "@/lib/db";
-import { posts } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
 
-const config = new ConfigServiceImpl({ db });
-
-// In-memory rate limiter for development
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  const realIp = request.headers.get("x-real-ip");
-  
-  if (forwarded) {
-    return forwarded.split(",")[0]?.trim() ?? "127.0.0.1";
-  }
-  
-  if (realIp) {
-    return realIp;
-  }
-  
-  // Fallback for development
-  return "127.0.0.1";
-}
-
-function isRateLimited(ipKey: string, limit: number): boolean {
-  const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute window
-  
-  const current = rateLimitMap.get(ipKey);
-  
-  if (!current || now > current.resetTime) {
-    rateLimitMap.set(ipKey, { count: 1, resetTime: now + windowMs });
-    return false;
-  }
-  
-  if (current.count >= limit) {
-    return true;
-  }
-  
-  current.count++;
-  return false;
-}
-
-const requestSchema = z.object({
-  postId: z.string().uuid("Invalid post ID format"),
-  sessionId: z.string().optional(),
+const bodySchema = z.object({
+  postId: z.string().uuid(),
+  sessionId: z.string().min(1).max(128).optional(),
 });
 
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   try {
-    // Parse and validate request body
-    const body = await request.json();
-    const parsed = requestSchema.safeParse(body);
-    
+    // Parse body
+    const json = await req.json().catch(() => null);
+    const parsed = bodySchema.safeParse(json);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "INVALID_REQUEST", message: "Invalid request format" } },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
 
-    const { postId, sessionId } = parsed.data;
-
-    // Check DNT header
-    const dnt = request.headers.get("dnt");
-    const respectDnt = await config.getBoolean("VIEW.RESPECT-DNT");
-    
-    if (respectDnt && dnt === "1") {
+    // Respect DNT if configured
+    const config = new ConfigServiceImpl();
+    const respectDnt = (await config.getBoolean("VIEW.RESPECT-DNT")) ?? false;
+    const dntHeader = req.headers.get("dnt");
+    if (respectDnt && dntHeader === "1") {
       return new NextResponse(null, { status: 204 });
     }
 
-    // Get client IP and check rate limiting
-    const clientIp = getClientIp(request);
-    // Hash IP for rate limiting when salt exists, else use plain IP in dev
-    const ipSalt = process.env.ANALYTICS_IP_SALT;
-    let ipKey = `P:${clientIp}`;
-    if (ipSalt) {
-      try {
-        const crypto = await import("crypto");
-        ipKey = `H:${crypto.createHmac("sha256", ipSalt).update(clientIp).digest("hex")}`;
-      } catch {
-        // Fallback: keep plain key
-      }
+    // Collect context
+    const ua = req.headers.get("user-agent") ?? undefined;
+    const referer = req.headers.get("referer") ?? undefined;
+    const lang = req.headers.get("accept-language") ?? undefined;
+    let ip: string | undefined = undefined;
+    const xff = req.headers.get("x-forwarded-for");
+    if (xff) {
+      ip = xff.split(",")[0]?.trim();
     }
-    const rateLimit = await config.getNumber("RATE.VIEWS-PER-MINUTE") ?? 120;
-    
-    if (isRateLimited(ipKey, rateLimit)) {
-      return NextResponse.json(
-        { error: { code: "RATE_LIMITED", message: "Too many requests" } },
-        { 
-          status: 429,
-          headers: { "Retry-After": "60" }
-        }
-      );
+    if (!ip) {
+      ip = req.headers.get("x-real-ip") ?? undefined;
     }
 
-    // Verify post exists
-    const postExists = await db
-      .select({ id: posts.id })
-      .from(posts)
-      .where(eq(posts.id, postId))
-      .limit(1);
+    // Build payload respecting exactOptionalPropertyTypes
+    const payload = {
+      postId: parsed.data.postId,
+      ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}),
+      ...(ip ? { ip } : {}),
+      ...(ua ? { ua } : {}),
+      ...(referer ? { referer } : {}),
+      ...(lang ? { lang } : {}),
+    } as const;
 
-    if (postExists.length === 0) {
-      // Return 204 to avoid probing as per requirements
-      return new NextResponse(null, { status: 204 });
-    }
+    // Record the view (best-effort)
+    await recordView(payload as any);
 
-    // Extract headers for analytics
-    const userAgent = request.headers.get("user-agent") || undefined;
-    const referer = request.headers.get("referer") || undefined;
-    const acceptLanguage = request.headers.get("accept-language") || undefined;
-
-    // Record the view
-    const recordViewInput: any = {
-      postId,
-      ip: clientIp,
-      ua: userAgent,
-      referer,
-      lang: acceptLanguage,
-    };
-    
-    if (sessionId) recordViewInput.sessionId = sessionId;
-    
-    await recordView(recordViewInput);
-
+    // Always return 204 to avoid leaking details to clients
     return new NextResponse(null, { status: 204 });
-    
   } catch (error) {
-    console.error("Error recording view:", error);
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Internal server error" } },
-      { status: 500 }
-    );
+    // Never throw; just return 204 to avoid impacting UX
+    return new NextResponse(null, { status: 204 });
   }
 }

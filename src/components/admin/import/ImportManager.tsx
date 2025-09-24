@@ -6,6 +6,7 @@ import { Upload, Play, Square, RotateCcw, FileText, AlertTriangle, CheckCircle, 
 import { startImportJob, cancelImportJob, retryImportJob, deleteImportJob } from "@/app/actions/import";
 import { useRouter } from "next/navigation";
 import type { importJobs } from "@/drizzle/schema";
+import { Modal } from "@/components/admin/config/Modal";
 
 type ImportJob = typeof importJobs.$inferSelect;
 
@@ -462,28 +463,26 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
 
       {/* Delete Confirmation Dialog */}
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Delete Import Job</h3>
-            <p className="text-muted mb-6">
-              Are you sure you want to delete this import job? This will permanently remove the job record and all associated error logs. This action cannot be undone.
-            </p>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 text-sm border border-border rounded hover:bg-muted/20"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
-                className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                Delete Job
-              </button>
-            </div>
+        <Modal onClose={() => setDeleteConfirm(null)}>
+          <h3 className="text-lg font-semibold mb-2">Delete Import Job</h3>
+          <p className="text-sm text-muted mb-6">
+            Are you sure you want to delete this import job? This will permanently remove the job record and all associated error logs. This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setDeleteConfirm(null)}
+              className="px-4 py-2 text-sm border border-border rounded hover:bg-muted/20"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Delete Job
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
