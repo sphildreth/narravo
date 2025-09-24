@@ -12,14 +12,14 @@ export default function AdminNavbar() {
                 <Link href="/admin/moderation" className="rounded-lg px-3 py-2 hover:bg-muted/20">Moderation</Link>
                 <Link href="/admin/posts" className="rounded-lg px-3 py-2 hover:bg-muted/20">Posts</Link>
                 <Link href="/admin/users" className="rounded-lg px-3 py-2 hover:bg-muted/20">Users</Link>
+                <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-muted">Data</div>
+                <Link href="/admin/data-operations" className="rounded-lg px-3 py-2 hover:bg-muted/20">Data Operations</Link>
                 <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-muted">System</div>
                 <Link href="/admin/system/about-me" className="rounded-lg px-3 py-2 hover:bg-muted/20">About Me</Link>
                 <Link href="/admin/system/appearance" className="rounded-lg px-3 py-2 hover:bg-muted/20">Appearance</Link>
                 <Link href="/admin/system/configuration" className="rounded-lg px-3 py-2 hover:bg-muted/20">Configuration</Link>
                 <Link href="/admin/system/disclaimer" className="rounded-lg px-3 py-2 hover:bg-muted/20">Disclaimer</Link>
                 <Link href="/admin/system/import" className="rounded-lg px-3 py-2 hover:bg-muted/20">Import</Link>
-                <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-muted">Data</div>
-                <Link href="/admin/data-operations" className="rounded-lg px-3 py-2 hover:bg-muted/20">Data Operations</Link>
             </nav>
         </aside>
     );

@@ -39,7 +39,7 @@ export function AuditLogSection() {
   const getOperationIcon = (type: string) => {
     switch (type) {
       case "export":
-        return <Download className="w-4 h-4 text-blue-600" />;
+        return <Download className="w-4 h-4 text-brand" />;
       case "restore":
         return <Upload className="w-4 h-4 text-green-600" />;
       case "purge_soft":
@@ -47,20 +47,20 @@ export function AuditLogSection() {
       case "purge_hard":
         return <Trash2 className="w-4 h-4 text-red-600" />;
       default:
-        return <FileText className="w-4 h-4 text-gray-600" />;
+        return <FileText className="w-4 h-4 text-muted" />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
-        return "text-green-600 dark:text-green-400";
+        return "text-green-700";
       case "failed":
-        return "text-red-600 dark:text-red-400";
+        return "text-red-700";
       case "started":
-        return "text-blue-600 dark:text-blue-400";
+        return "text-brand";
       default:
-        return "text-gray-600 dark:text-gray-400";
+        return "text-muted";
     }
   };
 
@@ -81,37 +81,37 @@ export function AuditLogSection() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="rounded-xl border border-border bg-card shadow-soft p-6">
         <div className="flex items-center gap-3 mb-4">
-          <FileText className="w-5 h-5 text-gray-600" />
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+          <FileText className="w-5 h-5 text-muted" />
+          <h2 className="text-xl font-semibold">
             Audit Log
           </h2>
         </div>
         <div className="flex items-center justify-center py-8">
-          <Clock className="w-6 h-6 animate-spin text-gray-400" />
+          <Clock className="w-6 h-6 animate-spin text-muted" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="rounded-xl border border-border bg-card shadow-soft p-6">
       <div className="flex items-center gap-3 mb-4">
-        <FileText className="w-5 h-5 text-gray-600" />
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+        <FileText className="w-5 h-5 text-muted" />
+        <h2 className="text-xl font-semibold">
           Audit Log
         </h2>
       </div>
 
-      <p className="text-gray-600 dark:text-gray-400 mb-6">
+      <p className="text-muted mb-6">
         Track all data operations with detailed audit logging for security and compliance.
       </p>
 
       {logs.length === 0 ? (
         <div className="text-center py-8">
-          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">
+          <FileText className="w-12 h-12 text-muted mx-auto mb-4" />
+          <p className="text-muted">
             No audit logs yet. Data operations will be tracked here.
           </p>
         </div>
@@ -120,16 +120,16 @@ export function AuditLogSection() {
           {logs.map((log) => (
             <div
               key={log.id}
-              className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+              className="border border-border rounded-lg p-4"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {getOperationIcon(log.operationType)}
                   <div>
-                    <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                    <h3 className="font-medium">
                       {formatOperationType(log.operationType)}
                     </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-muted">
                       {new Date(log.createdAt).toLocaleString()}
                     </p>
                   </div>
@@ -140,7 +140,7 @@ export function AuditLogSection() {
                     {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
                   </span>
                   {log.recordsAffected > 0 && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-muted">
                       {log.recordsAffected} records affected
                     </p>
                   )}
@@ -148,19 +148,19 @@ export function AuditLogSection() {
               </div>
 
               {log.archiveFilename && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                <p className="text-sm text-muted mt-2">
                   Archive: {log.archiveFilename}
                 </p>
               )}
 
               {log.errorMessage && (
-                <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                <p className="text-sm text-red-700 mt-2">
                   Error: {log.errorMessage}
                 </p>
               )}
 
               {log.completedAt && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                <p className="text-xs text-muted mt-2">
                   Completed: {new Date(log.completedAt).toLocaleString()}
                 </p>
               )}
