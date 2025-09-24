@@ -22,7 +22,7 @@ pnpm seed:config        # Seed configuration data
 pnpm seed:posts         # Seed demo posts
 
 # Import/Export
-pnpm wxr:import path=./sample.wxr  # Import WordPress WXR file
+pnpm wxr:import path=./wxr/sample.wxr  # Import WordPress WXR file
 ```
 
 ### Project Structure Patterns

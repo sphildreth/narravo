@@ -7,6 +7,28 @@ This document defines unit-test requirements for a coding agent implementing an 
 
 ---
 
+---
+
+## Fixture Location & Conventions (Authoritative)
+
+**Canonical path for all fixtures in this repo:** `./tests/fixtures/wxr/`
+
+- File extensions: `.xml` **or** `.wxr` (identical format).
+- Test discovery glob: `tests/fixtures/wxr/**/*.(xml|wxr)` (recursive).
+- Environment override (optional): `FIXTURE_DIR` — when set, the loader must read from this directory instead of the default.
+- Minimal loader contract:
+    - Provide `load_fixture(name: string): string` that resolves by filename (without path) inside `tests/fixtures/wxr`.
+    - Provide `list_fixtures(): string[]` returning relative paths under `tests/fixtures/wxr` sorted alphabetically.
+    - Fail fast with a clear error if a named fixture is missing; include suggested names on typos (Levenshtein ≤ 2).
+
+**Examples**
+- `load_fixture("wxr_html_lists.xml")` → reads `./tests/fixtures/wxr/wxr_html_lists.xml`
+- `load_fixture("wxr_iframe_embed.wxr")` → reads `./tests/fixtures/wxr/wxr_iframe_embed.wxr`
+
+**CI Note:** Tests MUST NOT reference absolute machine paths. Always use the canonical relative path or the `FIXTURE_DIR` override.
+
+
+
 ## 0) Test Philosophy & Harness
 
 - **Deterministic fixtures**: Keep each XML under 2–10 KB unless testing large-file behavior.
@@ -326,3 +348,101 @@ If importer supports flags (e.g., “skip media”, “map private to draft”, 
 - Code coverage for import mapping functions ≥ 90% lines/branches.
 - CI runs tests in < 2 minutes with deterministic results.
 - Lint/typecheck integrated; no `any` leaks in mapping code.
+
+
+---
+
+## Appendix A — Included Fixture Files
+
+**Canonical fixture directory:** `./tests/fixtures/wxr/`
+
+
+_Generated: 2025-09-24 21:50:14_
+
+The following WXR fixtures are included in the downloadable pack and align to the sections above:
+
+- `wxr_attachment_missing_file.xml`
+- `wxr_attachments.xml`
+- `wxr_author_missing_email.xml`
+- `wxr_comments_basic.xml`
+- `wxr_custom_tax.xml`
+- `wxr_dates_mixed.xml`
+- `wxr_duplicate_guids.xml`
+- `wxr_malformed.xml`
+- `wxr_many_small.xml`
+- `wxr_meta_serialized.xml`
+- `wxr_minimal.xml`
+- `wxr_missing_guid.xml`
+- `wxr_more_excerpt.xml`
+- `wxr_namespaced.xml`
+- `wxr_pingbacks.xml`
+- `wxr_post_password.xml`
+- `wxr_post_statuses.xml`
+- `wxr_posts_mix.xml`
+- `wxr_revisions.xml`
+- `wxr_shortcodes.xml`
+- `wxr_single_huge_content.xml`
+- `wxr_slug_edge.xml`
+- `wxr_sticky.xml`
+- `wxr_terms_hierarchy.xml`
+- `wxr_v1_1.xml`
+- `wxr_v1_2.xml`
+
+---
+
+## Appendix B — HTML Element Handling Matrix
+_Generated: 2025-09-24 22:08:16_
+
+Define and test a **sanitization/serialization policy** for common WordPress content elements. For each tag, specify: **allow/strip/transform**, **allowed attributes**, and whether **URL validation** is enforced.
+
+| Element | Policy | Allowed Attributes (example) | Notes/Test Expectations |
+
+| --- | --- | --- | --- |
+
+| `p`, `span`, `strong`, `em`, `b`, `i` | allow | global attrs | Preserve whitespace & inline semantics |
+
+| `ul`, `ol`, `li` | allow | global attrs | Nested lists survive round-trip; order maintained (see `wxr_html_lists.xml`) |
+
+| `blockquote` | allow | cite | Text preserved (see `wxr_code_pre_blockquote.xml`) |
+
+| `pre`, `code` | allow | class, data-lang | No double-escaping; language class retained |
+
+| `img` | allow | src, srcset, sizes, alt, title, width, height, data-* | Validate URLs; preserve `srcset/sizes` (see `wxr_img_srcset_data_attrs.xml`) |
+
+| `a` | allow | href, title, target, rel | Enforce safe `rel` on `target=_blank` (see `wxr_anchor_rel_target.xml`) |
+
+| `figure`, `figcaption` | allow | global attrs | Keep caption semantics (see `wxr_image_caption_gallery.xml`) |
+
+| `table`, `thead`, `tbody`, `tfoot`, `tr`, `th`, `td` | allow | scope, colspan, rowspan | No layout corruption (see `wxr_table_complex.xml`) |
+
+| `iframe` | **transform or allowlist** | src, width, height, allow, allowfullscreen | Prefer transform to trusted embed component; validate hostname (see `wxr_iframe_embed.xml`) |
+
+| `video`, `audio`, `source` | allow | src, controls, type | URL validation; no autoplay unless policy permits |
+
+| `object`, `embed` | **strip or transform** | data, type | Often blocked; assert logs when stripped (see `wxr_iframe_embed.xml`) |
+
+| `script`, `style` | **strip** | — | Must be removed or sandboxed (see `wxr_script_style.xml`) |
+
+| HTML entities | decode-once | — | Ensure not double-decoded (see `wxr_entities_cdata_mixed.xml`) |
+
+| RTL/LTR attributes | allow | dir | Ensure rendering direction preserved (see `wxr_rtl_mixed_ltr.xml`) |
+
+| Line endings | normalize | — | `\r\n` handled consistently (see `wxr_line_endings_crlf.xml`) |
+
+| oEmbed URLs | transform | — | Convert to embed model; no network in unit tests (see `wxr_oembed_urls.xml`) |
+
+| Gutenberg block comments | preserve | — | Keep block boundaries (see `wxr_gutenberg_blocks.xml`) |
+
+| Nav Menu Items | import/skip with log | meta `_menu_item_*` | Deterministic behavior (see `wxr_nav_menu_items.xml`, `wxr_menu_terms.xml`) |
+
+| Comment states | map | approved/pending/spam/trash | Correct state mapping (see `wxr_comment_states.xml`) |
+
+| Attachments (variants) | dedupe | URL canonicalization | Query strings normalized (see `wxr_attachment_variants.xml`) |
+
+| Orphan attachments | import + log | — | Not linked to post; logged (see `wxr_orphan_attachment.xml`) |
+
+| Term slug collisions | disambiguate | — | Parent-aware slug or suffix (see `wxr_term_slug_collision.xml`) |
+
+
+**Action**: Implement tests asserting the exact sanitization outcomes for each element per the chosen policy (e.g., snapshot the normalized HTML after import).
+
