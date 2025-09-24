@@ -39,22 +39,72 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         return null;
       }
 
-      const formData = new FormData();
-      Object.entries(signData.fields as Record<string, string>).forEach(([k, v]) => formData.append(k, v));
-      formData.append("file", file);
-      const uploadRes = await fetch(signData.url, { method: "POST", body: formData });
-      if (!uploadRes.ok) {
-        console.error("Upload failed", await uploadRes.text());
-        return null;
+      // Support PUT (presigned) and POST (form/mocked local) flows
+      const method = (signData.method as string | undefined)?.toUpperCase() || "POST";
+      let publicUrl: string | null = null;
+
+      if (method === "PUT") {
+        const headers: Record<string, string> = {};
+        const fields = (signData.fields ?? {}) as Record<string, string>;
+        if (fields["Content-Type"]) headers["Content-Type"] = fields["Content-Type"];
+        const putRes = await fetch(signData.url as string, { method: "PUT", body: file, headers });
+        if (!putRes.ok) {
+          console.error("Upload failed", await safeReadText(putRes));
+          return null;
+        }
+        publicUrl = (signData.publicUrl as string | undefined) || null;
+        if (!publicUrl) {
+          // Fallback best-effort: derive from key or strip query
+          if (signData.key && typeof signData.url === "string") {
+            const base = (signData.url as string).replace(/\?.*$/, "");
+            publicUrl = `${base}/${signData.key}`;
+          }
+        }
+      } else {
+        // POST flow: either S3 POST policy (not used here) or local API that returns JSON { url }
+        const formData = new FormData();
+        const fields = (signData.fields ?? {}) as Record<string, string>;
+        Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
+        formData.append("file", file);
+        const postRes = await fetch(signData.url as string, { method: "POST", body: formData });
+        if (!postRes.ok) {
+          console.error("Upload failed", await safeReadText(postRes));
+          return null;
+        }
+        // Try to parse JSON response for local uploads
+        try {
+          const ct = postRes.headers.get("Content-Type") || "";
+          if (ct.includes("application/json")) {
+            const json = await postRes.json();
+            publicUrl = json?.url || json?.publicUrl || null;
+          }
+        } catch {
+          // ignore
+        }
+        if (!publicUrl) {
+          publicUrl = (signData.publicUrl as string | undefined) || null;
+          if (!publicUrl && signData.key && typeof signData.url === "string") {
+            const base = (signData.url as string).replace(/\?.*$/, "");
+            publicUrl = `${base}/${signData.key}`;
+          }
+        }
       }
 
-      const publicUrl: string = signData.publicUrl || (signData.url as string).replace(/\?.*$/, "") + "/" + signData.key;
-      return publicUrl;
+      return publicUrl ?? null;
     } catch (err) {
       console.error("Upload error:", err);
       return null;
     }
   }, []);
+
+  // Small helper to safely read response text without throwing on body used/empty
+  async function safeReadText(res: Response): Promise<string> {
+    try {
+      return await res.text();
+    } catch {
+      return res.statusText || "";
+    }
+  }
 
   const insertVideoShortcode = useCallback((editor: Editor, url: string) => {
     const shortcode = `[video mp4="${url}"][/video]`;
@@ -134,6 +184,8 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       handlePaste: (view, event) => handleFileEvent(view, event, editor!),
       handleDrop: (view, event) => handleFileEvent(view, event, editor!),
     },
+    // Avoid SSR hydration mismatches per Tiptap warning
+    immediatelyRender: false,
   });
 
   const Toolbar = useMemo(() => function Toolbar({ editor }: { editor: Editor | null }) {
@@ -177,7 +229,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         {btn({ label: "H3", active: editor.isActive("heading", { level: 3 }), onClick: () => editor.chain().focus().toggleHeading({ level: 3 }).run() })}
         {btn({ label: "Quote", active: editor.isActive("blockquote"), onClick: () => editor.chain().focus().toggleBlockquote().run() })}
         {btn({ label: "Code", active: editor.isActive("codeBlock"), onClick: () => editor.chain().focus().toggleCodeBlock().run() })}
-        {btn({ label: "• List", active: editor.isActive("bulletList"), onClick: () => editor.chain().focus().toggleBulletList().run() })}
+        {btn({ label: "\u2022 List", active: editor.isActive("bulletList"), onClick: () => editor.chain().focus().toggleBulletList().run() })}
         {btn({ label: "1. List", active: editor.isActive("orderedList"), onClick: () => editor.chain().focus().toggleOrderedList().run() })}
         {btn({ label: "Image", onClick: triggerImage })}
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />

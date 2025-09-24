@@ -28,6 +28,7 @@
     "allowJs": false,
     "baseUrl": ".",
     "paths": {
+      "@/scripts/*": ["./scripts/*"],
       "@/*": ["./src/*"],
       "@drizzle/*": ["./drizzle/*"],
       "@/drizzle/*": ["./drizzle/*"]
