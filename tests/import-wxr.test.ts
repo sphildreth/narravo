@@ -311,24 +311,28 @@ describe("WXR Import", () => {
 
     it("should derive featured image from first image when no _thumbnail_id present", async () => {
       const insertedPosts: any[] = [];
-      // Patch db.transaction mock implementation
-      // We create a lightweight tx object with insert/select/delete/update matching usage patterns.
+      // Patch db.transaction mock implementation to also capture posts in onConflictDoUpdate chain
       // @ts-ignore
       db.transaction = vi.fn(async (fn: any) => {
         const tx = {
           insert: (_table: any) => ({
             values: (row: any) => ({
               onConflictDoUpdate: () => ({
-                returning: () => Promise.resolve([{ id: row.guid ? 'user1' : 'post1', ...row }])
+                returning: () => {
+                  // Capture post insertion (heuristic: presence of slug & html) even when conflict clause used
+                  if (row.slug && row.html) {
+                    insertedPosts.push(row);
+                    return Promise.resolve([{ id: 'post1', ...row }]);
+                  }
+                  return Promise.resolve([{ id: row.guid ? 'user1' : 'gen', ...row }]);
+                }
               }),
               onConflictDoNothing: () => Promise.resolve(),
               returning: () => {
-                // Capture post insertion (heuristic: presence of slug & html)
                 if (row.slug && row.html) {
                   insertedPosts.push(row);
                   return Promise.resolve([{ id: 'post1', ...row }]);
                 }
-                // For user/category/tag inserts
                 return Promise.resolve([{ id: row.guid ? 'user1' : 'gen', ...row }]);
               }
             })

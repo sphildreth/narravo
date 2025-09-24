@@ -105,7 +105,7 @@ export function stripForbiddenAttributes(html: string, allowedAttrs: Record<stri
     const tagAllowed = allowed[tagName] || [];
     const allAllowed = [...globalAllowed, ...tagAllowed];
     
-    const filteredAttrs = attributes.filter(attr => {
+    const filteredAttrs = attributes.filter((attr: string) => {
       if (attr.includes('=')) {
         const attrName = attr.split('=')[0]?.toLowerCase();
         return allAllowed.includes(attrName || '') || attrName?.startsWith('data-');

@@ -32,7 +32,7 @@ export async function loadFixture(name: string): Promise<string> {
   try {
     return await readFile(fixturePath, "utf-8");
   } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'ENOENT') {
       // Try to provide helpful suggestions
       const suggestions = await getSimilarFixtureNames(name);
       const suggestionText = suggestions.length > 0 
@@ -58,7 +58,7 @@ export async function listFixtures(): Promise<string[]> {
       .filter(file => file.endsWith('.xml') || file.endsWith('.wxr'))
       .sort();
   } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'ENOENT') {
       throw new Error(`Fixture directory not found: ${fixtureDir}`);
     }
     throw error;
@@ -83,26 +83,33 @@ async function getSimilarFixtureNames(targetName: string): Promise<string[]> {
  * Used for fixture name suggestions.
  */
 function levenshteinDistance(str1: string, str2: string): number {
-  const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+  if (str1 === str2) return 0;
+  if (str1.length === 0) return str2.length;
+  if (str2.length === 0) return str1.length;
 
-  for (let i = 0; i <= str1.length; i++) {
-    matrix[0][i] = i;
+  const rows = str2.length + 1;
+  const cols = str1.length + 1;
+  const matrix: number[][] = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0));
+
+  const set = (r: number, c: number, v: number): void => { matrix[r]![c] = v; };
+  const get = (r: number, c: number): number => matrix[r]![c]!;
+
+  for (let i = 0; i < cols; i++) {
+    set(0, i, i);
+  }
+  for (let j = 0; j < rows; j++) {
+    set(j, 0, j);
   }
 
-  for (let j = 0; j <= str2.length; j++) {
-    matrix[j][0] = j;
-  }
-
-  for (let j = 1; j <= str2.length; j++) {
-    for (let i = 1; i <= str1.length; i++) {
-      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      matrix[j][i] = Math.min(
-        matrix[j][i - 1] + 1, // deletion
-        matrix[j - 1][i] + 1, // insertion
-        matrix[j - 1][i - 1] + indicator // substitution
-      );
+  for (let j = 1; j < rows; j++) {
+    for (let i = 1; i < cols; i++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      const deletion = get(j, i - 1) + 1;      // deletion
+      const insertion = get(j - 1, i) + 1;     // insertion
+      const substitution = get(j - 1, i - 1) + cost; // substitution
+      set(j, i, Math.min(deletion, insertion, substitution));
     }
   }
 
-  return matrix[str2.length][str1.length];
+  return get(rows - 1, cols - 1);
 }
