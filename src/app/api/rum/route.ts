@@ -36,13 +36,13 @@ export async function POST(request: NextRequest) {
     const headersList = headers();
     const dnt = headersList.get('dnt') || headersList.get('DNT');
     if (dnt === '1') {
-      return new Response('', { status: 204 });
+      return new Response(null, { status: 204 });
     }
 
     // Apply sampling - only process 10% of requests by default
     const samplingRate = parseFloat(process.env.RUM_SAMPLING_RATE || '0.1');
     if (Math.random() > samplingRate) {
-      return new Response('', { status: 204 });
+      return new Response(null, { status: 204 });
     }
 
     const payload: RUMPayload = await request.json();
@@ -82,8 +82,8 @@ export async function POST(request: NextRequest) {
       clientIp: hashIp(clientIp),
     });
 
-    return new Response('', { status: 204 });
-    
+    return new Response(null, { status: 204 });
+
   } catch (error) {
     console.error('RUM processing error:', error);
     return new Response('Internal error', { status: 500 });

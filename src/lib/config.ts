@@ -283,7 +283,18 @@ export class ConfigServiceImpl implements ConfigService {
   }
   async getBoolean(key: string, opts?: GetOptions) {
     const v = await this.get<unknown>(key, opts);
-    return typeof v === "boolean" ? v : null;
+    if (typeof v === "boolean") return v;
+    // Be tolerant of common persisted representations
+    if (typeof v === "string") {
+      const s = v.trim().toLowerCase();
+      if (s === "true") return true;
+      if (s === "false") return false;
+    }
+    if (typeof v === "number") {
+      if (v === 1) return true;
+      if (v === 0) return false;
+    }
+    return null;
   }
   async getJSON<T = unknown>(key: string, opts?: GetOptions) {
     const v = await this.get<unknown>(key, opts);
