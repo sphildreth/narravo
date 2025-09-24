@@ -20,6 +20,8 @@ async function getCachedRedirects(request: NextRequest) {
 }
 
 export async function middleware(request: NextRequest) {
+  const startTime = performance.now();
+  
   const redirects = await getCachedRedirects(request);
   const pathname = request.nextUrl.pathname;
 
@@ -38,8 +40,20 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   const isAdmin = pathname.startsWith("/admin");
   requestHeaders.set("x-app-context", isAdmin ? "admin" : "site");
+  requestHeaders.set("x-middleware-start", startTime.toString());
 
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  
+  // Add Server-Timing header for performance monitoring on pages
+  const middlewareTime = performance.now() - startTime;
+  const isPostPage = pathname.match(/^\/[^\/]+$/) && !pathname.startsWith('/api');
+  const isAdminPage = pathname.startsWith('/admin');
+  
+  if (isPostPage || isAdminPage) {
+    response.headers.set('Server-Timing', `middleware;dur=${middlewareTime.toFixed(2)}`);
+  }
+  
+  return response;
 }
 
 export const config = {

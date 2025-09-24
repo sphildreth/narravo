@@ -2,6 +2,7 @@
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { getPostBySlug, getPostBySlugWithReactions, getPreviousPost, getNextPost } from "@/lib/posts";
 import { getSession } from "@/lib/auth";
 import { getSiteMetadata } from "@/lib/rss";
@@ -14,6 +15,9 @@ import { db } from "@/lib/db";
 import DeletePostButton from "@/components/admin/DeletePostButton";
 import Link from "next/link";
 import Prose from "@/components/Prose";
+import { RenderTimeBadge } from "@/components/RenderTimeBadge";
+import { RUMCollector } from "@/components/RUMCollector";
+import { measureAsync, createServerTimingHeader } from "@/lib/performance";
 
 type Props = {
   params: { slug: string };
@@ -32,23 +36,44 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function PostPage({ params }: Props) {
-  const config = new ConfigServiceImpl({ db });
+  const renderStart = performance.now();
+  
+  // Measure config loading
+  const { result: config, duration: configDuration } = await measureAsync(
+    'config-load',
+    async () => new ConfigServiceImpl({ db })
+  );
+  
   const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;
-  const session = await getSession();
+  
+  // Measure session loading
+  const { result: session, duration: sessionDuration } = await measureAsync(
+    'session-load',
+    async () => getSession()
+  );
+  
   const userId = session?.user?.id || undefined;
   const isAdmin = Boolean(session?.user?.isAdmin);
   const canReact = Boolean(session?.user?.id);
 
-  const post = await getPostBySlugWithReactions(params.slug, userId);
+  // Measure post loading (main data fetch)
+  const { result: post, duration: postDuration } = await measureAsync(
+    'post-load',
+    async () => getPostBySlugWithReactions(params.slug, userId)
+  );
+  
   if (!post) {
     notFound();
   }
   
-  // Get previous and next posts
-  const [previousPost, nextPost] = await Promise.all([
-    getPreviousPost(post.id),
-    getNextPost(post.id),
-  ]);
+  // Measure navigation data loading
+  const { result: [previousPost, nextPost], duration: navDuration } = await measureAsync(
+    'navigation-load',
+    async () => Promise.all([
+      getPreviousPost(post.id),
+      getNextPost(post.id),
+    ])
+  );
   
   const date = post.publishedAt
     ? new Date(post.publishedAt).toLocaleDateString()
@@ -56,6 +81,19 @@ export default async function PostPage({ params }: Props) {
 
   const { title: siteName, url: siteUrl } = getSiteMetadata();
   const jsonLd = generatePostJsonLd(post, siteUrl, siteName);
+
+  // Calculate total render time and set Server-Timing header
+  const renderEnd = performance.now();
+  const totalRenderTime = renderEnd - renderStart;
+  const totalDbTime = configDuration + postDuration + navDuration;
+  
+  // Set Server-Timing header for performance monitoring
+  const headersList = headers();
+  const serverTimingHeader = createServerTimingHeader({
+    srt: totalRenderTime,
+    dbTime: totalDbTime,
+    cacheStatus: 'MISS', // TODO: Determine actual cache status
+  });
 
   // Format view count for display
   const formatViewCount = (count: number): string => {
@@ -70,8 +108,9 @@ export default async function PostPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd }}
       />
+      <RUMCollector />
       <main className="max-w-screen mx-auto px-6 my-7 grid gap-7">
-  <ViewTracker postId={post.id} sessionWindowMinutes={sessionWindowMinutes} />
+        <ViewTracker postId={post.id} sessionWindowMinutes={sessionWindowMinutes} />
         <div className="order-1 md:order-2 grid gap-6">
             {isAdmin && (
                 <div className="px-6 p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -197,6 +236,7 @@ export default async function PostPage({ params }: Props) {
           <CommentsSection postId={post.id} />
         </div>
       </main>
+      <RenderTimeBadge serverMs={Math.round(totalRenderTime)} />
     </>
   );
 }
