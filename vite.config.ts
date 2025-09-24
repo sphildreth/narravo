@@ -13,5 +13,11 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    exclude: [
+      'tests/e2e/**', // Playwright e2e tests run separately
+    ],
+    environmentMatchGlobs: [
+      ['tests/**/*.test.tsx', 'jsdom'],
+    ],
   },
 });

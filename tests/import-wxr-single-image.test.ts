@@ -126,5 +126,35 @@ describe("WXR Import single image handling", () => {
     const newUrl = result.mediaUrls.get(IMAGE_URL)!;
     expect(newUrl.startsWith("https://storage.example.com/mock-bucket/imported-media/")).toBe(true);
   });
-});
 
+  it("downloads image when allowedHosts includes scheme and path (normalization)", async () => {
+    const result = await importWxr("test.xml", {
+      dryRun: true,
+      verbose: true,
+      allowedHosts: ["https://www.shildreth.com/some/path/"],
+    });
+    expect(putCalls.length).toBe(1);
+    expect(result.mediaUrls.size).toBe(1);
+  });
+
+  it("skips image download when host not in allowlist", async () => {
+    const result = await importWxr("test.xml", {
+      dryRun: true,
+      verbose: true,
+      allowedHosts: ["example.com"],
+    });
+    expect(putCalls.length).toBe(0);
+    expect(result.mediaUrls.size).toBe(0);
+  });
+
+  it("allows subdomain when base domain is in allowlist", async () => {
+    putCalls.length = 0;
+    const result = await importWxr("test.xml", {
+      dryRun: true,
+      verbose: true,
+      allowedHosts: ["shildreth.com"],
+    });
+    expect(putCalls.length).toBe(1);
+    expect(result.mediaUrls.size).toBe(1);
+  });
+});

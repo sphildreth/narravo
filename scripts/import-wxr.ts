@@ -77,7 +77,7 @@ function transformAutoEmbeds(html: string): string {
 
   // Standalone provider URLs: detect URLs that are in their own paragraph or on separate lines.
   html = html.replace(
-    /(?:^|\n|\r|\r\n)\s*(https?:\/\/[^\s<>"']+)\s*(?=$|\n|\r|\r\n)/g,
+    /(?:^|\n|\r|\r\n)\s*(https?:\/\/[^\s<>\"\']+)s*(?=$|\n|\r|\r\n)/g,
     (m, url) => "\n" + lineEmbed(url)
   );
 
@@ -457,7 +457,7 @@ function normalizeWpLists(html: string): string {
 }
 
 function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return string.replace(/[.*+?^${}()|[\\\]\\]/g, '\\$&');
 }
 
 function generateSlugWithFallback(baseSlug: string, existingSlugs: Set<string>): string {
@@ -500,7 +500,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
 
   // src, data-src, poster on media tags
   const attrPatterns = [
-    /\s(?:src|data-src|poster)=["']([^"']+)["']/gi,
+    /\s(?:src|data-src|poster)=["\']([^"\']+)["\']/gi,
   ];
 
   for (const re of attrPatterns) {
@@ -514,7 +514,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   }
 
   // srcset handling: URLs separated by commas, with descriptors
-  const srcsetRe = /\ssrcset=["']([^"']+)["']/gi;
+  const srcsetRe = /\ssrcset=["\']([^"\']+)["\']/gi;
   let sm: RegExpExecArray | null;
   while ((sm = srcsetRe.exec(html)) !== null) {
     const raw = sm?.[1] ?? "";
@@ -529,7 +529,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   }
 
   // <source src="...">
-  const sourceRe = /<source\b[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi;
+  const sourceRe = /<source\b[^>]*\ssrc=["\']([^"\']+)["\'][^>]*>/gi;
   let s: RegExpExecArray | null;
   while ((s = sourceRe.exec(html)) !== null) {
     const u = s?.[1] ?? "";
@@ -539,7 +539,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   }
 
   // CSS url(...) in style attributes
-  const cssUrlRe = /url\(("|')?(https?:[^"')]+)\1?\)/gi;
+  const cssUrlRe = /url\(("|')?(https?:[^"\')]+)\1?\)/gi;
   let c: RegExpExecArray | null;
   while ((c = cssUrlRe.exec(html)) !== null) {
     const u = c?.[2] ?? "";
@@ -547,7 +547,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   }
 
   // Anchor hrefs: only consider as media if the href looks like a media/document file
-  const hrefRe = /\shref=["']([^"']+)["']/gi;
+  const hrefRe = /\shref=["\']([^"\']+)["\']/gi;
   let hm: RegExpExecArray | null;
   while ((hm = hrefRe.exec(html)) !== null) {
     const u = hm?.[1] ?? "";
@@ -572,6 +572,22 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     rebuildExcerpts = false,
   } = options;
   
+  // NEW: normalize allowedHosts to accept user-provided values like https://example.com/ or with paths
+  const normalizedAllowedHosts = allowedHosts
+    .map(h => {
+      if (!h) return "";
+      let s = h.trim().toLowerCase();
+      // Remove protocol
+      s = s.replace(/^https?:\/\//, "");
+      // Drop everything after first slash (paths)
+      const slashIdx = s.indexOf("/");
+      if (slashIdx !== -1) s = s.slice(0, slashIdx);
+      // Drop leading dots
+      s = s.replace(/^\.+/, "");
+      return s;
+    })
+    .filter(Boolean);
+
   const result: ImportResult = {
     summary: {
       totalItems: 0,
@@ -752,16 +768,24 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         .where(eq(importJobs.id, jobId));
     }
 
-    // Pre-collect all media URLs (attachments + referenced in posts), then download with concurrency & dedupe
+    // Pre-process posts to expand shortcodes and collect all media URLs.
+    // This ensures that media from expanded shortcodes (e.g., galleries) is included before download.
+    const processedPostContent = new Map<string, string>(); // guid -> expanded HTML
+
     if (!skipMedia && (s3Service || localService)) {
       const allMedia = new Set<string>();
-      // Attachment direct URLs
+      if (verbose) console.log("🔍 Expanding shortcodes and scanning for media in all posts...");
+
+      // Add attachment URLs first
       for (const a of attachmentItems) {
         if (a.attachmentUrl) allMedia.add(a.attachmentUrl);
       }
-      // Media referenced in posts
+
+      // Then process posts: expand shortcodes, store the result, and collect media URLs
       for (const p of postItems) {
-        for (const u of extractMediaUrlsFromHtml(p.html)) {
+        const expandedHtml = expandShortcodes(p.html);
+        processedPostContent.set(p.guid, expandedHtml);
+        for (const u of extractMediaUrlsFromHtml(expandedHtml)) {
           allMedia.add(u);
         }
       }
@@ -772,7 +796,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       await runWithConcurrency(medias, concurrency, async (url) => {
         try {
           if (!result.mediaUrls.has(url)) {
-            const newUrl = await downloadMedia(url, s3Service, localService, allowedHosts, { dryRun, verbose });
+            const newUrl = await downloadMedia(url, s3Service, localService, normalizedAllowedHosts, { dryRun, verbose });
             if (newUrl) result.mediaUrls.set(url, newUrl);
           }
         } catch (e) {
@@ -780,6 +804,12 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         }
         return undefined as unknown as void;
       });
+    } else {
+      // If skipping media, we still need to expand shortcodes for consistent processing in the main loop.
+      if (verbose) console.log("🔍 Expanding shortcodes for all posts (media download skipped)...");
+      for (const p of postItems) {
+        processedPostContent.set(p.guid, expandShortcodes(p.html));
+      }
     }
 
     if (verbose && postItems.length > 0) {
@@ -794,7 +824,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     for (const post of postItems) {
       try {
         // Prepare HTML: expand shortcodes, normalize lists, sanitize, then rewrite media URLs
-        const expanded = expandShortcodes(post.html);
+        const expanded = processedPostContent.get(post.guid) || "";
         const withIframes = transformIframeVideos(expanded);
         const normalized = normalizeWpLists(withIframes);
 
@@ -814,6 +844,32 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         if (post.featuredImageId && attachmentIdToUrl.has(post.featuredImageId)) {
           const originalUrl = attachmentIdToUrl.get(post.featuredImageId)!;
           featuredImageUrl = result.mediaUrls.get(originalUrl) || originalUrl;
+        }
+
+        // Fallback: if no featuredImageUrl resolved via attachment meta, pick first image in content
+        if (!featuredImageUrl) {
+          // Prefer an anchor-wrapped image's href if it looks like an image; else use the img src
+            const anchorImgRe = /<a[^>]*href=["']([^"']+)["'][^>]*>\s*<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>\s*<\/a>/i;
+            const imgRe = /<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>/i;
+            let m = anchorImgRe.exec(finalHtml);
+            if (m) {
+              const href = m[1] ?? "";
+              const imgSrc = m[2] ?? "";
+              const alt = m[3];
+              featuredImageUrl = choosePreferredImageUrl(href, imgSrc);
+              if (alt && alt.trim().length > 0) featuredImageAlt = alt.trim();
+            } else {
+              const im = imgRe.exec(finalHtml);
+              if (im) {
+                featuredImageUrl = im[1];
+                const alt = im[2];
+                if (alt && alt.trim().length > 0) featuredImageAlt = alt.trim();
+              }
+            }
+            // As a last resort, use post title if alt still empty
+            if (!featuredImageAlt && featuredImageUrl) {
+              featuredImageAlt = post.title;
+            }
         }
 
         if (!dryRun) {
@@ -1190,7 +1246,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 function transformIframeVideos(html: string): string {
   if (!html) return html;
   return html.replace(/<iframe([^>]*)>\s*<\/iframe>/gi, (m, attrs) => {
-    const srcMatch = attrs.match(/\ssrc=["']([^"']+)["']/i);
+    const srcMatch = attrs.match(/\ssrc=["\']([^"\']+)["\']/i);
     const src = srcMatch?.[1] || "";
     if (!src) return m;
     try {
@@ -1213,4 +1269,20 @@ function transformIframeVideos(html: string): string {
       return m;
     }
   });
+}
+
+// Helper to choose between a thumbnail (with size suffix) and a full-size URL
+function choosePreferredImageUrl(anchorHref?: string, imgSrc?: string): string | undefined {
+  // Gracefully handle absent values
+  if (!anchorHref && !imgSrc) return undefined;
+  const sizeSuffixRe = /(.*)-\d+x\d+(\.[a-z0-9]+)$/i;
+  const a = anchorHref ?? "";
+  const i = imgSrc ?? "";
+  const aHas = sizeSuffixRe.test(a);
+  const iHas = sizeSuffixRe.test(i);
+  // Prefer anchor when it appears to be the full-size version
+  if (iHas && !aHas && a) return a;
+  if (!aHas && iHas && a) return a; // same condition kept for clarity
+  // Fall back to whichever is available
+  return a || i || undefined;
 }

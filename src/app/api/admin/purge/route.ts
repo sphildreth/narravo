@@ -131,13 +131,20 @@ export async function POST(req: NextRequest) {
           whereConditions.push(isNull(posts.deletedAt));
         }
 
+        // Determine where clause; allow BULK hard delete of all posts when explicitly confirmed
+        let whereClause: any;
         if (whereConditions.length === 0) {
-          throw new Error("No valid identifiers or filters provided");
+          if (mode === "hard" && !dryRun) {
+            // BULK hard delete — operate on all posts
+            whereClause = sql`1=1`;
+          } else {
+            throw new Error("No valid identifiers or filters provided");
+          }
+        } else {
+          whereClause = whereConditions.length === 1
+            ? whereConditions[0]
+            : and(...whereConditions);
         }
-
-        const whereClause = whereConditions.length === 1 
-          ? whereConditions[0] 
-          : and(...whereConditions);
 
         // Get posts that would be affected
         const postsToDelete = await db

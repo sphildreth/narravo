@@ -1,6 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
+import React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
