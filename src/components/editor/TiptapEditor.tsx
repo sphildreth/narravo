@@ -9,7 +9,6 @@ import TextAlign from "@tiptap/extension-text-align";
 import Link from "@tiptap/extension-link";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Underline from "@tiptap/extension-underline";
-import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "tiptap-markdown";
 import { createLowlight } from "lowlight";
 
@@ -340,10 +339,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
   const editor: Editor | null = useEditor({
     extensions: [
-      StarterKit.configure({
-        // Disable the default code block since we're using CodeBlockLowlight
-        codeBlock: false,
-      }),
+      StarterKit,
       Markdown.configure({ 
         html: true, // Allow HTML for image alignment figures
       }),
@@ -366,11 +362,8 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         defaultLanguage: 'plaintext',
       }),
       Underline,
-      Placeholder.configure({
-        placeholder,
-      }),
       AlignedImage,
-    ],
+    ] as any,
     content: initialMarkdown,
     onUpdate: ({ editor }) => {
       try {
