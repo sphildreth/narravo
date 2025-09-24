@@ -47,10 +47,9 @@ export class LocalStorageService {
     const ext = filename.split('.').pop() || '';
     const key = `${options.keyPrefix || 'uploads'}/${nanoid()}.${ext}`;
     
-    // In a real implementation, this would return a URL for direct upload
-    // For local storage, we'll handle uploads differently
+    // In development, upload via same-origin API route
     return {
-      url: `/api/upload/local`, // This would need to be implemented
+      url: `/api/uploads/local`,
       key,
       fields: {
         'Content-Type': mimeType,

@@ -41,7 +41,7 @@ export default async function Page() {
   return (
     <>
       <Header />
-      <div className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
+      <div className="max-w-screen mx-auto px-3 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
         <div className="order-2 md:order-1">
           <div className="space-y-6">
             <Sidebar />

@@ -209,7 +209,7 @@ function ModerationFilters({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 border rounded-lg p-4">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
           <form onSubmit={handleSearchSubmit} className="flex gap-2">
@@ -355,7 +355,7 @@ function CommentCard({
   }[comment.status] || "bg-gray-100 text-gray-800";
 
   return (
-    <div className={`border rounded-lg p-4 ${isSelected ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950/20" : "bg-white dark:bg-gray-800"}`}>
+    <div className={`border border-gray-200 dark:border-gray-700 rounded-lg p-4 ${isSelected ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950/20" : "bg-white dark:bg-gray-800"}`}>
       <div className="flex items-start gap-3">
         <input
           type="checkbox"
@@ -378,7 +378,7 @@ function CommentCard({
                 href={`/${comment.postSlug}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
+                className="text-blue-600 dark:text-blue-400 hover:underline"
               >
                 {comment.postTitle}
               </a>
@@ -389,7 +389,7 @@ function CommentCard({
               </span>
               <button
                 onClick={() => setShowDetails(!showDetails)}
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
               >
                 {showDetails ? "Hide Details" : "Show Details"}
               </button>
@@ -434,7 +434,7 @@ function CommentCard({
             {!isEditing && comment.bodyHtml.length > 300 && (
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="mt-2 text-sm text-blue-600 hover:underline"
+                className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
               >
                 {isExpanded ? "Show less" : "Show more"}
               </button>
@@ -459,7 +459,7 @@ function CommentCard({
                     </div>
                     <button
                       onClick={() => handleRemoveAttachment(attachment.id)}
-                      className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200"
+                      className="text-xs px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 rounded hover:bg-red-200 dark:hover:bg-red-800"
                       title="Remove attachment"
                     >
                       Remove

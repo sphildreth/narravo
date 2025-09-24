@@ -45,6 +45,12 @@ const anonymizeUserSchema = z.object({
   confirmation: z.literal("ANONYMIZE"),
 });
 
+// Confirmation schema for hard delete
+const deleteUserSchema = z.object({
+  userId: z.string().uuid(),
+  confirmation: z.literal("DELETE"),
+});
+
 // Get paginated users with filtering and sorting
 export async function getUsersWithFilters(
   filter: UsersFilter = {},
@@ -335,6 +341,69 @@ export async function anonymizeUser(formData: FormData) {
   } catch (error) {
     console.error("Error anonymizing user:", error);
     return { error: "Failed to anonymize user" };
+  }
+}
+
+// Delete user entirely (hard delete)
+export async function deleteUser(formData: FormData) {
+  await requireAdmin();
+
+  const data = {
+    userId: formData.get("userId") as string,
+    confirmation: formData.get("confirmation") as string,
+  };
+
+  const parsed = deleteUserSchema.safeParse(data);
+  if (!parsed.success) {
+    return {
+      error: parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ")
+    };
+  }
+
+  const { userId } = parsed.data;
+
+  try {
+    // Get user info and admin check
+    const [user] = await db
+      .select({ email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user) {
+      return { error: "User not found" };
+    }
+
+    if (isEmailAdmin(user.email)) {
+      return { error: "Cannot delete admin users" };
+    }
+
+    // Count comments to report back
+    const commentCountResult: any = await db.execute(sql`
+      SELECT COUNT(*)::int as count FROM comments WHERE user_id = ${userId}
+    `);
+    const commentCountRows: any[] = (commentCountResult as any).rows ?? (Array.isArray(commentCountResult) ? commentCountResult : []);
+    const commentCount = Number(commentCountRows[0]?.count ?? 0);
+
+    // Delete user's comments first (to fully remove their content)
+    if (commentCount > 0) {
+      await db.delete(comments).where(eq(comments.userId, userId));
+    }
+
+    // Delete the user (reactions/config will cascade per FK rules)
+    await db.delete(users).where(eq(users.id, userId));
+
+    // Revalidate admin pages
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/dashboard");
+
+    return {
+      success: true,
+      message: `User "${user.name || user.email}" and ${commentCount} comment(s) have been deleted.`,
+    };
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    return { error: "Failed to delete user" };
   }
 }
 

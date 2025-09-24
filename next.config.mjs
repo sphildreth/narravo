@@ -27,6 +27,14 @@ const mediaSrc = [
   s3Hostname,
 ].filter(Boolean).join(" ");
 
+const connectSrc = [
+  "'self'",
+  s3Hostname,
+  "https:",
+  "data:",
+  "blob:",
+].filter(Boolean).join(" ");
+
 const securityHeaders = [
   {
     key: 'X-Content-Type-Options',
@@ -48,6 +56,7 @@ const securityHeaders = [
       `style-src 'self' 'unsafe-inline';` +
       `img-src ${imgSrc};` +
       `media-src ${mediaSrc};` +
+      `connect-src ${connectSrc};` +
       `font-src 'self';` +
       `object-src 'none';` +
       `base-uri 'self';` +

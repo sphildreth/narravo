@@ -46,6 +46,7 @@ export async function listPosts(opts: { cursor?: { publishedAt: string; id: stri
     select p.id, p.slug, p.title, p.excerpt, p.published_at as "publishedAt"${selectViews}
     from posts p
     where true
+      and p.deleted_at is null
       ${c ? sql`and (p.published_at, p.id) < (${c.publishedAt}::timestamptz, ${c.id}::uuid)` : sql``}
     order by p.published_at desc nulls last, p.id desc
     limit ${limit + 1}
@@ -88,6 +89,7 @@ export async function getPostBySlug(slug: string) {
            p.category_id as "categoryId"${selectViews}
     from posts p
     where p.slug = ${slug}
+      and p.deleted_at is null
     limit 1
   `);
       const row = (res.rows ?? [])[0];
@@ -147,7 +149,7 @@ export async function getPostBySlugWithReactions(slug: string, userId?: string) 
 
 export async function countPublishedPosts(): Promise<number> {
   const rowsRes: any = await db.execute(
-    sql`select count(*)::int as c from posts where published_at is not null`
+    sql`select count(*)::int as c from posts where published_at is not null and deleted_at is null`
   );
   return Number(rowsRes.rows?.[0]?.c ?? 0);
 }
@@ -227,6 +229,7 @@ export async function getPreviousPost(currentId: string): Promise<{ id: string; 
     select p.id, p.slug, p.title, p.published_at as "publishedAt"
     from posts p
     where p.published_at is not null
+      and p.deleted_at is null
       and p.id != ${currentId}
       and (
         p.published_at < (select published_at from posts where id = ${currentId})
@@ -251,6 +254,7 @@ export async function getNextPost(currentId: string): Promise<{ id: string; slug
     select p.id, p.slug, p.title, p.published_at as "publishedAt"
     from posts p
     where p.published_at is not null
+      and p.deleted_at is null
       and p.id != ${currentId}
       and (
         p.published_at > (select published_at from posts where id = ${currentId})

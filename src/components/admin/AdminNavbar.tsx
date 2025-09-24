@@ -18,6 +18,8 @@ export default function AdminNavbar() {
                 <Link href="/admin/system/configuration" className="rounded-lg px-3 py-2 hover:bg-muted/20">Configuration</Link>
                 <Link href="/admin/system/disclaimer" className="rounded-lg px-3 py-2 hover:bg-muted/20">Disclaimer</Link>
                 <Link href="/admin/system/import" className="rounded-lg px-3 py-2 hover:bg-muted/20">Import</Link>
+                <div className="mt-3 px-3 text-[11px] uppercase tracking-wide text-muted">Data</div>
+                <Link href="/admin/data-operations" className="rounded-lg px-3 py-2 hover:bg-muted/20">Data Operations</Link>
             </nav>
         </aside>
     );
