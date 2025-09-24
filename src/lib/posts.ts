@@ -86,7 +86,9 @@ export async function getPostBySlug(slug: string) {
     select p.id, p.slug, p.title, p.excerpt, 
            p.body_md as "bodyMd", p.body_html as "bodyHtml", 
            p.html, p.published_at as "publishedAt",
-           p.category_id as "categoryId"${selectViews}
+           p.category_id as "categoryId",
+           p.featured_image_url as "featuredImageUrl",
+           p.featured_image_alt as "featuredImageAlt"${selectViews}
     from posts p
     where p.slug = ${slug}
       and p.deleted_at is null
@@ -103,6 +105,8 @@ export async function getPostBySlug(slug: string) {
           publishedAt: row.publishedAt ? new Date(row.publishedAt).toISOString() : null,
           viewsTotal: row.viewsTotal ?? 0,
           categoryId: row.categoryId,
+          featuredImageUrl: row.featuredImageUrl ?? null,
+          featuredImageAlt: row.featuredImageAlt ?? null,
       };
       
       // Get tags and category in parallel

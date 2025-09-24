@@ -456,6 +456,25 @@ function normalizeWpLists(html: string): string {
   return out;
 }
 
+/**
+ * Transform WordPress syntax highlighting blocks (hcb_wrap) into standard code blocks
+ * Converts: <div class="hcb_wrap"><pre class="prism ... lang-bash" data-lang="Bash"><code>content</code></pre></div>
+ * To: <pre data-language="bash"><code>content</code></pre>
+ */
+function transformSyntaxHighlighting(html: string): string {
+  if (!html) return html;
+  
+  // Match hcb_wrap divs with prism pre elements
+  return html.replace(
+    /<div\s+class="hcb_wrap"[^>]*>\s*<pre\s+class="[^"]*"\s+data-lang="([^"]*)"[^>]*>\s*<code>([\s\S]*?)<\/code>\s*<\/pre>\s*<\/div>/gi,
+    (match, lang, code) => {
+      // Normalize language name to lowercase for consistency
+      const normalizedLang = lang.toLowerCase();
+      return `<pre data-language="${normalizedLang}"><code>${code}</code></pre>`;
+    }
+  );
+}
+
 function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\\\]\\]/g, '\\$&');
 }
@@ -823,19 +842,20 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     for (const post of postItems) {
       try {
-        // Prepare HTML: expand shortcodes, normalize lists, sanitize, then rewrite media URLs
+        // Prepare HTML: expand shortcodes, normalize lists, transform syntax highlighting, sanitize, then rewrite media URLs
         const expanded = processedPostContent.get(post.importedSystemId) || "";
         const withIframes = transformIframeVideos(expanded);
         const normalized = normalizeWpLists(withIframes);
+        const withSyntaxHighlighting = transformSyntaxHighlighting(normalized);
 
         // Compute excerpt BEFORE sanitize to preserve <!--more--> markers if any
-        let computedExcerpt = generateExcerpt(normalized, {
+        let computedExcerpt = generateExcerpt(withSyntaxHighlighting, {
           maxChars: EXCERPT_MAX,
           ellipsis: EXCERPT_ELLIPSIS,
           dropBlockCode: !INCLUDE_BLOCK_CODE,
         });
 
-        const sanitized = sanitizeHtml(normalized);
+        const sanitized = sanitizeHtml(withSyntaxHighlighting);
         const finalHtml = rewriteMediaUrls(sanitized, result.mediaUrls);
 
         // Handle featured image
