@@ -104,9 +104,6 @@ export default async function PostPage({ params }: Props) {
                 <h1 className="text-3xl md:text-4xl font-extrabold leading-tight mt-1">
                   {post.title}
                 </h1>
-                {post.excerpt && (
-                  <p className="mt-2 text-gray-700">{post.excerpt}</p>
-                )}
               </header>
 
 

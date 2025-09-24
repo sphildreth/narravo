@@ -6,6 +6,7 @@
  */
 import Link from "next/link";
 import Image from "next/image";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export type ArticleCardPost = {
   id: string;
@@ -55,9 +56,12 @@ export default function ArticleCard({ post }: { post: ArticleCardPost }) {
             {post.title}
           </Link>
         </h2>
-        {post.excerpt && (
-          <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{post.excerpt}</p>
-        )}
+        {post.excerpt ? (
+          <div
+            className="mt-2 text-sm text-muted-foreground line-clamp-3 prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.excerpt) }}
+          />
+        ) : null}
         {post.author?.name && (
           <div className="mt-3 flex items-center gap-2 text-xs text-muted">
             {post.author?.image && (
