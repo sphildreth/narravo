@@ -2,6 +2,7 @@
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { getPostBySlug, getPostBySlugWithReactions, getPreviousPost, getNextPost } from "@/lib/posts";
 import { getSession } from "@/lib/auth";
 import { getSiteMetadata } from "@/lib/rss";
@@ -9,8 +10,14 @@ import { generatePostMetadata, generatePostJsonLd } from "@/lib/seo";
 import CommentsSection from "@/components/comments/CommentsSection";
 import ReactionButtons from "@/components/reactions/ReactionButtons";
 import { ViewTracker } from "@/components/analytics/ViewTracker";
+import { ConfigServiceImpl } from "@/lib/config";
+import { db } from "@/lib/db";
 import DeletePostButton from "@/components/admin/DeletePostButton";
 import Link from "next/link";
+import Prose from "@/components/Prose";
+import { RenderTimeBadge } from "@/components/RenderTimeBadge";
+import { RUMCollector } from "@/components/RUMCollector";
+import { measureAsync, createServerTimingHeader } from "@/lib/performance";
 
 type Props = {
   params: { slug: string };
@@ -29,20 +36,45 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function PostPage({ params }: Props) {
-  const session = await getSession();
+  const renderStart = performance.now();
+  
+  // Measure config loading
+  const { result: config, duration: configDuration } = await measureAsync(
+    'config-load',
+    async () => new ConfigServiceImpl({ db })
+  );
+  
+  const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;
+  const showRenderBadge = await config.getBoolean("VIEW.PUBLIC-SHOW-RENDER-BADGE") ?? false;
+  
+  // Measure session loading
+  const { result: session, duration: sessionDuration } = await measureAsync(
+    'session-load',
+    async () => getSession()
+  );
+  
   const userId = session?.user?.id || undefined;
   const isAdmin = Boolean(session?.user?.isAdmin);
+  const canReact = Boolean(session?.user?.id);
 
-  const post = await getPostBySlugWithReactions(params.slug, userId);
+  // Measure post loading (main data fetch)
+  const { result: post, duration: postDuration } = await measureAsync(
+    'post-load',
+    async () => getPostBySlugWithReactions(params.slug, userId)
+  );
+  
   if (!post) {
     notFound();
   }
   
-  // Get previous and next posts
-  const [previousPost, nextPost] = await Promise.all([
-    getPreviousPost(post.id),
-    getNextPost(post.id),
-  ]);
+  // Measure navigation data loading
+  const { result: [previousPost, nextPost], duration: navDuration } = await measureAsync(
+    'navigation-load',
+    async () => Promise.all([
+      getPreviousPost(post.id),
+      getNextPost(post.id),
+    ])
+  );
   
   const date = post.publishedAt
     ? new Date(post.publishedAt).toLocaleDateString()
@@ -50,6 +82,19 @@ export default async function PostPage({ params }: Props) {
 
   const { title: siteName, url: siteUrl } = getSiteMetadata();
   const jsonLd = generatePostJsonLd(post, siteUrl, siteName);
+
+  // Calculate total render time and set Server-Timing header
+  const renderEnd = performance.now();
+  const totalRenderTime = renderEnd - renderStart;
+  const totalDbTime = configDuration + postDuration + navDuration;
+  
+  // Set Server-Timing header for performance monitoring
+  const headersList = headers();
+  const serverTimingHeader = createServerTimingHeader({
+    srt: totalRenderTime,
+    dbTime: totalDbTime,
+    cacheStatus: 'MISS', // TODO: Determine actual cache status
+  });
 
   // Format view count for display
   const formatViewCount = (count: number): string => {
@@ -64,8 +109,9 @@ export default async function PostPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd }}
       />
-      <main className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
-        <ViewTracker postId={post.id} />
+      <RUMCollector />
+      <main className="max-w-screen mx-auto px-6 my-7 grid gap-7">
+        <ViewTracker postId={post.id} sessionWindowMinutes={sessionWindowMinutes} />
         <div className="order-1 md:order-2 grid gap-6">
             {isAdmin && (
                 <div className="px-6 p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -73,7 +119,7 @@ export default async function PostPage({ params }: Props) {
                         <span className="text-sm text-amber-800 font-medium">Admin Actions</span>
                         <div className="flex items-center gap-3">
                             <Link
-                                href={`/admin/posts/${post.id}`}
+                                href={`/admin/posts/${post.id}/edit`}
                                 className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
                             >
                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,33 +144,28 @@ export default async function PostPage({ params }: Props) {
                 <h1 className="text-3xl md:text-4xl font-extrabold leading-tight mt-1">
                   {post.title}
                 </h1>
-                {post.excerpt && (
-                  <p className="mt-2 text-gray-700">{post.excerpt}</p>
-                )}
               </header>
 
 
-              <div
-                className="prose"
-                dangerouslySetInnerHTML={{ __html: post.bodyHtml ?? "" }}
-              />
+              {/* Render post body with Prose to avoid max-width cap */}
+              <Prose html={post.bodyHtml ?? ""} />
 
               {/* Tags and Category */}
-              {(post.tags && post.tags.length > 0) || post.category && (
+              {(((post.tags?.length ?? 0) > 0) || Boolean(post.category)) && (
                 <div className="mt-6 pt-4 border-t border-border">
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-wrap gap-6">
                     {post.category && (
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide block mb-1">Category</span>
                         <Link
                           href={`/categories/${post.category.slug}`}
-                          className="inline-flex items-center px-3 py-1 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                          className="inline-flex items-center text-brand hover:opacity-90 text-sm font-medium"
                         >
                           {post.category.name}
                         </Link>
                       </div>
                     )}
-                    {post.tags && post.tags.length > 0 && (
+                    {(post.tags?.length ?? 0) > 0 && (
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide block mb-1">Tags</span>
                         <div className="flex flex-wrap gap-2">
@@ -132,7 +173,7 @@ export default async function PostPage({ params }: Props) {
                             <Link
                               key={tag.id}
                               href={`/tags/${tag.slug}`}
-                              className="inline-flex items-center px-2 py-1 rounded-md bg-accent text-accent-foreground text-sm hover:bg-accent/80 transition-colors"
+                              className="inline-flex items-center px-2 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent text-sm hover:bg-accent/20 transition-colors"
                             >
                               #{tag.name}
                             </Link>
@@ -145,7 +186,7 @@ export default async function PostPage({ params }: Props) {
               )}
 
               {/* Post reactions */}
-              {post.reactions && (
+              {canReact && post.reactions && (
                 <div className="mt-4 pt-4 border-t border-border">
                   <ReactionButtons
                     targetType="post"
@@ -196,6 +237,7 @@ export default async function PostPage({ params }: Props) {
           <CommentsSection postId={post.id} />
         </div>
       </main>
+      <RenderTimeBadge serverMs={Math.round(totalRenderTime)} showBadge={showRenderBadge} />
     </>
   );
 }

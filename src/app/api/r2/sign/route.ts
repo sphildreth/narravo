@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { ConfigServiceImpl } from "@/lib/config";
 import { S3Service, getS3Config } from "@/lib/s3";
 import { db } from "@/lib/db";
+import { localStorageService } from "@/lib/local-storage";
 
 export async function POST(req: NextRequest) {
   try {
@@ -82,14 +83,21 @@ export async function POST(req: NextRequest) {
     // Get S3/R2 configuration
     const s3Config = getS3Config();
     if (!s3Config) {
-      // In development/test, return a mock response (no real upload)
+      // In development/test, return a same-origin local upload policy to avoid CSP/connect-src issues
+      const ext = String(filename).split('.').pop() || '';
+      const keyPrefix = isImage ? 'images' : 'videos';
+      // Use timestamp + random to reduce collisions
+      const rand = Math.random().toString(36).slice(2);
+      const key = `${keyPrefix}/${Date.now()}-${rand}.${ext}`;
+      const publicUrl = localStorageService.getPublicUrl(key);
+
       return new Response(
         JSON.stringify({ 
-          url: "https://example.com/presigned",
-          fields: { "Content-Type": mimeType },
-          key: `uploads/mock-${Date.now()}.${filename.split('.').pop()}`,
-          method: "PUT",
-          publicUrl: "",
+          url: "/api/uploads/local",
+          fields: { "Content-Type": mimeType, key },
+          key,
+          method: "POST",
+          publicUrl,
           policy: {
             kind: isImage ? "image" : "video",
             limits: {

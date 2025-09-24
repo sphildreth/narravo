@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import withBundleAnalyzer from '@next/bundle-analyzer'
 
 // Get S3 hostname for CSP
 const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || "";
@@ -19,11 +20,20 @@ const imgSrc = [
   "images.unsplash.com",
   "lh3.googleusercontent.com",
   "i.pravatar.cc",
+  "stackoverflow.com",
 ].filter(Boolean).join(" ");
 
 const mediaSrc = [
   "'self'",
   s3Hostname,
+].filter(Boolean).join(" ");
+
+const connectSrc = [
+  "'self'",
+  s3Hostname,
+  "https:",
+  "data:",
+  "blob:",
 ].filter(Boolean).join(" ");
 
 const securityHeaders = [
@@ -47,6 +57,7 @@ const securityHeaders = [
       `style-src 'self' 'unsafe-inline';` +
       `img-src ${imgSrc};` +
       `media-src ${mediaSrc};` +
+      `connect-src ${connectSrc};` +
       `font-src 'self';` +
       `object-src 'none';` +
       `base-uri 'self';` +
@@ -69,6 +80,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
       { protocol: 'https', hostname: 'i.pravatar.cc' },
+      { protocol: 'https', hostname: 'stackoverflow.com' },
       ...(s3Hostname ? [{ protocol: 'https', hostname: s3Hostname }] : []),
     ],
   },
@@ -81,4 +93,10 @@ const nextConfig = {
     ];
   },
 };
-export default nextConfig;
+
+// Enable bundle analyzer when ANALYZE=true
+const bundleAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
+
+export default bundleAnalyzer(nextConfig);

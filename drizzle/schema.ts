@@ -33,11 +33,17 @@ export const posts = pgTable("posts", {
   html: text("html").notNull(), // Legacy column - to be deprecated
   excerpt: text("excerpt"),
   guid: text("guid").unique(), // WordPress GUID for import idempotency
+  // Featured image (post thumbnail)
+  featuredImageUrl: text("featured_image_url"),
+  featuredImageAlt: text("featured_image_alt"),
   viewsTotal: integer("views_total").notNull().default(0),
   categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+  // Soft delete columns
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
 });
 
 export const users = pgTable("users", {
@@ -45,6 +51,7 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   name: text("name"),
   image: text("image"),
+  login: text("login").unique(), // WordPress username for import mapping
 });
 
 export const comments = pgTable(
@@ -60,6 +67,9 @@ export const comments = pgTable(
     bodyMd: text("body_md"),
     status: text("status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+    // Soft delete columns
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   },
   (table) => ({
     parentReference: foreignKey({ columns: [table.parentId], foreignColumns: [table.id] }).onDelete("cascade"),
@@ -74,6 +84,9 @@ export const commentAttachments = pgTable("comment_attachments", {
   posterUrl: text("poster_url"),
   mime: text("mime"),
   bytes: integer("bytes"),
+  // Soft delete columns
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
 });
 
 export const reactions = pgTable("reactions", {
@@ -178,4 +191,95 @@ export const commentTags = pgTable("comment_tags", {
   commentTagsPrimaryKey: { columns: [table.commentId, table.tagId] },
   commentTagsCommentIdIndex: index("comment_tags_comment_id_idx").on(table.commentId),
   commentTagsTagIdIndex: index("comment_tags_tag_id_idx").on(table.tagId),
+}));
+
+// Import job status enum
+export const importJobStatus = pgEnum("import_job_status", [
+  "queued",
+  "running", 
+  "cancelling",
+  "cancelled",
+  "failed",
+  "completed",
+]);
+
+// Import jobs table for tracking WXR imports
+export const importJobs = pgTable("import_jobs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  status: importJobStatus("status").notNull().default("queued"),
+  fileName: text("file_name").notNull(),
+  filePath: text("file_path").notNull(), // Temporary file path
+  options: jsonb("options").notNull(), // Import options (statuses, purge, etc.)
+  
+  // Progress counters
+  totalItems: integer("total_items").notNull().default(0),
+  postsImported: integer("posts_imported").notNull().default(0),
+  attachmentsProcessed: integer("attachments_processed").notNull().default(0),
+  redirectsCreated: integer("redirects_created").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  
+  // Timestamps
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  
+  // User who started the import
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+}, (table) => ({
+  importJobsStatusIndex: index("import_jobs_status_idx").on(table.status),
+  importJobsCreatedAtIndex: index("import_jobs_created_at_idx").on(table.createdAt),
+}));
+
+// Import job errors table for detailed error logging
+export const importJobErrors = pgTable("import_job_errors", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  jobId: uuid("job_id").references(() => importJobs.id, { onDelete: "cascade" }).notNull(),
+  itemIdentifier: text("item_identifier").notNull(), // Post GUID, attachment URL, etc.
+  errorType: text("error_type").notNull(), // "post_import", "media_download", "redirect_creation", etc.
+  errorMessage: text("error_message").notNull(),
+  itemData: jsonb("item_data"), // Relevant data for debugging
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  importJobErrorsJobIdIndex: index("import_job_errors_job_id_idx").on(table.jobId),
+  importJobErrorsTypeIndex: index("import_job_errors_type_idx").on(table.errorType),
+}));
+
+// Data operation types for audit logging
+export const dataOperationType = pgEnum("data_operation_type", [
+  "export",
+  "restore", 
+  "purge_soft",
+  "purge_hard",
+]);
+
+// Audit logs for export/restore/purge operations
+export const dataOperationLogs = pgTable("data_operation_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  operationType: dataOperationType("operation_type").notNull(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  
+  // Operation details
+  details: jsonb("details").notNull(), // Export options, restore file, purge filters, etc.
+  
+  // Results
+  status: text("status").notNull(), // "started", "completed", "failed"
+  recordsAffected: integer("records_affected").notNull().default(0),
+  errorMessage: text("error_message"),
+  
+  // File/archive info for exports
+  archiveFilename: text("archive_filename"),
+  archiveChecksum: text("archive_checksum"),
+  
+  // IP address for security audit
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  
+  // Timestamps
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => ({
+  dataOperationLogsUserIdIndex: index("data_operation_logs_user_id_idx").on(table.userId),
+  dataOperationLogsTypeIndex: index("data_operation_logs_type_idx").on(table.operationType),
+  dataOperationLogsCreatedAtIndex: index("data_operation_logs_created_at_idx").on(table.createdAt),
 }));

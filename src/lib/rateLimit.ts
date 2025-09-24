@@ -246,15 +246,17 @@ export function validateHoneypot(honeypotValue: string | null | undefined): bool
 export async function validateMinSubmitTime(
   submitStartTime: number | null | undefined
 ): Promise<{ valid: boolean; actualTime?: number; requiredTime?: number }> {
-  if (!submitStartTime || typeof submitStartTime !== 'number') {
-    return { valid: false };
-  }
-  
   const config = new ConfigServiceImpl({ db });
-  const minSubmitSecs = await config.getNumber('RATE.MIN-SUBMIT-SECS');
-  
-  if (minSubmitSecs == null) {
-    throw new Error('Missing required config: RATE.MIN-SUBMIT-SECS');
+  let minSubmitSecs = await config.getNumber('RATE.MIN-SUBMIT-SECS');
+
+  // Fallback to a sensible default if not configured or invalid
+  if (typeof minSubmitSecs !== 'number' || !Number.isFinite(minSubmitSecs) || minSubmitSecs <= 0) {
+    minSubmitSecs = 2; // default minimum submit time in seconds
+  }
+
+  // If the submitStartTime is missing/invalid, still return the requiredTime for messaging
+  if (typeof submitStartTime !== 'number' || !Number.isFinite(submitStartTime) || submitStartTime <= 0) {
+    return { valid: false, requiredTime: minSubmitSecs };
   }
   
   const now = Date.now();

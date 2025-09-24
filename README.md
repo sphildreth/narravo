@@ -19,6 +19,8 @@ Narravo is a sleek, minimal, and feature-rich blog engine designed for developer
 *   **Tailwind CSS:** Rapidly build beautiful, responsive UIs with a utility-first CSS framework.
 *   **PostgreSQL + Drizzle ORM:** A modern, type-safe ORM for seamless database interactions.
 *   **Auth.js (NextAuth):** Secure authentication with GitHub and Google OAuth providers out-of-the-box.
+*   **WordPress WXR Import:** Robustly import posts, comments, media, tags, and more from WordPress via the Admin UI or CLI.
+*   **Data Operations:** Complete backup/export, restore, and purge functionality with audit logging and confirmation flows.
 *   **Nested Comments & Reactions:** Engage your audience with threaded comments, attachments (image/video), and emoji-like reactions.
 *   **Admin Dashboard:** A powerful moderation queue to manage comments, attachments, and user content.
 *   **S3/R2 Media Uploads:** Scalable media storage with presigned URLs for AWS S3 or Cloudflare R2.
@@ -128,7 +130,6 @@ A quick reference for common development tasks:
 | `pnpm drizzle:push`     | Apply schema changes to the database            |
 | `pnpm seed:config`      | Seed default configuration values               |
 | `pnpm seed:posts`       | Seed demo posts and comments                    |
-| `pnpm wxr:import`       | Import WordPress WXR content (stub)             |
 
 ---
 
@@ -142,12 +143,43 @@ src/components/         # Reusable UI components
 src/lib/                # Server-side services, utilities, and business logic
 src/types/              # TypeScript types (consolidated)
 drizzle/                # Drizzle ORM schema and database migrations
-scripts/                # Utility scripts (seeding, imports)
+scripts/                # Utility scripts (seeding)
 tests/                  # Unit and integration tests
 docs/                   # Project documentation and specifications
 ```
 
-See docs/RESTRUCTURE.md for the detailed rationale and migration plan.
+---
+
+## 🔄 WordPress WXR Import
+
+Narravo includes a powerful and resilient WordPress import tool to migrate your content from a WordPress WXR export file.
+
+**Import Capabilities:**
+
+*   **Comprehensive Content:** Imports posts, comments (with threading), categories, and tags.
+*   **Flexible Statuses:** Choose which post statuses to import (e.g., `publish`, `draft`).
+*   **Media & SEO:** Downloads media to S3/R2, rewrites content URLs, and creates 301 redirects from old WordPress post URLs.
+*   **Resilient Process:** Features include dry-runs, real-time progress, job cancellation, and detailed error logging.
+*   **Admin UI & CLI:** Manage imports through the Admin Dashboard or automate them with a CLI script.
+
+For a complete guide, see the [**WordPress Import Documentation**](./docs/wordpress-import.md).
+
+### Excerpts: configuration and rebuild
+
+During import, Narravo auto-generates short HTML-safe post excerpts. You can control excerpt generation and optionally rebuild them.
+
+- Environment variables (optional):
+  - `EXCERPT_MAX_CHARS` (default: `220`)
+  - `EXCERPT_ELLIPSIS` (default: `…`)
+  - `EXCERPT_INCLUDE_BLOCK_CODE` (default: `false` — when `true`, preserves `<pre>` block code)
+- Admin UI: toggle “Rebuild excerpts” in Admin → System → Import to force recomputing excerpts for this job.
+- CLI: pass `--rebuild-excerpts` to the importer.
+
+Example CLI run:
+
+```bash
+pnpm wxr:import -- path=./export.xml --rebuild-excerpts --verbose
+```
 
 ---
 
@@ -183,3 +215,20 @@ We welcome contributions! Please refer to our [CONTRIBUTING.md](./docs/CONTRIBUT
 ## 📄 License
 
 This project is licensed under the Apache License, Version 2.0. See the [LICENSE](./LICENSE) and [NOTICE](./NOTICE) files for more details.
+
+---
+
+## 🧑 About Me Sidebar
+
+An optional About Me section can appear in the public sidebar.
+
+- Enable/disable: SITE.ABOUT-ME.ENABLED (boolean)
+- Title: SITE.ABOUT-ME.TITLE (string)
+- Content: SITE.ABOUT-ME.CONTENT (string)
+
+You can manage these in the Admin Dashboard:
+
+- Navigate to Admin -> System -> About Me
+- Toggle enable, edit the title and content, then Save Changes
+
+When enabled, the About Me section renders above the Recent posts list.

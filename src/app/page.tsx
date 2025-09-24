@@ -3,7 +3,6 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import LoadMore from "@/components/LoadMore";
 import ProseExample from "@/components/Prose";
-import TrendingPosts from "@/components/analytics/TrendingPosts";
 import { listPosts } from "@/lib/posts";
 import { getPostViewCounts } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
@@ -15,6 +14,7 @@ export default async function Page() {
   const revalidateSeconds = await config.getNumber("PUBLIC.HOME.REVALIDATE-SECONDS");
   if (revalidateSeconds == null) throw new Error("Missing required config: PUBLIC.HOME.REVALIDATE-SECONDS");
   const feedCount = await config.getNumber("FEED.LATEST-COUNT");
+  const disclaimerEnabled = await config.getBoolean("SITE.DISCLAIMER.ENABLED");
   if (feedCount == null) throw new Error("Missing required config: FEED.LATEST-COUNT");
 
   const getPosts = cache(
@@ -41,11 +41,10 @@ export default async function Page() {
   return (
     <>
       <Header />
-      <div className="max-w-screen mx-auto px-6 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
+      <div className="max-w-screen mx-auto px-3 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
         <div className="order-2 md:order-1">
           <div className="space-y-6">
             <Sidebar />
-            <TrendingPosts />
           </div>
         </div>
         <div className="order-1 md:order-2">
@@ -57,7 +56,12 @@ export default async function Page() {
           <ProseExample html="" />
         </div>
       </div>
-      <footer className="mt-10 border-t border-border px-6 py-6 text-center text-muted">Proudly powered by <a href="https://github.com/sphildreth/narravo" target="_blank">Narravo</a>.</footer>
+      <footer className="mt-10 border-t border-border px-6 py-6 text-center text-muted">
+        Proudly powered by <a href="https://github.com/sphildreth/narravo" target="_blank">Narravo</a>.
+        {disclaimerEnabled && (
+          <><span className="mx-2">|</span><a href="/disclaimer">Disclaimer</a></>
+        )}
+      </footer>
     </>
   );
 }

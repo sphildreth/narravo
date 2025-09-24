@@ -2,6 +2,71 @@
 import { marked } from "marked";
 import { sanitizeHtml } from "./sanitize";
 
+export function expandShortcodes(markdown: string): string {
+  if (!markdown || typeof markdown !== "string") return "";
+
+  // Video shortcode: [video mp4="..." webm="..." ogv="..." width="400" height="300" poster="..."][/video]
+  const videoRe = /\[video([^\]]*)\](?:\s*\[\/video\])?/gi;
+
+  const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
+
+  return markdown.replace(videoRe, (_full, attrStr: string) => {
+    const attrs: Record<string, string> = {};
+    let m: RegExpExecArray | null;
+    while ((m = attrRe.exec(attrStr))) {
+      const rawKey = m[1] ?? "";
+      if (!rawKey) continue;
+      const key = rawKey.toLowerCase();
+      let val = m[2] ?? "";
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      attrs[key] = val;
+    }
+
+    const sources: Array<{ src: string; type: string }> = [];
+    const addIfHttp = (url?: string | null, type?: string) => {
+      if (!url) return;
+      try {
+        const u = new URL(url);
+        if (u.protocol === "http:" || u.protocol === "https:") {
+          sources.push({ src: url, type: type || "" });
+        }
+      } catch {
+        // ignore invalid URLs
+      }
+    };
+
+    addIfHttp(attrs.mp4, "video/mp4");
+    addIfHttp(attrs.webm, "video/webm");
+    addIfHttp(attrs.ogv || attrs.ogg, "video/ogg");
+
+    if (sources.length === 0) {
+      // No valid sources, keep original text
+      return _full;
+    }
+
+    const width = attrs.width && /^\d+$/.test(attrs.width) ? ` width="${attrs.width}"` : "";
+    const height = attrs.height && /^\d+$/.test(attrs.height) ? ` height="${attrs.height}"` : "";
+
+    const poster = attrs.poster && (() => { try { const u = new URL(attrs.poster); return (u.protocol === "http:" || u.protocol === "https:") ? ` poster="${attrs.poster}"` : ""; } catch { return ""; } })();
+
+    const autoplay = attrs.autoplay ? " autoplay" : "";
+    // If autoplay is set, muted and playsinline are typically required for browsers to auto-play inline
+    const muted = attrs.autoplay || attrs.muted ? " muted" : "";
+    const playsinline = attrs.autoplay || attrs.playsinline ? " playsinline" : "";
+    const loop = attrs.loop ? " loop" : "";
+
+    const sourcesHtml = sources
+      .map(s => `<source src="${s.src}"${s.type ? ` type="${s.type}"` : ""} />`)
+      .join("");
+
+    const fallbackLink = `<a href="${sources[0]!.src}">Download video</a>`;
+
+    return `<video controls preload="metadata"${width}${height}${poster}${autoplay}${muted}${playsinline}${loop}>${sourcesHtml}${fallbackLink}</video>`;
+  });
+}
+
 /**
  * Configure marked with security-focused options
  */
@@ -23,7 +88,7 @@ configureMarked();
 function postProcessHtml(html: string): string {
   // Add security attributes to external links
   return html.replace(
-    /<a href="(https?:\/\/[^"]+)"([^>]*)>/g,
+    /<a href="(https?:\/\/[^\"]+)"([^>]*)>/g,
     '<a href="$1"$2 target="_blank" rel="noopener noreferrer">'
   );
 }
@@ -37,9 +102,12 @@ export function markdownToHtmlSync(markdown: string): string {
   }
 
   try {
+    // Expand shortcodes before parsing
+    const preprocessed = expandShortcodes(markdown.trim());
+
     // Convert markdown to HTML synchronously
-    const rawHtml = marked.parse(markdown.trim()) as string;
-    
+    const rawHtml = marked.parse(preprocessed) as string;
+
     // Sanitize the resulting HTML first
     const sanitizedHtml = sanitizeHtml(rawHtml);
     
@@ -65,9 +133,12 @@ export async function markdownToHtml(markdown: string): Promise<string> {
   }
 
   try {
+    // Expand shortcodes before parsing
+    const preprocessed = expandShortcodes(markdown.trim());
+
     // Convert markdown to HTML
-    const rawHtml = await marked(markdown.trim()) as string;
-    
+    const rawHtml = await marked(preprocessed) as string;
+
     // Sanitize the resulting HTML first
     const sanitizedHtml = sanitizeHtml(rawHtml);
     

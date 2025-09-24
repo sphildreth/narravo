@@ -76,6 +76,17 @@ export class S3Service {
     };
   }
 
+  // New: simple helper to upload a buffer directly
+  async putObject(key: string, body: Uint8Array, contentType: string): Promise<void> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    });
+    await this.client.send(command);
+  }
+
   getPublicUrl(key: string): string {
     if (this.config.endpoint) {
       // For R2 or custom endpoints
@@ -105,6 +116,15 @@ export function getS3Config(): S3Config | null {
     secretAccessKey,
     bucket,
   };
+}
+
+// Get storage service (S3 or local filesystem fallback)
+export function getStorageService(): S3Service | null {
+  const s3Config = getS3Config();
+  if (s3Config) {
+    return new S3Service(s3Config);
+  }
+  return null; // Use local storage fallback in import script
 }
 
 // Helper function to validate file size from magic numbers

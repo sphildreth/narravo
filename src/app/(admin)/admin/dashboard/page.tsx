@@ -12,6 +12,7 @@ import {
   SpamButton,
 } from "@/components/admin/DashboardActions";
 import ServerDetails from "@/components/admin/ServerDetails";
+import AdminActivityWidget from "@/components/admin/analytics/AdminActivityWidget";
 
 export default async function AdminDashboardPage() {
   const [
@@ -58,6 +59,8 @@ export default async function AdminDashboardPage() {
           </div>
         </Link>
       </div>
+      {/* Site analytics summary */}
+      <AdminActivityWidget />
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-card p-4">
           <h2 className="font-bold">Recent Comments</h2>
@@ -80,6 +83,15 @@ export default async function AdminDashboardPage() {
                     <p className="text-xs text-muted-foreground">
                       {comment.author.name}
                     </p>
+                    {comment.postSlug && (
+                      <Link
+                        href={`/${comment.postSlug}#comment-${comment.id}`}
+                        target="_blank"
+                        className="text-xs text-blue-600 hover:underline mt-1 inline-block"
+                      >
+                        View Post
+                      </Link>
+                    )}
                   </div>
                   <div className="flex space-x-2">
                     <ApproveButton commentId={comment.id} />

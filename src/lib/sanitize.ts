@@ -7,29 +7,75 @@ import DOMPurify from "isomorphic-dompurify";
  * and allows common formatting elements while blocking dangerous content.
  */
 export function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    // Allowed HTML tags - matches requirements from REQ_MARKDOWN_TO_HTML.md
+  let sanitized = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       "p", "a", "strong", "em", "code", "pre", "ul", "ol", "li", 
-      "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6"
+      "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6",
+      // Allow safe media tags
+      "video", "source",
+      // Allow figures from WordPress blocks
+      "figure",
+      // Allow safe iframes (we'll restrict by host post-sanitize)
+      "iframe",
+      // Allow tables (needed for WordPress imports)
+      "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col"
     ],
     // Allowed attributes
     ALLOWED_ATTR: [
-      "href", "src", "alt", "title", "target", "rel", "controls", "poster"
-    ],
-    // Explicitly forbidden attributes (security-critical)
-    FORBID_ATTR: [
-      "onerror", "onclick", "onload", "onmouseover", "onfocus", 
-      "onblur", "onchange", "onsubmit", "style", "class"
+      "href", "src", "alt", "title", "target", "rel", "controls", "poster",
+      // Responsive image attributes
+      "srcset", "sizes",
+      // Video/iframe-related safe attributes
+      "muted", "loop", "playsinline", "preload", "width", "height", "type",
+      "frameborder", "allow", "allowfullscreen", "referrerpolicy",
+      // Table-related safe attributes
+      "colspan", "rowspan", "scope",
+      // Code highlighting attributes - allow class for pre/code tags only
+      "class", "data-lang"
     ],
     // Additional security options
-    ALLOW_DATA_ATTR: false, // No data-* attributes
+    ALLOW_DATA_ATTR: false, // No data-* attributes except those explicitly allowed
     ALLOW_UNKNOWN_PROTOCOLS: false, // Only allow known URL protocols
     SANITIZE_DOM: true, // Sanitize DOM nodes
     KEEP_CONTENT: true, // Keep text content even if tags are removed
     // Ensure external links are safe
-    FORBID_TAGS: ["script", "object", "embed", "iframe", "form", "input"],
+    FORBID_TAGS: ["script", "object", "embed", "form", "input"],
   });
+
+  // Post-process: allow only YouTube iframes, strip others entirely
+  sanitized = sanitized.replace(/<iframe([^>]*)>(.*?)<\/iframe>/gi, (m, attrs) => {
+    const srcMatch = String(attrs).match(/\ssrc=["']([^"']+)["']/i);
+    const src = srcMatch?.[1] || "";
+    try {
+      const u = new URL(src, "https://example.com");
+      const host = u.hostname.toLowerCase();
+      const allowed = /(^|\.)youtube\.com$/.test(host) || /(^|\.)youtu\.be$/.test(host) || /(^|\.)youtube-nocookie\.com$/.test(host);
+      return allowed ? `<iframe${attrs}></iframe>` : "";
+    } catch {
+      return "";
+    }
+  });
+
+  // Post-process to filter dangerous class names on code elements
+  sanitized = sanitized.replace(
+    /<(pre|code)([^>]*?)\sclass=["']([^"']*?)["']/gi,
+    (match, tagName, attrs, className) => {
+      // Only allow safe syntax highlighting classes
+      const safeClasses = className
+        .split(/\s+/)
+        .filter((cls: string) => /^(prism|language|lang|hljs|undefined|numbers|line)[\w-]*$/i.test(cls))
+        .join(' ');
+      
+      if (safeClasses) {
+        return `<${tagName}${attrs} class="${safeClasses}"`;
+      } else {
+        // Remove class attribute if no safe classes found
+        return `<${tagName}${attrs}`;
+      }
+    }
+  );
+
+  return sanitized;
 }
 
 /**

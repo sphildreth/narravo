@@ -7,6 +7,7 @@ import Link from "next/link";
 import { 
   anonymizeUser, 
   exportUserData, 
+  deleteUser,
   getUserDetails,
   type UsersFilter, 
   type UsersSortOptions,
@@ -95,6 +96,43 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
     } catch (error) {
       console.error("Anonymization error:", error);
       alert("An error occurred while anonymizing the user");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle hard delete user
+  const handleDeleteUser = async (user: UserWithStats) => {
+    const confirmText = `DELETE`;
+    const userInput = prompt(
+      `Are you sure you want to DELETE user "${user.name || user.email}"?\n\n` +
+      `This will:\n` +
+      `• Permanently delete the user account\n` +
+      `• Permanently delete their ${user.commentsCount} comment(s)\n` +
+      `• Remove their ${user.reactionsCount} reactions\n` +
+      `• This action CANNOT be undone\n\n` +
+      `Type "${confirmText}" to confirm:`
+    );
+
+    if (userInput !== confirmText) return;
+
+    setIsProcessing(true);
+    try {
+      const formData = new FormData();
+      formData.append("userId", user.id);
+      formData.append("confirmation", confirmText);
+
+      const result = await deleteUser(formData);
+
+      if (result.success) {
+        alert(result.message);
+        router.refresh();
+      } else {
+        alert(result.error || "Failed to delete user");
+      }
+    } catch (error) {
+      console.error("Delete user error:", error);
+      alert("An error occurred while deleting the user");
     } finally {
       setIsProcessing(false);
     }
@@ -292,13 +330,22 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
                         Export
                       </button>
                       {!user.isAdmin && (
-                        <button
-                          onClick={() => handleAnonymizeUser(user)}
-                          disabled={isProcessing}
-                          className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200 disabled:opacity-50"
-                        >
-                          Anonymize
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleAnonymizeUser(user)}
+                            disabled={isProcessing}
+                            className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200 disabled:opacity-50"
+                          >
+                            Anonymize
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={isProcessing}
+                            className="text-xs px-2 py-1 bg-red-200 text-red-900 rounded hover:bg-red-300 disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -411,13 +458,24 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
                     {selectedUser.recentComments.map((comment) => (
                       <div key={comment.id} className="bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
                         <div className="flex items-center justify-between mb-1">
-                          <Link
-                            href={`/${comment.postSlug}`}
-                            target="_blank"
-                            className="text-sm font-medium text-blue-600 hover:underline"
-                          >
-                            {comment.postTitle}
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/${comment.postSlug}`}
+                              target="_blank"
+                              className="text-sm font-medium text-blue-600 hover:underline"
+                            >
+                              {comment.postTitle}
+                            </Link>
+                            {comment.postSlug && (
+                              <Link
+                                href={`/${comment.postSlug}#comment-${comment.id}`}
+                                target="_blank"
+                                className="text-xs px-2 py-1 rounded border border-border hover:bg-muted"
+                              >
+                                View Post
+                              </Link>
+                            )}
+                          </div>
                           <span className={`text-xs px-2 py-1 rounded ${
                             comment.status === "approved" ? "bg-green-100 text-green-800" :
                             comment.status === "pending" ? "bg-yellow-100 text-yellow-800" :
@@ -450,13 +508,22 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
                   Export Data
                 </button>
                 {!selectedUser.isAdmin && (
-                  <button
-                    onClick={() => handleAnonymizeUser(selectedUser)}
-                    disabled={isProcessing}
-                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-                  >
-                    Anonymize User
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleAnonymizeUser(selectedUser)}
+                      disabled={isProcessing}
+                      className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Anonymize User
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(selectedUser)}
+                      disabled={isProcessing}
+                      className="px-4 py-2 bg-red-700 text-white rounded hover:bg-red-800 disabled:opacity-50"
+                    >
+                      Delete User
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={() => setSelectedUser(null)}

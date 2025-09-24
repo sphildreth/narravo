@@ -28,6 +28,7 @@
     "allowJs": false,
     "baseUrl": ".",
     "paths": {
+      "@/scripts/*": ["./scripts/*"],
       "@/*": ["./src/*"],
       "@drizzle/*": ["./drizzle/*"],
       "@/drizzle/*": ["./drizzle/*"]
@@ -42,6 +43,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "src/types/**/*.d.ts",
     "drizzle.config.ts",
     ".next/types/**/*.ts"
   ],

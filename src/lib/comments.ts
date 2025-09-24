@@ -83,7 +83,7 @@ export type CommentDTO = {
   }>;
 };
 export async function countApprovedComments(postId: string): Promise<number> {
-  const rows = await db.execute(sql`select count(*)::int as c from comments where post_id = ${postId} and status = 'approved'`);
+  const rows = await db.execute(sql`select count(*)::int as c from comments where post_id = ${postId} and status = 'approved' and deleted_at is null`);
   const first = Array.isArray(rows) ? rows[0] : (rows as any).rows?.[0];
   return Number(first?.c ?? 0);
 }
@@ -102,6 +102,7 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
     left join users u on u.id = c.user_id
     where c.post_id = ${postId}
       and c.status = 'approved'
+      and c.deleted_at is null
       and c.depth = 0
       ${cursor ? sql`and c.path > ${cursor}` : sql``}
     order by c.path asc
@@ -130,6 +131,7 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
       left join users u on u.id = c.user_id
       where c.post_id = ${postId}
         and c.status = 'approved'
+        and c.deleted_at is null
         and (
           ${sql.join(likeClauses, sql` or `)}
         )
@@ -221,6 +223,7 @@ export async function getCommentAttachments(commentIds: string[]): Promise<Recor
     select comment_id as "commentId", id, kind, url, poster_url as "posterUrl", mime
     from comment_attachments
     where comment_id IN (${sql.join(commentIds.map((id) => sql`${id}`), sql`, `)})
+      and deleted_at is null
     order by comment_id, id
   `);
   
@@ -244,7 +247,7 @@ export async function getCommentAttachments(commentIds: string[]): Promise<Recor
 
 export async function countPendingComments(): Promise<number> {
   const rows = await db.execute(
-    sql`select count(*)::int as c from comments where status = 'pending'`
+    sql`select count(*)::int as c from comments where status = 'pending' and deleted_at is null`
   );
   const first = Array.isArray(rows) ? rows[0] : (rows as any).rows?.[0];
   return Number(first?.c ?? 0);
@@ -261,9 +264,11 @@ export async function countSpamComments(): Promise<number> {
 export async function getRecentComments(limit = 5) {
   const res: any = await db.execute(sql`
     select c.id, c.body_html as "bodyHtml", c.created_at as "createdAt",
-           u.name as "authorName", u.image as "authorImage"
+           u.name as "authorName", u.image as "authorImage",
+           p.slug as "postSlug"
     from comments c
     left join users u on u.id = c.user_id
+    left join posts p on p.id = c.post_id
     order by c.created_at desc
     limit ${limit}
   `);
@@ -274,5 +279,6 @@ export async function getRecentComments(limit = 5) {
     bodyHtml: r.bodyHtml,
     createdAt: new Date(r.createdAt).toISOString(),
     author: { name: r.authorName ?? null, image: r.authorImage ?? null },
+    postSlug: r.postSlug ?? null,
   }));
 }

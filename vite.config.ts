@@ -7,6 +7,7 @@ export default defineConfig({
     alias: [
       // Make sure the more specific drizzle alias matches before '@'
       { find: '@/drizzle', replacement: fileURLToPath(new URL('./drizzle/', import.meta.url)) },
+      { find: '@/scripts', replacement: fileURLToPath(new URL('./scripts/', import.meta.url)) },
       { find: '@', replacement: fileURLToPath(new URL('./src/', import.meta.url)) },
     ],
   },
