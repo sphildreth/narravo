@@ -41,6 +41,9 @@ export const posts = pgTable("posts", {
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+  // Soft delete columns
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
 });
 
 export const users = pgTable("users", {
@@ -64,6 +67,9 @@ export const comments = pgTable(
     bodyMd: text("body_md"),
     status: text("status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+    // Soft delete columns
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
   },
   (table) => ({
     parentReference: foreignKey({ columns: [table.parentId], foreignColumns: [table.id] }).onDelete("cascade"),
@@ -78,6 +84,9 @@ export const commentAttachments = pgTable("comment_attachments", {
   posterUrl: text("poster_url"),
   mime: text("mime"),
   bytes: integer("bytes"),
+  // Soft delete columns
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
 });
 
 export const reactions = pgTable("reactions", {
@@ -234,4 +243,43 @@ export const importJobErrors = pgTable("import_job_errors", {
 }, (table) => ({
   importJobErrorsJobIdIndex: index("import_job_errors_job_id_idx").on(table.jobId),
   importJobErrorsTypeIndex: index("import_job_errors_type_idx").on(table.errorType),
+}));
+
+// Data operation types for audit logging
+export const dataOperationType = pgEnum("data_operation_type", [
+  "export",
+  "restore", 
+  "purge_soft",
+  "purge_hard",
+]);
+
+// Audit logs for export/restore/purge operations
+export const dataOperationLogs = pgTable("data_operation_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  operationType: dataOperationType("operation_type").notNull(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  
+  // Operation details
+  details: jsonb("details").notNull(), // Export options, restore file, purge filters, etc.
+  
+  // Results
+  status: text("status").notNull(), // "started", "completed", "failed"
+  recordsAffected: integer("records_affected").notNull().default(0),
+  errorMessage: text("error_message"),
+  
+  // File/archive info for exports
+  archiveFilename: text("archive_filename"),
+  archiveChecksum: text("archive_checksum"),
+  
+  // IP address for security audit
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  
+  // Timestamps
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => ({
+  dataOperationLogsUserIdIndex: index("data_operation_logs_user_id_idx").on(table.userId),
+  dataOperationLogsTypeIndex: index("data_operation_logs_type_idx").on(table.operationType),
+  dataOperationLogsCreatedAtIndex: index("data_operation_logs_created_at_idx").on(table.createdAt),
 }));

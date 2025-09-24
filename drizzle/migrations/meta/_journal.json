@@ -71,6 +71,13 @@
       "when": 1758573498331,
       "tag": "0009_smooth_zaladane",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1758677339132,
+      "tag": "0010_milky_squirrel_girl",
+      "breakpoints": true
     }
   ]
 }
