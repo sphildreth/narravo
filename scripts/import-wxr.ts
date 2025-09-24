@@ -370,8 +370,19 @@ async function downloadMedia(
   try {
     // Check if URL is allowed
     const urlObj = new URL(url);
-    if (allowedHosts.length > 0 && !allowedHosts.includes(urlObj.hostname)) {
-      throw new Error(`Host ${urlObj.hostname} not in allowlist`);
+    const hostname = urlObj.hostname.toLowerCase();
+    const hostAllowed = (hosts: string[], host: string): boolean => {
+      if (hosts.length === 0) return true;
+      for (const raw of hosts) {
+        const a = raw.trim().toLowerCase().replace(/^\.+/, "");
+        if (!a) continue;
+        if (host === a) return true;
+        if (host.endsWith(`.${a}`)) return true; // allow subdomains of an allowed registrable domain
+      }
+      return false;
+    };
+    if (!hostAllowed(allowedHosts, hostname)) {
+      throw new Error(`Host ${hostname} not in allowlist`);
     }
 
     // Download file
