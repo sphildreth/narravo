@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import withBundleAnalyzer from '@next/bundle-analyzer'
 
 // Get S3 hostname for CSP
 const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || "";
@@ -92,4 +93,10 @@ const nextConfig = {
     ];
   },
 };
-export default nextConfig;
+
+// Enable bundle analyzer when ANALYZE=true
+const bundleAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
+
+export default bundleAnalyzer(nextConfig);
