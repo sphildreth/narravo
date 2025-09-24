@@ -47,6 +47,7 @@ export async function listPosts(opts: { cursor?: { publishedAt: string; id: stri
     from posts p
     where true
       and p.deleted_at is null
+      and p.published_at is not null
       ${c ? sql`and (p.published_at, p.id) < (${c.publishedAt}::timestamptz, ${c.id}::uuid)` : sql``}
     order by p.published_at desc nulls last, p.id desc
     limit ${limit + 1}
