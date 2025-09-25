@@ -30,7 +30,21 @@ describe("WXR: Versioning & Compatibility", () => {
     const fixturePath = await writeTempFixture("wxr_v1_2.xml");
     const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await importWxr(fixturePath, { dryRun: true, verbose: true });
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Parsed document structure:"), expect.stringContaining("wp_wxr_version"));
+    
+    // Check if verbose logs include parsed structure
+    expect(consoleLogSpy).toHaveBeenCalledWith("Parsed document structure:", expect.any(String));
+    
+    // Find the call that contains the parsed structure and check for wp:wxr_version
+    const parsedStructureCalls = consoleLogSpy.mock.calls.filter(call => 
+      call[0] === "Parsed document structure:"
+    );
+    expect(parsedStructureCalls.length).toBe(1);
+    
+    // The second argument should contain the structure with wp:wxr_version
+    const structureString = parsedStructureCalls[0]?.[1] as string;
+    expect(structureString).toContain("wp:wxr_version");
+    expect(structureString).toContain("1.2");
+    
     consoleLogSpy.mockRestore();
   });
 
