@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+/* eslint-disable no-console */
 import { parseStringPromise } from "xml2js";
 import { db } from "@/lib/db";
 import { posts, redirects, categories, tags, postTags, comments, users, importJobs, importJobErrors } from "@/drizzle/schema";
@@ -13,111 +14,8 @@ import { expandShortcodes } from "@/lib/markdown";
 import { generateExcerpt } from "@/lib/excerpts/ExcerptService";
 
 /**
- * Gutenberg block wrapper remover.
- * Strips <!-- wp:* --> and <!-- /wp:* --> comments while preserving inner HTML.
- * Safe fallback for importers that don't interpret blocks semantically.
+ * Represents the structure of an <item> element in a WordPress WXR export file.
  */
-function stripGutenbergBlockComments(html: string): string {
-  if (!html) return html;
-  return html
-    // Remove opening/closing block comments but keep everything between them
-    .replace(/<!--\s*\/?wp:[\s\S]*?-->\s*/g, "");
-}
-
-/**
- * Quicktags handler.
- * - <!--more-->: returns excerpt (text before) if none provided, removes the marker from HTML.
- * - <!--nextpage-->: replaces with a marker <hr data-wp-nextpage="true" /> to preserve intent.
- */
-
-function applyQuicktags(html: string): { html: string; excerptFromMore?: string; pageBreaks: number } {
-  if (!html) return { html, pageBreaks: 0 };
-  let excerptFromMoreValue: string | undefined;
-  let pageBreaks = 0;
-
-  if (html.includes("<!--more-->")) {
-    const idx = html.indexOf("<!--more-->");
-    const before = idx >= 0 ? html.slice(0, idx) : "";
-    const after = idx >= 0 ? html.slice(idx + "<!--more-->".length) : "";
-    excerptFromMoreValue = before.trim();
-    html = (before + after);
-  }
-
-  html = html.replace(/<!--\s*nextpage\s*-->/gi, () => {
-    pageBreaks += 1;
-    return '<hr data-wp-nextpage="true" />';
-  });
-
-  const base = { html, pageBreaks };
-  return excerptFromMoreValue !== undefined ? { ...base, excerptFromMore: excerptFromMoreValue } : base;
-}
-
-/**
- * Minimal auto-embed detection.
- * Converts standalone YouTube/Vimeo URLs (or [embed]URL[/embed]) on their own line into
- * <a class="wp-embed" data-embed="provider" href="...">...</a>
- * This avoids sanitizer iframe stripping while preserving intent for the renderer.
- */
-function transformAutoEmbeds(html: string): string {
-  if (!html) return html;
-
-  const lineEmbed = (url: string) => {
-    const u = url.trim();
-    let provider: string | null = null;
-    if (/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(u)) provider = "youtube";
-    else if (/^(https?:\/\/)?(player\.)?vimeo\.com\//i.test(u)) provider = "vimeo";
-    else provider = null;
-    if (!provider) return url;
-    const escaped = u.replace(/"/g, "&quot;");
-    return `<p><a class="wp-embed" data-embed="${provider}" href="${escaped}">${escaped}</a></p>`;
-  };
-
-  // [embed]URL[/embed] -> embedded anchor
-  html = html.replace(/\[embed\]([\s\S]*?)\[\/embed\]/gi, (_, url) => lineEmbed(url));
-
-  // Standalone provider URLs: detect URLs that are in their own paragraph or on separate lines.
-  html = html.replace(
-    /(?:^|\n|\r|\r\n)\s*(https?:\/\/[^\s<>\"\']+)s*(?=$|\n|\r|\r\n)/g,
-    (m, url) => "\n" + lineEmbed(url)
-  );
-
-  return html;
-}
-
-/**
- * Minimal shortcode helpers.
- * - [caption] <img ... /> Caption text [/caption] -> <figure><img ... /><figcaption>Caption text</figcaption></figure>
- * Leaves unknown shortcodes intact to avoid data loss.
- */
-function transformBasicShortcodes(html: string): string {
-  if (!html) return html;
-  // naive [caption] transform
-  html = html.replace(/\[caption[^\]]*\]([\s\S]*?)\[\/caption\]/gi, (_m, inner) => {
-    // Try to split out the first <img ...>
-    const imgMatch = inner.match(/<img[\s\S]*?>/i);
-    if (!imgMatch) return inner; // fallback
-    const img = imgMatch[0];
-    const rest = inner.replace(img, "").trim();
-    const caption = rest ? `<figcaption>${rest}</figcaption>` : "";
-    return `<figure class="wp-caption">${img}${caption}</figure>`;
-  });
-  return html;
-}
-
-/**
- * Utility to safely set excerpt if missing.
- */
-function chooseExcerpt(existing: string | undefined, excerptFromMore?: string): string | undefined {
-  if (existing && existing.trim().length > 0) return existing;
-  if (excerptFromMore && excerptFromMore.trim().length > 0) return excerptFromMore;
-  return existing;
-}
-
-// --- Enhanced content processing pipeline additions ---
-interface EmbedOptions {
-  allowedEmbedHosts?: string[]; // informational for renderers; sanitization still happens downstream
-}
-
 export interface WxrItem {
   title?: string;
   link?: string;
@@ -134,11 +32,11 @@ export interface WxrItem {
   "wp:post_type"?: string;
   "wp:post_parent"?: string;
   "wp:attachment_url"?: string;
-  "wp:postmeta"?: Array<{
+  "wp:postmeta"?: Array<{ 
     "wp:meta_key": string;
     "wp:meta_value": string;
   }>;
-  "wp:comment"?: Array<{
+  "wp:comment"?: Array<{ 
     "wp:comment_id": string;
     "wp:comment_author": string;
     "wp:comment_author_email": string;
@@ -149,7 +47,7 @@ export interface WxrItem {
     "wp:comment_type": string;
     "wp:comment_parent": string;
   }>;
-  category?: Array<{
+  category?: Array<{ 
     _: string;
     "$": {
       domain: string;
@@ -158,6 +56,9 @@ export interface WxrItem {
   }>;
 }
 
+/**
+ * Represents a parsed WordPress post, ready for import.
+ */
 export interface ParsedPost {
   type: "post";
   importedSystemId: string;
@@ -171,7 +72,7 @@ export interface ParsedPost {
   featuredImageId?: string | undefined;
   categories: Array<{ name: string; slug: string }>;
   tags: Array<{ name: string; slug: string }>;
-  comments: Array<{
+  comments: Array<{ 
     id: string;
     author: string;
     authorEmail?: string | undefined;
@@ -182,6 +83,9 @@ export interface ParsedPost {
   }>;
 }
 
+/**
+ * Represents a parsed WordPress attachment (media item).
+ */
 export interface ParsedAttachment {
   type: "attachment";
   importedSystemId: string;
@@ -190,6 +94,9 @@ export interface ParsedAttachment {
   alt?: string | undefined;
 }
 
+/**
+ * Options to configure the WXR import process.
+ */
 export interface ImportOptions {
   dryRun?: boolean;
   skipMedia?: boolean;
@@ -202,6 +109,9 @@ export interface ImportOptions {
   rebuildExcerpts?: boolean; // new flag
 }
 
+/**
+ * The result of an import operation, including a summary and any errors.
+ */
 export interface ImportResult {
   summary: {
     totalItems: number;
@@ -215,6 +125,11 @@ export interface ImportResult {
   mediaUrls: Map<string, string>; // old URL -> new URL mapping
 }
 
+/**
+ * Parses a raw WXR item object into a structured `ParsedPost`, `ParsedAttachment`, or null.
+ * @param item The raw item object from xml2js.
+ * @returns A parsed object or null if the item type is not supported or invalid.
+ */
 export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | null {
   const postType = item["wp:post_type"];
 
@@ -315,6 +230,12 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
   return null; // Skip other post types
 }
 
+/**
+ * Guesses the MIME type of a file based on its URL's extension.
+ * @param url The URL of the file.
+ * @param fallback The content type to return if no match is found.
+ * @returns The guessed MIME type string.
+ */
 function guessContentType(url: string, fallback: string = 'application/octet-stream'): string {
   const lower = url.toLowerCase();
   if (lower.endsWith('.png')) return 'image/png';
@@ -329,6 +250,11 @@ function guessContentType(url: string, fallback: string = 'application/octet-str
   return fallback;
 }
 
+/**
+ * Extracts the file extension from a URL.
+ * @param url The URL to parse.
+ * @returns The file extension in lowercase, or "bin" as a fallback.
+ */
 function getExtensionFromUrl(url: string): string {
   try {
     const u = new URL(url);
@@ -347,6 +273,15 @@ function getExtensionFromUrl(url: string): string {
   return "bin";
 }
 
+/**
+ * Downloads a media file from a given URL and uploads it to the configured storage (S3 or local).
+ * @param url The URL of the media file to download.
+ * @param s3Service An S3 service instance, or null.
+ * @param localService A local storage service instance, or null.
+ * @param allowedHosts A list of allowed hostnames to download from.
+ * @param opts Options for the download process (e.g., dryRun, verbose).
+ * @returns The new public URL of the uploaded media, or null if the download failed or was skipped.
+ */
 async function downloadMedia(
   url: string,
   s3Service: S3Service | null,
@@ -423,6 +358,12 @@ async function downloadMedia(
   }
 }
 
+/**
+ * Rewrites all occurrences of old media URLs in an HTML string with their new URLs.
+ * @param html The HTML content to process.
+ * @param mediaUrlMap A map of old URLs to new URLs.
+ * @returns The HTML content with rewritten URLs.
+ */
 function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): string {
   let rewritten = html;
   
@@ -437,7 +378,12 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): strin
   return rewritten;
 }
 
-// Normalize common WordPress list markup issues prior to sanitization
+/**
+ * Normalizes common WordPress list markup issues (e.g., `<p>` tags wrapping lists)
+ * before HTML sanitization.
+ * @param html The raw HTML from WordPress.
+ * @returns The normalized HTML.
+ */
 function normalizeWpLists(html: string): string {
   if (!html) return html;
   let out = html;
@@ -475,10 +421,22 @@ function transformSyntaxHighlighting(html: string): string {
   );
 }
 
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\\\]\\]/g, '\\$&');
+/**
+ * Escapes special characters in a string for use in a regular expression.
+ * @param input The string to escape.
+ * @returns The escaped string.
+ */
+function escapeRegExp(input: string): string {
+  // Escape special regex characters: . * + ? ^ $ { } ( ) | [ ] \
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Generates a unique slug by appending a counter if the base slug already exists.
+ * @param baseSlug The desired slug.
+ * @param existingSlugs A set of slugs that are already in use.
+ * @returns A unique slug.
+ */
 function generateSlugWithFallback(baseSlug: string, existingSlugs: Set<string>): string {
   if (!existingSlugs.has(baseSlug)) {
     return baseSlug;
@@ -495,10 +453,20 @@ function generateSlugWithFallback(baseSlug: string, existingSlugs: Set<string>):
   return candidateSlug;
 }
 
+/**
+ * Checks if a string is an HTTP or HTTPS URL.
+ * @param u The string to check.
+ * @returns True if the string starts with "http://" or "https://".
+ */
 function isHttpUrl(u: string): boolean {
   return u.startsWith("http://") || u.startsWith("https://");
 }
 
+/**
+ * Extracts all potential media URLs from an HTML string.
+ * @param html The HTML content to scan.
+ * @returns A Set of unique media URLs found in the HTML.
+ */
 function extractMediaUrlsFromHtml(html: string): Set<string> {
   const urls = new Set<string>();
   if (!html) return urls;
@@ -519,7 +487,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
 
   // src, data-src, poster on media tags
   const attrPatterns = [
-    /\s(?:src|data-src|poster)=["\']([^"\']+)["\']/gi,
+    /\s(?:src|data-src|poster)=["\']([^"\']+)["']/gi,
   ];
 
   for (const re of attrPatterns) {
@@ -533,7 +501,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   }
 
   // srcset handling: URLs separated by commas, with descriptors
-  const srcsetRe = /\ssrcset=["\']([^"\']+)["\']/gi;
+  const srcsetRe = /\ssrcset=["\']([^"\']+)["']/gi;
   let sm: RegExpExecArray | null;
   while ((sm = srcsetRe.exec(html)) !== null) {
     const raw = sm?.[1] ?? "";
@@ -548,7 +516,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   }
 
   // <source src="...">
-  const sourceRe = /<source\b[^>]*\ssrc=["\']([^"\']+)["\'][^>]*>/gi;
+  const sourceRe = /<source\b[^>]*\ssrc=["\']([^"\']+)["'][^>]*>/gi;
   let s: RegExpExecArray | null;
   while ((s = sourceRe.exec(html)) !== null) {
     const u = s?.[1] ?? "";
@@ -558,7 +526,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   }
 
   // CSS url(...) in style attributes
-  const cssUrlRe = /url\(("|')?(https?:[^"\')]+)\1?\)/gi;
+  const cssUrlRe = /url\( ("|')?(https?:[^"\')]+)\1?\)/gi;
   let c: RegExpExecArray | null;
   while ((c = cssUrlRe.exec(html)) !== null) {
     const u = c?.[2] ?? "";
@@ -566,7 +534,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   }
 
   // Anchor hrefs: only consider as media if the href looks like a media/document file
-  const hrefRe = /\shref=["\']([^"\']+)["\']/gi;
+  const hrefRe = /\shref=["\']([^"\']+)["']/gi;
   let hm: RegExpExecArray | null;
   while ((hm = hrefRe.exec(html)) !== null) {
     const u = hm?.[1] ?? "";
@@ -578,6 +546,12 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   return urls;
 }
 
+/**
+ * Main function to import posts, media, and comments from a WordPress WXR file.
+ * @param filePath The path to the WXR XML file.
+ * @param options Configuration options for the import process.
+ * @returns A promise that resolves to an `ImportResult` object summarizing the import.
+ */
 export async function importWxr(filePath: string, options: ImportOptions = {}): Promise<ImportResult> {
   const { 
     dryRun = false, 
@@ -591,7 +565,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     rebuildExcerpts = false,
   } = options;
   
-  // NEW: normalize allowedHosts to accept user-provided values like https://example.com/ or with paths
+  // Normalize allowedHosts to accept user-provided values like https://example.com/ or with paths
   const normalizedAllowedHosts = allowedHosts
     .map(h => {
       if (!h) return "";
@@ -640,7 +614,12 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     }
   }
 
-  // Simple concurrency limiter
+  /**
+   * A simple concurrency limiter to run async tasks in parallel with a controlled limit.
+   * @param items The array of items to process.
+   * @param limit The maximum number of concurrent workers.
+   * @param worker The async function to execute for each item.
+   */
   const runWithConcurrency = async <T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> => {
     const results: R[] = new Array(items.length) as R[];
     let i = 0;
@@ -664,7 +643,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     // Update job status if provided
     if (jobId && !dryRun) {
       await db.update(importJobs)
-        .set({ 
+        .set({
           status: "running",
           startedAt: sql`now()`,
           updatedAt: sql`now()`
@@ -731,7 +710,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     // Get existing slugs to avoid conflicts
     if (!dryRun) {
       const existingPosts = await db.execute(sql`SELECT slug FROM posts`);
-      (existingPosts.rows || []).forEach((row: any) => {
+      (existingPosts.rows || []).forEach((row: { slug: string }) => {
         if (row?.slug) existingSlugs.add(row.slug);
       });
     }
@@ -756,7 +735,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         
         // Build attachment map for featured images (post_id -> url)
         if (parsed.type === "attachment") {
-          const postId = (item as any)["wp:post_id"];
+          const postId = (item as WxrItem)["wp:post_id"];
           if (postId) {
             attachmentIdToUrl.set(postId, parsed.attachmentUrl);
           }
@@ -849,7 +828,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         const withSyntaxHighlighting = transformSyntaxHighlighting(normalized);
 
         // Compute excerpt BEFORE sanitize to preserve <!--more--> markers if any
-        let computedExcerpt = generateExcerpt(withSyntaxHighlighting, {
+        const computedExcerpt = generateExcerpt(withSyntaxHighlighting, {
           maxChars: EXCERPT_MAX,
           ellipsis: EXCERPT_ELLIPSIS,
           dropBlockCode: !INCLUDE_BLOCK_CODE,
@@ -869,9 +848,9 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         // Fallback: if no featuredImageUrl resolved via attachment meta, pick first image in content
         if (!featuredImageUrl) {
           // Prefer an anchor-wrapped image's href if it looks like an image; else use the img src
-            const anchorImgRe = /<a[^>]*href=["']([^"']+)["'][^>]*>\s*<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>\s*<\/a>/i;
-            const imgRe = /<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>/i;
-            let m = anchorImgRe.exec(finalHtml);
+            const anchorImgRe = /<a[^>]*href=["\']([^"\']+)["'][^>]*>\s*<img[^>]*src=["\']([^"\']+)["'][^>]*alt=["\']([^"\']*)["'][^>]*>\s*<\/a>/i;
+            const imgRe = /<img[^>]*src=["\']([^"\']+)["'][^>]*alt=["\']([^"\']*)["'][^>]*>/i;
+            const m = anchorImgRe.exec(finalHtml);
             if (m) {
               const href = m[1] ?? "";
               const imgSrc = m[2] ?? "";
@@ -1263,10 +1242,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
+/**
+ * Transforms `<iframe>` tags pointing to video files into native `<video>` tags.
+ * It preserves YouTube iframes to allow direct embedding.
+ * @param html The HTML content to transform.
+ * @returns The transformed HTML.
+ */
 function transformIframeVideos(html: string): string {
   if (!html) return html;
   return html.replace(/<iframe([^>]*)>\s*<\/iframe>/gi, (m, attrs) => {
-    const srcMatch = attrs.match(/\ssrc=["\']([^"\']+)["\']/i);
+    const srcMatch = attrs.match(/\ssrc=["\']([^"\']+)["']/i);
     const src = srcMatch?.[1] || "";
     if (!src) return m;
     try {
@@ -1291,7 +1276,13 @@ function transformIframeVideos(html: string): string {
   });
 }
 
-// Helper to choose between a thumbnail (with size suffix) and a full-size URL
+/**
+ * Helper to choose the best image URL, preferring a full-size version over a thumbnail.
+ * WordPress often links a thumbnail to the full-size image. This function prefers the link's `href`.
+ * @param anchorHref The `href` attribute of a surrounding `<a>` tag.
+ * @param imgSrc The `src` attribute of the `<img>` tag.
+ * @returns The preferred image URL, or undefined if none are available.
+ */
 function choosePreferredImageUrl(anchorHref?: string, imgSrc?: string): string | undefined {
   // Gracefully handle absent values
   if (!anchorHref && !imgSrc) return undefined;
