@@ -368,6 +368,7 @@ async function downloadMedia(
 function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): string {
   let rewritten = html;
   
+  // First, handle exact URL matches (the traditional approach)
   for (const [oldUrl, newUrl] of mediaUrlMap) {
     // Replace any occurrence (src, href, srcset, poster, CSS url())
     rewritten = rewritten.replace(
@@ -375,6 +376,82 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): strin
       newUrl
     );
   }
+  
+  // Second, handle WordPress dimension URLs
+  // For each dimensioned URL in the content, check if we have the original (non-dimensioned) version downloaded
+  const imgTagRe = /<img\b[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi;
+  rewritten = rewritten.replace(imgTagRe, (match, src) => {
+    if (!src || !isHttpUrl(src)) return match;
+    
+    // Check if this looks like a WordPress dimensioned URL
+    const originalUrl = removeWordPressDimensions(src);
+    if (originalUrl !== src && mediaUrlMap.has(originalUrl)) {
+      // We have the original image downloaded, replace the dimensioned URL with local URL
+      // Also preserve the width/height attributes from the original img tag
+      const localUrl = mediaUrlMap.get(originalUrl)!;
+      
+      // Extract width/height attributes from the img tag if they exist
+      const widthMatch = match.match(/\swidth=["']([^"']+)["']/i);
+      const heightMatch = match.match(/\sheight=["']([^"']+)["']/i);
+      
+      let newMatch = match.replace(new RegExp(escapeRegExp(src), 'g'), localUrl);
+      
+      // If the img tag doesn't have width/height attributes, try to extract from WordPress dimensions
+      if (!widthMatch || !heightMatch) {
+        const dimensionMatch = src.match(/-(\d+)x(\d+)\.[a-zA-Z0-9]+$/);
+        if (dimensionMatch) {
+          const width = dimensionMatch[1];
+          const height = dimensionMatch[2];
+          
+          if (!widthMatch && width) {
+            newMatch = newMatch.replace('<img', `<img width="${width}"`);
+          }
+          if (!heightMatch && height) {
+            newMatch = newMatch.replace('<img', `<img height="${height}"`);
+          }
+        }
+      }
+      
+      return newMatch;
+    }
+    
+    return match;
+  });
+  
+  // Handle other attributes that might contain dimensioned URLs (srcset, href in anchors, etc.)
+  const srcsetRe = /\ssrcset=["']([^"']+)["']/gi;
+  rewritten = rewritten.replace(srcsetRe, (match, srcset) => {
+    let newSrcset = srcset;
+    const parts = srcset.split(',');
+    
+    for (let i = 0; i < parts.length; i++) {
+      const urlPart = (parts[i].trim().split(/\s+/)[0] ?? "");
+      if (urlPart && isHttpUrl(urlPart)) {
+        const originalUrl = removeWordPressDimensions(urlPart);
+        if (originalUrl !== urlPart && mediaUrlMap.has(originalUrl)) {
+          const localUrl = mediaUrlMap.get(originalUrl)!;
+          parts[i] = parts[i].replace(urlPart, localUrl);
+        }
+      }
+    }
+    
+    newSrcset = parts.join(',');
+    return match.replace(srcset, newSrcset);
+  });
+  
+  // Handle anchor href attributes
+  const anchorRe = /<a\b[^>]*\shref=["']([^"']+)["'][^>]*>/gi;
+  rewritten = rewritten.replace(anchorRe, (match, href) => {
+    if (!href || !isHttpUrl(href)) return match;
+    
+    const originalUrl = removeWordPressDimensions(href);
+    if (originalUrl !== href && mediaUrlMap.has(originalUrl)) {
+      const localUrl = mediaUrlMap.get(originalUrl)!;
+      return match.replace(new RegExp(escapeRegExp(href), 'g'), localUrl);
+    }
+    
+    return match;
+  });
   
   return rewritten;
 }
@@ -396,6 +473,13 @@ function replaceRemoteImagesWithPlaceholder(html: string, mediaUrlMap: Map<strin
     if (u.startsWith('/')) return true;
     // Allow any URL that we produced via download step
     if (allowedNewUrls.has(u)) return true;
+    // Check if this is a WordPress dimensioned URL that we have the original for
+    if (isHttpUrl(u)) {
+      const originalUrl = removeWordPressDimensions(u);
+      if (originalUrl !== u && mediaUrlMap.has(originalUrl)) {
+        return true;
+      }
+    }
     return false;
   };
 
@@ -614,6 +698,29 @@ function isHttpUrl(u: string): boolean {
 }
 
 /**
+ * Removes WordPress dimension suffixes from image URLs.
+ * WordPress often generates URLs like "image-300x169.jpg" or "image-501x1024.png".
+ * This function returns the original URL without those dimensions.
+ * @param url The URL to process.
+ * @returns The URL with WordPress dimension suffix removed.
+ */
+function removeWordPressDimensions(url: string): string {
+  if (!url) return url;
+  
+  // Match WordPress dimension patterns like -300x169, -1024x768, etc.
+  // The pattern is: dash, digits, 'x', digits, followed by file extension
+  const dimensionPattern = /-\d+x\d+(\.[a-zA-Z0-9]+)$/;
+  const match = url.match(dimensionPattern);
+  
+  if (match) {
+    // Remove the dimension part but keep the file extension
+    return url.replace(/-\d+x\d+(\.[a-zA-Z0-9]+)$/, '$1');
+  }
+  
+  return url;
+}
+
+/**
  * Extracts all potential media URLs from an HTML string.
  * @param html The HTML content to scan.
  * @returns A Set of unique media URLs found in the HTML.
@@ -646,7 +753,9 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
     while ((m = re.exec(html)) !== null) {
       const u = m?.[1] ?? "";
       if (u && isHttpUrl(u) && isLikelyMediaExtension(u)) {
-        urls.add(u);
+        // Remove WordPress dimension suffixes to get original image URL
+        const originalUrl = removeWordPressDimensions(u);
+        urls.add(originalUrl);
       }
     }
   }
@@ -661,7 +770,9 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
     for (const part of parts) {
       const urlPart = (part.trim().split(/\s+/)[0] ?? "");
       if (urlPart && isHttpUrl(urlPart)) {
-        urls.add(urlPart);
+        // Remove WordPress dimension suffixes to get original image URL
+        const originalUrl = removeWordPressDimensions(urlPart);
+        urls.add(originalUrl);
       }
     }
   }
@@ -681,7 +792,11 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   let c: RegExpExecArray | null;
   while ((c = cssUrlRe.exec(html)) !== null) {
     const u = c?.[2] ?? "";
-    if (u && isLikelyMediaExtension(u)) urls.add(u);
+    if (u && isLikelyMediaExtension(u)) {
+      // Remove WordPress dimension suffixes to get original image URL
+      const originalUrl = removeWordPressDimensions(u);
+      urls.add(originalUrl);
+    }
   }
 
   // Anchor hrefs: only consider as media if the href looks like a media/document file
@@ -690,7 +805,9 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   while ((hm = hrefRe.exec(html)) !== null) {
     const u = hm?.[1] ?? "";
     if (u && isHttpUrl(u) && isLikelyMediaExtension(u)) {
-      urls.add(u);
+      // Remove WordPress dimension suffixes to get original image URL
+      const originalUrl = removeWordPressDimensions(u);
+      urls.add(originalUrl);
     }
   }
 
