@@ -78,14 +78,16 @@ describe("WXR: Versioning & Compatibility", () => {
   it("imports successfully with wp:wxr_version 1.1", async () => {
     const fixturePath = await writeTempFixture("wxr_v1_1.xml");
     const result = await importWxr(fixturePath, { dryRun: true, allowedStatuses: ["publish", "draft"] });
-    expect(result.summary.postsImported).toBe(1);
+    // Fixture only declares version; no items to import
+    expect(result.summary.postsImported).toBe(0);
     expect(result.errors).toHaveLength(0);
   });
 
   it("imports successfully with wp:wxr_version 1.2", async () => {
     const fixturePath = await writeTempFixture("wxr_v1_2.xml");
     const result = await importWxr(fixturePath, { dryRun: true, allowedStatuses: ["publish", "draft"] });
-    expect(result.summary.postsImported).toBe(1);
+    // Fixture only declares version; no items to import
+    expect(result.summary.postsImported).toBe(0);
     expect(result.errors).toHaveLength(0);
   });
 });

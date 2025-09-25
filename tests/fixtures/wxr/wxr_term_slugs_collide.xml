@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+>
+<channel>
+    <wp:category>
+        <wp:term_id>1</wp:term_id>
+        <wp:category_nicename>parent1</wp:category_nicename>
+        <wp:category_parent></wp:category_parent>
+        <wp:cat_name><![CDATA[Parent1]]></wp:cat_name>
+    </wp:category>
+    <wp:category>
+        <wp:term_id>2</wp:term_id>
+        <wp:category_nicename>parent2</wp:category_nicename>
+        <wp:category_parent></wp:category_parent>
+        <wp:cat_name><![CDATA[Parent2]]></wp:cat_name>
+    </wp:category>
+    <wp:category>
+        <wp:term_id>3</wp:term_id>
+        <wp:category_nicename>term</wp:category_nicename>
+        <wp:category_parent>parent1</wp:category_parent>
+        <wp:cat_name><![CDATA[Term]]></wp:cat_name>
+    </wp:category>
+    <wp:category>
+        <wp:term_id>4</wp:term_id>
+        <wp:category_nicename>term</wp:category_nicename>
+        <wp:category_parent>parent2</wp:category_parent>
+        <wp:cat_name><![CDATA[Term]]></wp:cat_name>
+    </wp:category>
+</channel>
+</rss>

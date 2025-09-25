@@ -12,6 +12,7 @@ import crypto from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import { expandShortcodes } from "@/lib/markdown";
 import { generateExcerpt } from "@/lib/excerpts/ExcerptService";
+import { validateAndProtectIframes, restoreProtectedIframes, defaultProviders } from "./iframe-allowlist";
 
 /**
  * Represents the structure of an <item> element in a WordPress WXR export file.
@@ -834,7 +835,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           dropBlockCode: !INCLUDE_BLOCK_CODE,
         });
 
-        const sanitized = sanitizeHtml(withSyntaxHighlighting);
+        const sanitized = sanitizeWithIframes(withSyntaxHighlighting);
         const finalHtml = rewriteMediaUrls(sanitized, result.mediaUrls);
 
         // Handle featured image
@@ -1059,7 +1060,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
                     parentId: parentInfo?.id ?? null,
                     path,
                     depth,
-                    bodyHtml: sanitizeHtml(c.content),
+                    bodyHtml: sanitizeWithIframes(c.content),
                     bodyMd: null,
                     status: "approved",
                     createdAt: c.date || null,
@@ -1299,3 +1300,17 @@ function choosePreferredImageUrl(anchorHref?: string, imgSrc?: string): string |
   // Fall back to whichever is available
   return a || i || undefined;
 }
+
+// --- iframe-safe sanitize wrapper (auto-injected) ---
+export function sanitizeWithIframes(rawHtml: string): string {
+  const { html: protectedHtml, placeholders } = validateAndProtectIframes(rawHtml, defaultProviders);
+  // First, drop all iframes during sanitize; we'll restore only validated ones next
+  const sanitized = sanitizeHtml(
+    // Temporarily replace tokens already, since our sanitize function allows iframes by default.
+    // We removed raw iframes earlier by tokenizing; now ensure sanitizer cannot reintroduce unsafe content.
+    protectedHtml.replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+  );
+  const restored = restoreProtectedIframes(sanitized, placeholders);
+  return restored;
+}
+// --- end iframe-safe sanitize wrapper ---

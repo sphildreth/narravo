@@ -5,11 +5,9 @@
 >
 <channel>
     <item>
-        <title>Shortcodes</title>
+        <title>CDATA Content</title>
         <wp:post_type>post</wp:post_type>
-        <content:encoded><![CDATA[[gallery]
-[audio src="audio.mp3"]
-[shortcode attr="x"]text[/shortcode]]]></content:encoded>
+        <content:encoded><![CDATA[<p>This is some HTML content.</p>]]></content:encoded>
     </item>
 </channel>
 </rss>

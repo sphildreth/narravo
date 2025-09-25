@@ -16,7 +16,8 @@ describe("Test helpers", () => {
       const content = await loadFixture("wxr_minimal.xml");
       expect(content).toBeDefined();
       expect(content).toContain("<?xml");
-      expect(content).toContain("Hello World");
+      // Fixture has 'Hello world!' with lowercase 'world' and an exclamation
+      expect(content).toContain("Hello world!");
     });
 
     it("should throw helpful error for missing fixture", async () => {

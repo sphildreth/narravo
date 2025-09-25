@@ -1,21 +1,38 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0"
-    xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
+    xmlns:wp="http://wordpress.org/export/1.2/"
     xmlns:content="http://purl.org/rss/1.0/modules/content/"
-    xmlns:wfw="http://wellformedweb.org/CommentAPI/"
-    xmlns:dc="http://purl.org/dc/elements/1.1/"
-    xmlns:wp="http://wordpress.org/export/1.2/">
+>
 <channel>
-    <title>WXR Test Blog</title>
-    <link>https://example.com</link>
-    <description>Fixture blog</description>
-    <pubDate>Tue, 23 Sep 2025 12:00:00 +0000</pubDate>
-    <language>en-US</language>
-    <wp:wxr_version>1.2</wp:wxr_version>
-    <wp:base_site_url>https://example.com</wp:base_site_url>
-    <wp:base_blog_url>https://example.com</wp:base_blog_url>
-<item><title>Draft Post</title><wp:post_id>20</wp:post_id><wp:post_type>post</wp:post_type><wp:status>draft</wp:status><wp:post_name>draft-post</wp:post_name></item>
-<item><title>Pending Post</title><wp:post_id>21</wp:post_id><wp:post_type>post</wp:post_type><wp:status>pending</wp:status><wp:post_name>pending-post</wp:post_name></item>
-<item><title>Future Post</title><wp:post_id>22</wp:post_id><wp:post_type>post</wp:post_type><wp:status>future</wp:status><wp:post_date>2030-01-01 00:00:00</wp:post_date><wp:post_name>future-post</wp:post_name></item>
+    <item>
+        <title>Publish Post</title>
+        <wp:post_type>post</wp:post_type>
+        <wp:status>publish</wp:status>
+        <content:encoded><![CDATA[This is a published post.]]></content:encoded>
+    </item>
+    <item>
+        <title>Draft Post</title>
+        <wp:post_type>post</wp:post_type>
+        <wp:status>draft</wp:status>
+        <content:encoded><![CDATA[This is a draft post.]]></content:encoded>
+    </item>
+    <item>
+        <title>Private Post</title>
+        <wp:post_type>post</wp:post_type>
+        <wp:status>private</wp:status>
+        <content:encoded><![CDATA[This is a private post.]]></content:encoded>
+    </item>
+    <item>
+        <title>Pending Post</title>
+        <wp:post_type>post</wp:post_type>
+        <wp:status>pending</wp:status>
+        <content:encoded><![CDATA[This is a pending post.]]></content:encoded>
+    </item>
+    <item>
+        <title>Future Post</title>
+        <wp:post_type>post</wp:post_type>
+        <wp:status>future</wp:status>
+        <content:encoded><![CDATA[This is a future post.]]></content:encoded>
+    </item>
 </channel>
 </rss>

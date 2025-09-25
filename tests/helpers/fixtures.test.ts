@@ -15,7 +15,8 @@ describe("Fixture Helper", () => {
     const content = loadFixture("wxr_minimal.xml");
     expect(content).toContain("<?xml version=");
     expect(content).toContain("<rss version=");
-    expect(content).toContain("Hello World");
+    // The sample fixture contains 'Hello world!' (lowercase 'world')
+    expect(content).toContain("Hello world!");
   });
 
   it("should provide helpful error with suggestions for typos", () => {

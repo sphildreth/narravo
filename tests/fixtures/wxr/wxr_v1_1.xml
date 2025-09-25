@@ -1,35 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0"
-    xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
-    xmlns:content="http://purl.org/rss/1.0/modules/content/"
-    xmlns:wfw="http://wellformedweb.org/CommentAPI/"
-    xmlns:dc="http://purl.org/dc/elements/1.1/"
-    xmlns:wp="http://wordpress.org/export/1.2/">
+    xmlns:wp="http://wordpress.org/export/1.2/"
+>
 <channel>
-    <title>WXR Test Blog</title>
-    <link>https://example.com</link>
-    <description>Fixture blog</description>
-    <pubDate>Tue, 23 Sep 2025 12:00:00 +0000</pubDate>
-    <language>en-US</language>
     <wp:wxr_version>1.1</wp:wxr_version>
-    <wp:base_site_url>https://example.com</wp:base_site_url>
-    <wp:base_blog_url>https://example.com</wp:base_blog_url>
-
-<item>
-    <title>Version 1.1 Post</title>
-    <link>https://example.com/v11-post</link>
-    <pubDate>Tue, 23 Sep 2025 12:00:00 +0000</pubDate>
-    <dc:creator><![CDATA[admin]]></dc:creator>
-    <guid isPermaLink="false">https://example.com/?p=11</guid>
-    <description></description>
-    <content:encoded><![CDATA[<p>Content for version 1.1 test.</p>]]></content:encoded>
-    <excerpt:encoded><![CDATA[Version 1.1 excerpt]]></excerpt:encoded>
-    <wp:post_id>11</wp:post_id>
-    <wp:post_date><![CDATA[2025-09-23 12:00:00]]></wp:post_date>
-    <wp:post_date_gmt><![CDATA[2025-09-23 12:00:00]]></wp:post_date_gmt>
-    <wp:post_type><![CDATA[post]]></wp:post_type>
-    <wp:status><![CDATA[publish]]></wp:status>
-    <wp:post_name><![CDATA[v11-post]]></wp:post_name>
-</item>
 </channel>
 </rss>

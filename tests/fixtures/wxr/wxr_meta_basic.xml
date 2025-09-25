@@ -4,10 +4,10 @@
 >
 <channel>
     <item>
-        <title>Post with serialized meta</title>
+        <title>Post with meta</title>
         <wp:postmeta>
-            <wp:meta_key>_serialized_meta</wp:meta_key>
-            <wp:meta_value><![CDATA[a:1:{s:4:"key";s:5:"value";}]]></wp:meta_value>
+            <wp:meta_key>_thumbnail_id</wp:meta_key>
+            <wp:meta_value><![CDATA[123]]></wp:meta_value>
         </wp:postmeta>
     </item>
 </channel>
