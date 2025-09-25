@@ -28,6 +28,13 @@ const mediaSrc = [
   s3Hostname,
 ].filter(Boolean).join(" ");
 
+// Domains allowed to be embedded in iframes (e.g., YouTube)
+const frameSrc = [
+  "'self'",
+  "https://*.youtube.com",
+  "https://*.youtube-nocookie.com",
+].join(" ");
+
 const connectSrc = [
   "'self'",
   s3Hostname,
@@ -57,6 +64,7 @@ const securityHeaders = [
       `style-src 'self' 'unsafe-inline';` +
       `img-src ${imgSrc};` +
       `media-src ${mediaSrc};` +
+      `frame-src ${frameSrc};` +
       `connect-src ${connectSrc};` +
       `font-src 'self';` +
       `object-src 'none';` +

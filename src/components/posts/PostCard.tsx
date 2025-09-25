@@ -1,9 +1,13 @@
+"use client";
 // SPDX-License-Identifier: Apache-2.0
 import Link from "next/link";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { useDateFormat } from "@/lib/dateFormat.client";
+import { formatDateSafe } from "@/lib/dateFormat";
 
 export default function PostCard({ post }: { post: any }) {
-  const date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : "";
+  const fmt = useDateFormat();
+  const date = formatDateSafe(post.publishedAt ?? null, fmt);
   return (
     <article className="card border border-border rounded-xl overflow-hidden bg-card shadow-soft">
       <div className="p-4">

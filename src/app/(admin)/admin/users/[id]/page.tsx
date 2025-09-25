@@ -2,6 +2,9 @@
 import { getUserDetails, getAdminVisibility } from "@/app/(admin)/admin/users/actions";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ConfigServiceImpl } from "@/lib/config";
+import { db } from "@/lib/db";
+import { formatDateSafe } from "@/lib/dateFormat";
 
 interface UserDetailPageProps {
   params: {
@@ -14,6 +17,8 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
     getUserDetails(params.id),
     getAdminVisibility(),
   ]);
+  // Server-side date format from configuration
+  const dateFormat = (await new ConfigServiceImpl({ db }).getString("VIEW.DATE-FORMAT")) ?? "MMMM d, yyyy";
   
   if (!user) {
     notFound();
@@ -123,7 +128,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                           {comment.status}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(comment.createdAt).toLocaleDateString()}
+                          {formatDateSafe(comment.createdAt, dateFormat)}
                         </span>
                       </div>
                     </div>

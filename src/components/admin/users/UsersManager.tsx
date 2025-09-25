@@ -4,6 +4,8 @@
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useDateFormat } from "@/lib/dateFormat.client";
+import { formatDateSafe } from "@/lib/dateFormat";
 import { 
   anonymizeUser, 
   exportUserData, 
@@ -35,6 +37,7 @@ interface UsersManagerProps {
 }
 
 export default function UsersManager({ initialData, filter, sort, page }: UsersManagerProps) {
+  const fmt = useDateFormat();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -490,7 +493,7 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
                           dangerouslySetInnerHTML={{ __html: comment.bodyHtml }}
                         />
                         <div className="text-xs text-gray-500 mt-1">
-                          {new Date(comment.createdAt).toLocaleDateString()}
+                          {formatDateSafe(comment.createdAt, fmt)}
                         </div>
                       </div>
                     ))}

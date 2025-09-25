@@ -56,6 +56,8 @@ async function main() {
   await service.setGlobal("VIEW.RESPECT-DNT", true, { type: "boolean", required: true });
   await service.setGlobal("RATE.VIEWS-PER-MINUTE", 120, { type: "integer", required: true });
   await service.setGlobal("VIEW.PUBLIC-SHOW-RENDER-BADGE", true, { type: "boolean", required: false });
+  // Date format (date-fns format) — default example renders 2025-04-25 as "April 25, 2025"
+  await service.setGlobal("VIEW.DATE-FORMAT", "MMMM d, yyyy", { type: "string", required: false });
 
   // About me
   await service.setGlobal("SITE.ABOUT-ME.ENABLED", false, { type: "boolean", required: true });

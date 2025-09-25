@@ -18,6 +18,7 @@ import Prose from "@/components/Prose";
 import { RenderTimeBadge } from "@/components/RenderTimeBadge";
 import { RUMCollector } from "@/components/RUMCollector";
 import { measureAsync, createServerTimingHeader } from "@/lib/performance";
+import { formatDateSafe } from "@/lib/dateFormat";
 
 type Props = {
   params: { slug: string };
@@ -76,9 +77,12 @@ export default async function PostPage({ params }: Props) {
     ])
   );
   
-  const date = post.publishedAt
-    ? new Date(post.publishedAt).toLocaleDateString()
-    : "";
+  // Use configured date format
+  // Note: This is a Server Component; DateFormatProvider context is for client side.
+  // For server rendering, read config directly with a safe default.
+  const configForDate = new ConfigServiceImpl({ db });
+  const df = (await configForDate.getString("VIEW.DATE-FORMAT")) ?? "MMMM d, yyyy";
+  const date = formatDateSafe(post.publishedAt ?? null, df);
 
   const { title: siteName, url: siteUrl } = getSiteMetadata();
   const jsonLd = generatePostJsonLd(post, siteUrl, siteName);

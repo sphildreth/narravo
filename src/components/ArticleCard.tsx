@@ -1,3 +1,4 @@
+"use client";
 // SPDX-License-Identifier: Apache-2.0
 
 /**
@@ -7,6 +8,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { useDateFormat } from "@/lib/dateFormat.client";
+import { formatDateSafe } from "@/lib/dateFormat";
 
 export type ArticleCardPost = {
   id: string;
@@ -21,7 +24,8 @@ export type ArticleCardPost = {
 };
 
 export default function ArticleCard({ post }: { post: ArticleCardPost }) {
-  const date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : null;
+  const fmt = useDateFormat();
+  const date = formatDateSafe(post.publishedAt ?? null, fmt) || null;
 
   // Format view count for display
   const formatViewCount = (count: number): string => {

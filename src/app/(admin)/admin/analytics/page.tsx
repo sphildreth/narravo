@@ -5,10 +5,12 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import Sparkline from "@/components/analytics/Sparkline";
 import Link from "next/link";
+import { formatDateSafe } from "@/lib/dateFormat";
 
 export default async function AnalyticsPage() {
   const config = new ConfigServiceImpl({ db });
   const sparklineDays = await config.getNumber("VIEW.ADMIN-SPARKLINE-DAYS") ?? 30;
+  const dateFormat = (await config.getString("VIEW.DATE-FORMAT")) ?? "MMMM d, yyyy";
 
   // Get recent posts
   const { items: posts } = await listPosts({ limit: 20, includeViews: true });
@@ -82,7 +84,7 @@ export default async function AnalyticsPage() {
                       <span>• {formatViewCount(post.viewsLastNDays)} recent</span>
                     )}
                     {post.publishedAt && (
-                      <span>• {new Date(post.publishedAt).toLocaleDateString()}</span>
+                      <span>• {formatDateSafe(post.publishedAt, dateFormat)}</span>
                     )}
                   </div>
                 </div>
