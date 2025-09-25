@@ -13,6 +13,18 @@
 .prose th, .prose td { @apply border border-border px-3 py-2 align-top; }
 .prose tbody tr:nth-child(odd) { background: color-mix(in oklab, var(--card) 95%, var(--fg) 5%); }
 
+/* List styles for post content */
+.prose ul { @apply list-disc pl-6 my-4; }
+.prose ol { @apply list-decimal pl-6 my-4; }
+.prose li { @apply my-1; }
+/* Marker color uses theme variable for light/dark */
+.prose li::marker { color: var(--muted); }
+/* Nested lists */
+.prose ul ul, .prose ul ol, .prose ol ul, .prose ol ol { @apply my-2 ml-6; }
+/* Paragraphs and blocks inside list items */
+.prose li > p { @apply my-2; }
+.prose li > :is(pre, table, blockquote) { @apply my-3; }
+
 /* Image alignment styles for TipTap editor */
 .prose figure.align-left { @apply text-left; }
 .prose figure.align-center { @apply text-center; }

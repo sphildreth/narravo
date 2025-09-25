@@ -390,11 +390,14 @@ function normalizeWpLists(html: string): string {
   let out = html;
 
   // Unwrap <p> that directly wraps <ul> or <ol>
-  out = out.replace(/<p>\s*(<(?:ul|ol)\b[^>]*>)/gi, "$1");
-  out = out.replace(/(<\/(?:ul|ol)>\s*)<\/p>/gi, "$1");
+  // Handle optional attributes on <p> and optional HTML comments between <p> and the list
+  // Example WP markup: <p class="has-text-color">\n<!-- wp:list --><ul>... </ul><!-- /wp:list -->\n</p>
+  out = out.replace(/<p\b[^>]*>\s*(?:<!--[\s\S]*?-->\s*)*(<(?:ul|ol)\b[^>]*>)/gi, "$1");
+  out = out.replace(/(<\/(?:ul|ol)>\s*(?:<!--[\s\S]*?-->\s*)*)<\/p>/gi, "$1");
 
   // Unwrap <p> inside list items: <li><p>text</p></li> -> <li>text</li>
-  out = out.replace(/<li>\s*<p>/gi, "<li>");
+  // Allow attributes on the inner <p>
+  out = out.replace(/<li>\s*<p\b[^>]*>/gi, "<li>");
   out = out.replace(/<\/p>\s*<\/li>/gi, "</li>");
 
   // Sometimes editors place lists inside blockquotes incorrectly wrapped
