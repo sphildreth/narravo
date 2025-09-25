@@ -872,7 +872,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         }
 
         if (!dryRun) {
-          await db.transaction(async (tx) => {
+          await db.transaction(async (tx: any) => {
             // Get or create author (cache by login/name)
             let authorId: string | undefined = authorCache.get(post.author);
             if (!authorId) {
@@ -989,8 +989,10 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               const existing = await tx.select({ id: comments.id, path: comments.path, depth: comments.depth })
                 .from(comments)
                 .where(eq(comments.postId, postId));
-              const existingPaths = new Set(existing.map(r => r.path));
-              const existingByPath = new Map(existing.map(r => [r.path, { id: r.id, depth: r.depth, path: r.path }]));
+              const existingPaths = new Set<string>(existing.map((r: any) => r.path as string));
+              const existingByPath = new Map<string, { id: string; depth: number; path: string }>(
+                existing.map((r: any) => [r.path as string, { id: r.id as string, depth: r.depth as number, path: r.path as string }])
+              );
 
               // Map original comment id -> inserted { id, path, depth }
               const insertedMap = new Map<string, { id: string; path: string; depth: number }>();
@@ -1015,7 +1017,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
                     else {
                       // If parent existed already, its path ends with the parent's original ID
                       // We can find by scanning existing paths for those that end with `.${parentId}` or equal to parentId
-                      const parentPath = Array.from(existingPaths).find(p => p === c.parentId || p.endsWith(`.${c.parentId}`));
+                      const parentPath = Array.from(existingPaths).find((p: string) => p === c.parentId || p.endsWith(`.${c.parentId}`));
                       if (parentPath) {
                         const e = existingByPath.get(parentPath);
                         if (e) parentInfo = e;

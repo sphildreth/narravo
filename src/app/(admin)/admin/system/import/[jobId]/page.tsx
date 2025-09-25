@@ -148,11 +148,11 @@ export default async function ImportJobDetailsPage({ params }: Props) {
           </h2>
           
           <div className="space-y-4">
-            {errors.map((error, index) => (
+            {errors.map((error: any, index: number) => (
               <div key={error.id} className="border border-red-200 rounded p-4 bg-red-50">
                 <div className="flex justify-between items-start mb-2">
                   <div className="font-medium text-red-800">
-                    {error.errorType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    {error.errorType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                   </div>
                   <div className="text-xs text-red-600">
                     {formatDate(error.createdAt)}

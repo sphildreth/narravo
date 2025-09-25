@@ -92,7 +92,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                 Recent Comments ({user.recentComments.length} of {user.commentsCount})
               </h2>
               <div className="space-y-4">
-                {user.recentComments.map((comment) => (
+                {user.recentComments.map((comment: any) => (
                   <div key={comment.id} className="border border-border rounded-md p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">

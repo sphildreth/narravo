@@ -20,11 +20,11 @@ describe("Test helpers", () => {
     });
 
     it("should throw helpful error for missing fixture", async () => {
-      await expect(loadFixture("wxr_nonexistent.xml")).rejects.toThrow(/Fixture not found/);
+      expect(() => loadFixture("wxr_nonexistent.xml")).toThrow(/Fixture not found/);
     });
 
     it("should suggest similar fixture names for typos", async () => {
-      await expect(loadFixture("wxr_minimal.xm")).rejects.toThrow(/Similar fixtures found/);
+      expect(() => loadFixture("wxr_minimal.xm")).toThrow(/Similar fixtures found/);
     });
   });
 

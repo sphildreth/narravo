@@ -9,6 +9,9 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import { unstable_cache as cache } from "next/cache";
 
+// This page reads DB-backed config and latest posts; ensure it's not pre-rendered at build time
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   const config = new ConfigServiceImpl({ db });
   const revalidateSeconds = await config.getNumber("PUBLIC.HOME.REVALIDATE-SECONDS");

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { MockInstance } from "vitest";
 import { importWxr } from "../../scripts/import-wxr";
 import { loadFixture } from "../helpers/fixtures";
 import path from "path";
@@ -12,7 +13,7 @@ vi.mock("@/lib/local-storage", () => ({ localStorageService: { putObject: vi.fn(
 
 describe("WXR: Versioning & Compatibility", () => {
   let tempDir: string;
-  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+  let consoleWarnSpy: MockInstance<Parameters<typeof console.warn>, ReturnType<typeof console.warn>>;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "wxr-test-"));

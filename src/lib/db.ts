@@ -4,30 +4,33 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { logSlowQuery } from "./performance";
 
-const url = process.env.DATABASE_URL!;
+const url = process.env.DATABASE_URL;
 
-// Create connection pool with query timing instrumentation
-export const pool = new Pool({ 
-  connectionString: url,
-  // Add query timing for performance monitoring
-  ...(process.env.NODE_ENV !== 'test' && {
-    // Only add instrumentation in non-test environments to avoid noise
-    query: (text: string, params?: any[], callback?: Function) => {
+let pool: any = null;
+if (url) {
+  pool = new Pool({ connectionString: url });
+  if (process.env.NODE_ENV !== "test") {
+    const originalQuery = pool.query.bind(pool);
+    pool.query = (text: string, params?: any[], callback?: Function) => {
       const start = performance.now();
-      
-      const originalQuery = pool.query.bind(pool);
-      const result = originalQuery(text, params, (err: any, result: any) => {
+      const res = originalQuery(text as any, params as any, (err: any, result: any) => {
         const duration = performance.now() - start;
-        logSlowQuery(text, duration);
-        
-        if (callback) {
-          callback(err, result);
-        }
+        try { logSlowQuery(text, duration); } catch {}
+        if (callback) callback(err, result);
       });
-      
-      return result;
-    }
-  })
-});
+      return res;
+    };
+  }
+}
 
-export const db = drizzle(pool);
+// When DATABASE_URL is missing, export a proxy that throws on use.
+const dbOrProxy: any = pool
+  ? drizzle(pool)
+  : new Proxy({}, {
+      get() {
+        throw new Error("Database is not configured (DATABASE_URL missing)");
+      }
+    });
+
+export { pool };
+export const db = dbOrProxy;

@@ -244,11 +244,17 @@ export class ConfigServiceImpl implements ConfigService {
   private async getTtlMinutes(): Promise<number> {
     const now = Date.now();
     if (now < this.ttlMinutesCache.nextRefreshAt) return this.ttlMinutesCache.value;
-    const v = await this.repo.getGlobalNumber(TTL_KEY);
-    let minutes = DEFAULT_TTL_MINUTES;
-    if (typeof v === "number" && Number.isFinite(v) && v >= 1 && v <= 1440) minutes = v;
-    this.ttlMinutesCache = { value: minutes, nextRefreshAt: now + 60_000 };
-    return minutes;
+    try {
+      const v = await this.repo.getGlobalNumber(TTL_KEY);
+      let minutes = DEFAULT_TTL_MINUTES;
+      if (typeof v === "number" && Number.isFinite(v) && v >= 1 && v <= 1440) minutes = v;
+      this.ttlMinutesCache = { value: minutes, nextRefreshAt: now + 60_000 };
+      return minutes;
+    } catch {
+      // If DB is unavailable, keep using the last known/default TTL and try again later
+      this.ttlMinutesCache = { value: this.ttlMinutesCache.value ?? DEFAULT_TTL_MINUTES, nextRefreshAt: now + 60_000 };
+      return this.ttlMinutesCache.value;
+    }
   }
 
   async get<T = unknown>(key: string, opts?: GetOptions): Promise<T | null> {
@@ -268,9 +274,14 @@ export class ConfigServiceImpl implements ConfigService {
       singleFlight(ck, () => this.readEffective<T>(k, u).then((v) => this.setCache(ck, v, ttlMs, swrMs)));
       return entry.value;
     }
-    const value = await singleFlight(ck, () => this.readEffective<T>(k, u));
-    this.setCache(ck, value, ttlMs, swrMs);
-    return value;
+    try {
+      const value = await singleFlight(ck, () => this.readEffective<T>(k, u));
+      this.setCache(ck, value, ttlMs, swrMs);
+      return value;
+    } catch {
+      // DB failure: return null to let callers decide default/fallback behavior.
+      return null as T | null;
+    }
   }
 
   async getString(key: string, opts?: GetOptions) {

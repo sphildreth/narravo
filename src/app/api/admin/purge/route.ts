@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
         preview.records = postsToDelete;
 
         if (postsToDelete.length > 0) {
-          const postIds = postsToDelete.map(p => p.id);
+          const postIds = postsToDelete.map((p: any) => p.id);
           
           // Check cascade effects (comments that would be affected)
           const commentsCount = await db
@@ -236,7 +236,7 @@ export async function POST(req: NextRequest) {
           .where(whereClause);
 
         recordsAffected = commentsToDelete.length;
-        preview.records = commentsToDelete.map(c => ({
+  preview.records = commentsToDelete.map((c: any) => ({
           id: c.id,
           postId: c.postId,
           excerpt: c.bodyHtml.substring(0, 100) + "...",

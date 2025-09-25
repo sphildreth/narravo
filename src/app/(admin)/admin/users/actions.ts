@@ -117,11 +117,11 @@ export async function getUsersWithFilters(
   const total = totalResult?.count ?? 0;
   
   // Get stats for each user
-  const userIds = items.map(u => u.id);
+  const userIds = items.map((u: any) => u.id);
   const userStats = await getUserStats(userIds);
   
   // Apply admin filter if specified
-  const usersWithStats = items.map(user => {
+  const usersWithStats = items.map((user: any) => {
     const stats = userStats[user.id] || { commentsCount: 0, reactionsCount: 0, recentComments: [] };
     const isAdmin = isEmailAdmin(user.email);
     
@@ -131,7 +131,7 @@ export async function getUsersWithFilters(
       isAdmin,
       ...stats,
     };
-  }).filter(user => {
+  }).filter((user: any) => {
     if (filter.isAdmin !== undefined) {
       return filter.isAdmin ? user.isAdmin : !user.isAdmin;
     }

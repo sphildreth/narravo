@@ -167,7 +167,7 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
   if (!currentDate) throw new Error("Invalid current date");
 
   try {
-    await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
       // Insert view event
       await tx.insert(postViewEvents).values({
         postId,
@@ -278,7 +278,7 @@ export async function getTrendingPosts({ days = 7, limit = 10 }: { days?: number
       .orderBy(desc(sum(postDailyViews.views)))
       .limit(limit);
 
-    return trendingPosts.map(post => ({
+  return trendingPosts.map((post: any) => ({
       id: post.id,
       slug: post.slug,
       title: post.title,
@@ -295,7 +295,7 @@ export async function getTrendingPosts({ days = 7, limit = 10 }: { days?: number
       .orderBy(desc(posts.viewsTotal))
       .limit(limit);
 
-    return rows.map(r => ({ id: r.id, slug: r.slug, title: r.title, totalViews: r.totalViews, viewsLastNDays: 0 }));
+  return rows.map((r: any) => ({ id: r.id, slug: r.slug, title: r.title, totalViews: r.totalViews, viewsLastNDays: 0 }));
   }
 }
 
@@ -393,9 +393,9 @@ export async function getPostSparkline(postId: string, days: number = 30): Promi
       .orderBy(postDailyViews.day);
 
     // Merge actual data with the template
-    const dataMap = new Map(viewData.map(item => [item.day, item.views]));
+  const dataMap = new Map<string, number>(viewData.map((item: any) => [item.day as string, Number(item.views)]));
 
-    return sparklineData.map(item => ({
+    return sparklineData.map((item: SparklineData) => ({
       ...item,
       views: dataMap.get(item.day) ?? 0,
     }));
@@ -463,7 +463,7 @@ export async function getSiteAnalyticsSummary({ days = 7, topN = 5 }: { days?: n
       .orderBy(desc(sum(postDailyViews.views)))
       .limit(topN);
 
-    topPosts = rows.map(r => ({
+    topPosts = rows.map((r: any) => ({
       id: r.id,
       slug: r.slug,
       title: r.title,
@@ -479,7 +479,7 @@ export async function getSiteAnalyticsSummary({ days = 7, topN = 5 }: { days?: n
       .where(sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`)
       .orderBy(desc(posts.viewsTotal))
       .limit(topN);
-    topPosts = rows.map(r => ({ id: r.id, slug: r.slug, title: r.title, totalViews: r.totalViews, viewsLastNDays: 0 }));
+  topPosts = rows.map((r: any) => ({ id: r.id, slug: r.slug, title: r.title, totalViews: r.totalViews, viewsLastNDays: 0 }));
   }
 
   return { totalViewsAllTime, viewsLastNDays, topPosts };

@@ -3,6 +3,9 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 
+// Avoid prerendering this page at build time since it depends on DB-backed config
+export const dynamic = "force-dynamic";
+
 export default async function DisclaimerPage() {
   const config = new ConfigServiceImpl({ db });
   const enabled = await config.getBoolean("SITE.DISCLAIMER.ENABLED");

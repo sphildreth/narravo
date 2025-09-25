@@ -7,31 +7,31 @@ const FIXTURE_DIR = process.env.FIXTURE_DIR || "./tests/fixtures/wxr";
  * Calculate Levenshtein distance between two strings
  */
 function levenshteinDistance(a: string, b: string): number {
-  const matrix: number[][] = [];
+  // Create (b.length + 1) x (a.length + 1) matrix filled with 0
+  const rows = b.length + 1;
+  const cols = a.length + 1;
+  const matrix: number[][] = Array.from({ length: rows }, () => Array<number>(cols).fill(0));
 
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
+  // Initialize first column and first row
+  for (let i = 0; i < rows; i++) matrix[i]![0] = i;
+  for (let j = 0; j < cols; j++) matrix[0]![j] = j;
 
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
+  // Populate matrix
+  for (let i = 1; i < rows; i++) {
+    for (let j = 1; j < cols; j++) {
       if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
+        matrix[i]![j] = matrix[i - 1]![j - 1]!;
       } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1, // substitution
-          matrix[i][j - 1] + 1,     // insertion
-          matrix[i - 1][j] + 1      // deletion
+        matrix[i]![j] = Math.min(
+          matrix[i - 1]![j - 1]! + 1, // substitution
+          matrix[i]![j - 1]! + 1,     // insertion
+          matrix[i - 1]![j]! + 1      // deletion
         );
       }
     }
   }
 
-  return matrix[b.length][a.length];
+  return matrix[rows - 1]![cols - 1]!;
 }
 
 /**
@@ -74,10 +74,11 @@ export function loadFixture(name: string): string {
       .map(({ fixture }) => fixture)
       .slice(0, 3); // Limit to top 3 suggestions
 
-    let errorMessage = `Error loading fixture: ${name} from ${fixturePath}`;
+  let errorMessage = `Fixture not found: ${name}\nError loading fixture: ${name} from ${fixturePath}`;
     
     if (suggestions.length > 0) {
       errorMessage += `\n\nDid you mean one of these?`;
+      errorMessage += `\nSimilar fixtures found:`;
       suggestions.forEach(suggestion => {
         errorMessage += `\n- ${suggestion}`;
       });

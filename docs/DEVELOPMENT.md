@@ -25,6 +25,12 @@ pnpm seed:posts         # Seed demo posts
 pnpm wxr:import path=./wxr/sample.wxr  # Import WordPress WXR file
 ```
 
+### CI and DB availability
+
+- Unit tests do not require a running database. They use in-memory fallbacks and avoid live connections.
+- The production build (pnpm build) succeeds even if the database is down. Pages that depend on DB are rendered dynamically at request time or fall back to safe defaults during build.
+- If DATABASE_URL is not set, any attempt to use the db object at runtime will throw a clear error. During build, DB-backed pages/components are gated to avoid crashing the build.
+
 ### Project Structure Patterns
 
 #### Page Routes (App Router)
