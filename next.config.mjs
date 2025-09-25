@@ -29,11 +29,8 @@ const mediaSrc = [
 ].filter(Boolean).join(" ");
 
 // Domains allowed to be embedded in iframes (e.g., YouTube)
-const frameSrc = [
-  "'self'",
-  "https://*.youtube.com",
-  "https://*.youtube-nocookie.com",
-].join(" ");
+import { FRAME_SRC_HOSTS } from "./src/lib/frame-src.mjs";
+const frameSrc = ["'self'", ...FRAME_SRC_HOSTS].join(" ");
 
 const connectSrc = [
   "'self'",

@@ -113,7 +113,8 @@ function isValidMetric(metric: any): metric is RUMMetric {
     typeof metric.value === 'number' &&
     metric.value >= 0 &&
     metric.value < 60000 && // Cap at 60 seconds to filter out invalid values
-    ['LCP', 'INP', 'CLS', 'TTFB', 'FCP'].includes(metric.name)
+    // Accept common Core Web Vitals; include FID for older browsers
+    ['LCP', 'INP', 'CLS', 'TTFB', 'FCP', 'FID'].includes(metric.name)
   );
 }
 

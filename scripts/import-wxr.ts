@@ -380,6 +380,153 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): strin
 }
 
 /**
+ * Replace any remaining remote image elements with a local placeholder image.
+ * Only images that were successfully downloaded (present in mediaUrlMap values)
+ * or are same-origin relative URLs are allowed to remain.
+ */
+function replaceRemoteImagesWithPlaceholder(html: string, mediaUrlMap: Map<string, string>): string {
+  if (!html) return html;
+
+  const PLACEHOLDER_SRC = "/images/image-cannot-be-downloaded.svg";
+  const allowedNewUrls = new Set<string>(Array.from(mediaUrlMap.values()));
+
+  const isAllowedImageUrl = (u: string): boolean => {
+    if (!u) return false;
+    // Allow same-origin relative URLs
+    if (u.startsWith('/')) return true;
+    // Allow any URL that we produced via download step
+    if (allowedNewUrls.has(u)) return true;
+    return false;
+  };
+
+  // Replace <picture> blocks if any contained image/source is remote
+  html = html.replace(/<picture\b[\s\S]*?<\/picture>/gi, (block) => {
+    // Any http(s) URL still present that isn't allowed?
+    const urls: string[] = [];
+    // src attributes
+    Array.from(block.matchAll(/\s(?:src|srcset)=["']([^"']+)["']/gi)).forEach((m) => {
+      if (m[1]) urls.push(m[1]);
+    });
+    // Extract potential URLs from srcset list
+    const expanded: string[] = [];
+    for (const entry of urls) {
+      if (entry.includes(',')) {
+        for (const p of entry.split(',')) {
+          const candidate = (p.trim().split(/\s+/)[0] ?? '').trim();
+          if (candidate) expanded.push(candidate);
+        }
+      } else {
+        expanded.push(entry);
+      }
+    }
+    const hasDisallowed = expanded.some((u) => isHttpUrl(u) && !isAllowedImageUrl(u));
+    if (hasDisallowed) {
+      return `<img class="image-placeholder" src="${PLACEHOLDER_SRC}" alt="Image cannot be downloaded" />`;
+    }
+    return block;
+  });
+
+  // Replace standalone <img ...>
+  html = html.replace(/<img\b[^>]*>/gi, (tag) => {
+    const sm = tag.match(/\ssrc=["']([^"']+)["']/i);
+    const src = sm?.[1] ?? "";
+    if (!src) return tag;
+    if (isHttpUrl(src) && !isAllowedImageUrl(src)) {
+      return `<img class="image-placeholder" src="${PLACEHOLDER_SRC}" alt="Image cannot be downloaded" />`;
+    }
+    // Also scrub remote srcset entries by removing the attribute entirely if any are disallowed
+    const srcsetMatch = tag.match(/\ssrcset=["']([^"']+)["']/i);
+    if (srcsetMatch?.[1]) {
+      const entries = srcsetMatch[1].split(',').map(s => (s.trim().split(/\s+/)[0] ?? '').trim()).filter(Boolean);
+      const disallowed = entries.some((u) => isHttpUrl(u) && !isAllowedImageUrl(u));
+      if (disallowed) {
+        // Drop srcset attribute
+        return tag.replace(/\s+srcset=["'][^"']+["']/i, '');
+      }
+    }
+    return tag;
+  });
+
+  return html;
+}
+
+/**
+ * Replace any remaining remote video elements with a local placeholder image.
+ * Any <video>, its <source> children, or poster attributes still pointing to a remote URL
+ * after rewriteMediaUrls must be replaced, unless their URL was remapped to a local one
+ * (present in mediaUrlMap values) or is already a same-origin relative URL.
+ *
+ * Policy: Never display a video from a remote domain. Only local (rewritten) URLs are allowed.
+ */
+export function replaceRemoteVideosWithPlaceholder(html: string, mediaUrlMap: Map<string, string>): string {
+  if (!html) return html;
+
+  const PLACEHOLDER_SRC = "/images/video-cannot-be-imported.svg";
+  const allowedNewUrls = new Set<string>(Array.from(mediaUrlMap.values()));
+  const allowedOldUrls = new Set<string>(Array.from(mediaUrlMap.keys()));
+
+  const isAllowedVideoUrl = (u: string): boolean => {
+    if (!u) return false;
+    // Allow same-origin relative URLs only
+    if (u.startsWith('/')) return true;
+    // Allow any URL that we produced via download step
+    if (allowedNewUrls.has(u)) return true;
+    return false;
+  };
+
+  // Strategy: Replace entire <video>...</video> blocks that reference any disallowed remote URL
+  html = html.replace(/<video\b[\s\S]*?<\/video>/gi, (block) => {
+    // Collect src/poster from the <video> tag
+    const videoTagMatch = block.match(/<video\b[^>]*>/i);
+    const openTag = videoTagMatch?.[0] ?? "";
+    const posterMatch = openTag.match(/\sposter=["']([^"']+)["']/i);
+    const srcMatch = openTag.match(/\ssrc=["']([^"']+)["']/i);
+    const poster = posterMatch?.[1] ?? "";
+    const src = srcMatch?.[1] ?? "";
+
+    // Collect <source src="...">
+    const sourceUrls: string[] = [];
+    Array.from(block.matchAll(/<source\b[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi)).forEach((m) => {
+      const url = m[1];
+      if (url) sourceUrls.push(url);
+    });
+
+    const candidates = [poster, src, ...sourceUrls].filter(Boolean);
+    const hasDisallowed = candidates.some((u) => {
+      if (!isHttpUrl(u)) return false; // relative URLs are fine
+      // If this URL is slated to be rewritten (present as an old URL key), allow it
+      if (allowedOldUrls.has(u)) return false;
+      // Else, only allow if it's already a local rewritten URL (should be rare if isHttpUrl)
+      return !isAllowedVideoUrl(u);
+    });
+    if (hasDisallowed) {
+      return `<img class="video-placeholder" src="${PLACEHOLDER_SRC}" alt="Video cannot be imported" />`;
+    }
+    return block;
+  });
+
+  // Also handle stray self-closing <video ... /> (edge case; uncommon in WP HTML)
+  html = html.replace(/<video\b[^>]*\/>/gi, (tag) => {
+    const posterMatch = tag.match(/\sposter=["']([^"']+)["']/i);
+    const srcMatch = tag.match(/\ssrc=["']([^"']+)["']/i);
+    const poster = posterMatch?.[1] ?? "";
+    const src = srcMatch?.[1] ?? "";
+    const candidates = [poster, src].filter(Boolean);
+    const hasDisallowed = candidates.some((u) => {
+      if (!isHttpUrl(u)) return false;
+      if (allowedOldUrls.has(u)) return false;
+      return !isAllowedVideoUrl(u);
+    });
+    if (hasDisallowed) {
+      return `<img class="video-placeholder" src="${PLACEHOLDER_SRC}" alt="Video cannot be imported" />`;
+    }
+    return tag;
+  });
+
+  return html;
+}
+
+/**
  * Normalizes common WordPress list markup issues (e.g., `<p>` tags wrapping lists)
  * before HTML sanitization.
  * @param html The raw HTML from WordPress.
@@ -463,7 +610,7 @@ function generateSlugWithFallback(baseSlug: string, existingSlugs: Set<string>):
  * @returns True if the string starts with "http://" or "https://".
  */
 function isHttpUrl(u: string): boolean {
-  return u.startsWith("http://") || u.startsWith("https://");
+  return u.startsWith("http://") || u.startsWith("https://") || u.startsWith("//");
 }
 
 /**
@@ -548,6 +695,31 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
   }
 
   return urls;
+}
+
+/**
+ * Extract the first image candidate (anchor href preferred over img src) and alt text from raw HTML.
+ */
+function extractFirstImageFromHtml(html: string): { url: string; alt?: string } | null {
+  if (!html) return null;
+  // Anchor-wrapped image preferred
+  const anchorImgRe = /<a[^>]*href=["']([^"']+)["'][^>]*>\s*<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>\s*<\/a>/i;
+  const imgRe = /<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>/i;
+  const m = anchorImgRe.exec(html);
+  if (m) {
+    const href = m[1] ?? "";
+    const imgSrc = m[2] ?? "";
+    const alt = (m[3] ?? "").trim();
+    const preferred = choosePreferredImageUrl(href, imgSrc);
+    if (preferred) return { url: preferred, alt };
+  }
+  const im = imgRe.exec(html);
+  if (im) {
+    const url = im[1] ?? "";
+    const alt = (im[2] ?? "").trim();
+    if (url) return { url, alt };
+  }
+  return null;
 }
 
 /**
@@ -825,11 +997,14 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     for (const post of postItems) {
       try {
-        // Prepare HTML: expand shortcodes, normalize lists, transform syntax highlighting, sanitize, then rewrite media URLs
+  // Prepare HTML: expand shortcodes, normalize lists, transform syntax highlighting, sanitize, then rewrite media URLs
         const expanded = processedPostContent.get(post.importedSystemId) || "";
         const withIframes = transformIframeVideos(expanded);
         const normalized = normalizeWpLists(withIframes);
         const withSyntaxHighlighting = transformSyntaxHighlighting(normalized);
+
+  // Determine a featured image fallback from raw content BEFORE placeholders/sanitization
+  const rawFeatured = extractFirstImageFromHtml(expanded);
 
         // Compute excerpt BEFORE sanitize to preserve <!--more--> markers if any
         const computedExcerpt = generateExcerpt(withSyntaxHighlighting, {
@@ -838,41 +1013,34 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           dropBlockCode: !INCLUDE_BLOCK_CODE,
         });
 
-        const sanitized = sanitizeWithIframes(withSyntaxHighlighting);
-        const finalHtml = rewriteMediaUrls(sanitized, result.mediaUrls);
+  const sanitized = sanitizeWithIframes(withSyntaxHighlighting);
+  const rewritten = rewriteMediaUrls(sanitized, result.mediaUrls);
+  const withImagePlaceholders = replaceRemoteImagesWithPlaceholder(rewritten, result.mediaUrls);
+  const finalHtml = replaceRemoteVideosWithPlaceholder(withImagePlaceholders, result.mediaUrls);
 
         // Handle featured image
         let featuredImageUrl: string | undefined;
         let featuredImageAlt: string | undefined = undefined;
         if (post.featuredImageId && attachmentIdToUrl.has(post.featuredImageId)) {
           const originalUrl = attachmentIdToUrl.get(post.featuredImageId)!;
-          featuredImageUrl = result.mediaUrls.get(originalUrl) || originalUrl;
+          // Only accept downloaded/mapped URL; never keep a remote original
+          const mapped = result.mediaUrls.get(originalUrl);
+          featuredImageUrl = mapped || undefined;
         }
 
-        // Fallback: if no featuredImageUrl resolved via attachment meta, pick first image in content
-        if (!featuredImageUrl) {
-          // Prefer an anchor-wrapped image's href if it looks like an image; else use the img src
-            const anchorImgRe = /<a[^>]*href=["\']([^"\']+)["'][^>]*>\s*<img[^>]*src=["\']([^"\']+)["'][^>]*alt=["\']([^"\']*)["'][^>]*>\s*<\/a>/i;
-            const imgRe = /<img[^>]*src=["\']([^"\']+)["'][^>]*alt=["\']([^"\']*)["'][^>]*>/i;
-            const m = anchorImgRe.exec(finalHtml);
-            if (m) {
-              const href = m[1] ?? "";
-              const imgSrc = m[2] ?? "";
-              const alt = m[3];
-              featuredImageUrl = choosePreferredImageUrl(href, imgSrc);
-              if (alt && alt.trim().length > 0) featuredImageAlt = alt.trim();
-            } else {
-              const im = imgRe.exec(finalHtml);
-              if (im) {
-                featuredImageUrl = im[1];
-                const alt = im[2];
-                if (alt && alt.trim().length > 0) featuredImageAlt = alt.trim();
-              }
-            }
-            // As a last resort, use post title if alt still empty
-            if (!featuredImageAlt && featuredImageUrl) {
-              featuredImageAlt = post.title;
-            }
+        // Fallback: if no featuredImageUrl resolved via attachment meta, pick first image from RAW (pre-sanitize) content
+        if (!featuredImageUrl && rawFeatured) {
+          const candidate = rawFeatured.url;
+          const allowed = !isHttpUrl(candidate) || Array.from(result.mediaUrls.values()).includes(candidate) || skipMedia;
+          if (candidate && allowed) {
+            featuredImageUrl = candidate;
+            featuredImageAlt = rawFeatured.alt && rawFeatured.alt.length > 0 ? rawFeatured.alt : post.title;
+          }
+        }
+
+        // Guard against placeholder-derived alt leaking into featured alt
+        if (featuredImageAlt === 'Image cannot be downloaded') {
+          featuredImageAlt = rawFeatured?.alt && rawFeatured.alt.length > 0 ? rawFeatured.alt : post.title;
         }
 
         if (!dryRun) {
@@ -964,7 +1132,6 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
             const postId = insertedPost?.[0]?.id;
             if (!postId) throw new Error("Failed to upsert post");
-
             // Refresh post-tags: replace associations
             await tx.delete(postTags).where(eq(postTags.postId, postId));
             for (const tagId of tagIds) {
@@ -1254,7 +1421,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
  * @param html The HTML content to transform.
  * @returns The transformed HTML.
  */
-function transformIframeVideos(html: string): string {
+export function transformIframeVideos(html: string): string {
   if (!html) return html;
   return html.replace(/<iframe([^>]*)>\s*<\/iframe>/gi, (m, attrs) => {
     const srcMatch = attrs.match(/\ssrc=["\']([^"\']+)["']/i);
@@ -1265,7 +1432,7 @@ function transformIframeVideos(html: string): string {
       const host = u.hostname.toLowerCase();
       const isYouTube = /(^|\.)youtube\.com$/.test(host) || /(^|\.)youtu\.be$/.test(host) || /(^|\.)youtube-nocookie\.com$/.test(host);
       if (isYouTube) {
-        // Keep YouTube iframe as-is so it plays from YouTube directly
+        // Keep YouTube iframe as-is so it plays from YouTube directly (allowed by frameSrc/providers)
         return m;
       }
       const ext = getExtensionFromUrl(src);
@@ -1274,8 +1441,8 @@ function transformIframeVideos(html: string): string {
         const escaped = src.replace(/"/g, "&quot;");
         return `<video controls preload="metadata" src="${escaped}"></video>`;
       }
-      // Not a direct video file; leave as-is (sanitizer may drop non-YouTube iframes)
-      return m;
+      // Not a direct video file and not an allowed provider: replace with placeholder
+      return `<img class="video-placeholder" src="/images/video-cannot-be-imported.svg" alt="Video cannot be imported" />`;
     } catch {
       return m;
     }

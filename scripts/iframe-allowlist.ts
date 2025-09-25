@@ -34,29 +34,51 @@ const DEFAULT_IFRAME_ATTRS = [
   "referrerpolicy", "loading", "title"
 ];
 
-// Safe default providers; consumers can replace or extend this list.
-// NOTE: Only YouTube is enabled by default to match a conservative posture.
-// Add others as needed in your app config.
-export const defaultProviders: IframeProvider[] = [
-  {
-    name: "YouTube",
-    hostPatterns: [/^((www|m)\.)?youtube\.com$/, /^((www|m)\.)?youtube-nocookie\.com$/],
-    pathPattern: /^\/embed\/[A-Za-z0-9_-]+$/,
-    allowedAttrs: [...DEFAULT_IFRAME_ATTRS],
-    httpsOnly: true,
-    extraValidate: (url) => {
-      // Require /embed/<id> and no query params that look suspicious
-      // Allow modestbranding, rel, start, end, autoplay, controls, mute
-      const okParams = new Set([
-        "autoplay","controls","mute","start","end","rel","modestbranding","iv_load_policy","playsinline","loop","playlist"
-      ]);
-      for (const key of url.searchParams.keys()) {
-        if (!okParams.has(key)) return false;
-      }
-      return true;
+import { FRAME_SRC_HOSTS } from "@/lib/frame-src";
+
+// Safe default providers derived from FRAME_SRC_HOSTS; extend per-host rules as needed.
+const providerFromHost = (pattern: string): IframeProvider | null => {
+  // Normalize simple wildcard hosts to regex
+  // Supports forms like https://*.youtube.com
+  try {
+    const host = pattern.replace(/^https?:\/\//, "");
+    const star = host.startsWith("*.");
+    const bare = star ? host.slice(2) : host;
+    const escaped = bare.replace(/\./g, "\\.");
+    const re = star ? new RegExp(`^(?:[a-z0-9-]+\\.)?${escaped}$`) : new RegExp(`^${escaped}$`);
+    if (/youtube/.test(bare)) {
+      return {
+        name: "YouTube",
+        hostPatterns: [re],
+        pathPattern: /^\/embed\/[A-Za-z0-9_-]+$/,
+        allowedAttrs: [...DEFAULT_IFRAME_ATTRS],
+        httpsOnly: true,
+        extraValidate: (url) => {
+          const okParams = new Set([
+            "autoplay","controls","mute","start","end","rel","modestbranding","iv_load_policy","playsinline","loop","playlist"
+          ]);
+          for (const key of url.searchParams.keys()) {
+            if (!okParams.has(key)) return false;
+          }
+          return true;
+        }
+      } satisfies IframeProvider;
     }
+    // Unknown host patterns: allow only strict https src with minimal attrs (conservative default)
+    return {
+      name: `Host:${bare}`,
+      hostPatterns: [re],
+      allowedAttrs: [...DEFAULT_IFRAME_ATTRS],
+      httpsOnly: true,
+    } satisfies IframeProvider;
+  } catch {
+    return null;
   }
-];
+};
+
+export const defaultProviders: IframeProvider[] = FRAME_SRC_HOSTS
+  .map(providerFromHost)
+  .filter((p): p is IframeProvider => !!p);
 
 // ---- Internal helpers ----
 
