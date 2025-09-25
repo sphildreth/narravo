@@ -10,16 +10,37 @@ let pool: any = null;
 if (url) {
   pool = new Pool({ connectionString: url });
   if (process.env.NODE_ENV !== "test") {
-    const originalQuery = pool.query.bind(pool);
-    pool.query = (text: string, params?: any[], callback?: Function) => {
-      const start = performance.now();
-      const res = originalQuery(text as any, params as any, (err: any, result: any) => {
-        const duration = performance.now() - start;
-        try { logSlowQuery(text, duration); } catch {}
-        if (callback) callback(err, result);
+    const originalQuery: typeof pool.query = pool.query.bind(pool);
+    // Preserve pg's overloads: (text), (text, values), (text, cb), (text, values, cb)
+    pool.query = ((text: any, params?: any, callback?: any) => {
+      const start = typeof performance !== "undefined" && (performance as any).now ? (performance as any).now() : Date.now();
+
+      // Support (text, cb) signature
+      if (typeof params === "function") {
+        callback = params;
+        params = undefined;
+      }
+
+      if (typeof callback === "function") {
+        // Callback style: call original with callback and log timing
+        return (originalQuery as any)(text, params, (err: any, result: any) => {
+          const end = typeof performance !== "undefined" && (performance as any).now ? (performance as any).now() : Date.now();
+          try { logSlowQuery(text, end - start); } catch {}
+          callback(err, result);
+        });
+      }
+
+      // Promise style: do not pass a callback so pg returns a Promise<QueryResult>
+      const promise: Promise<any> = params !== undefined
+        ? (originalQuery as any)(text, params)
+        : (originalQuery as any)(text);
+
+      return promise.then((result) => {
+        const end = typeof performance !== "undefined" && (performance as any).now ? (performance as any).now() : Date.now();
+        try { logSlowQuery(text, end - start); } catch {}
+        return result;
       });
-      return res;
-    };
+    }) as typeof pool.query;
   }
 }
 
