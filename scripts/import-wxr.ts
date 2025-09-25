@@ -321,6 +321,10 @@ async function downloadMedia(
       throw new Error(`Host ${hostname} not in allowlist`);
     }
 
+    if (verbose) {
+      console.log(`📥 Downloading media: ${url}`);
+    }
+
     // Download file
     const response = await fetch(url, {
       headers: {
@@ -342,17 +346,31 @@ async function downloadMedia(
     // Upload to S3 or local storage
     const contentType = response.headers.get('content-type') || guessContentType(url);
     
+    if (verbose) {
+      console.log(`💾 Uploading ${buffer.length} bytes as ${key} (${contentType})`);
+    }
+    
     if (s3Service) {
       await s3Service.putObject(key, buffer, contentType);
-      return s3Service.getPublicUrl(key);
+      const publicUrl = s3Service.getPublicUrl(key);
+      if (verbose) {
+        console.log(`✅ Successfully uploaded to S3: ${url} -> ${publicUrl}`);
+      }
+      return publicUrl;
     } else if (localService) {
       await localService.putObject(key, buffer, contentType);
-      return localService.getPublicUrl(key);
+      const publicUrl = localService.getPublicUrl(key);
+      if (verbose) {
+        console.log(`✅ Successfully uploaded to local storage: ${url} -> ${publicUrl}`);
+      }
+      return publicUrl;
     }
     
     return null;
   } catch (error) {
     if (verbose) {
+      console.error(`❌ Failed to download media ${url}:`, error);
+    } else {
       console.warn(`Skipping media ${url}:`, error);
     }
     return null;
@@ -363,38 +381,184 @@ async function downloadMedia(
  * Rewrites all occurrences of old media URLs in an HTML string with their new URLs.
  * @param html The HTML content to process.
  * @param mediaUrlMap A map of old URLs to new URLs.
+ * @param verbose Whether to log rewriting operations.
  * @returns The HTML content with rewritten URLs.
  */
-function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): string {
+function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbose: boolean = false): string {
   let rewritten = html;
+  let replacementCount = 0;
   
-  // First, handle exact URL matches (the traditional approach)
-  for (const [oldUrl, newUrl] of mediaUrlMap) {
-    // Replace any occurrence (src, href, srcset, poster, CSS url())
-    rewritten = rewritten.replace(
-      new RegExp(escapeRegExp(oldUrl), 'g'),
-      newUrl
-    );
+  if (verbose) {
+    console.log(`🔄 Rewriting media URLs in HTML content (${html.length} characters, ${mediaUrlMap.size} mappings available)`);
   }
   
-  // Second, handle WordPress dimension URLs
-  // For each dimensioned URL in the content, check if we have the original (non-dimensioned) version downloaded
+  // Create a comprehensive URL replacement function that handles both exact matches and WordPress dimensions
+  const replaceUrl = (url: string): string | null => {
+    // First, try exact match
+    if (mediaUrlMap.has(url)) {
+      return mediaUrlMap.get(url)!;
+    }
+    
+    // Second, if this looks like a WordPress dimensioned URL, try the original
+    if (isHttpUrl(url)) {
+      const originalUrl = removeWordPressDimensions(url);
+      if (originalUrl !== url && mediaUrlMap.has(originalUrl)) {
+        return mediaUrlMap.get(originalUrl)!;
+      }
+    }
+    
+    // Third, try protocol variations (http vs https)
+    if (isHttpUrl(url)) {
+      const alternateProtocolUrl = url.startsWith('https://') ? 
+        url.replace('https://', 'http://') : 
+        url.replace('http://', 'https://');
+      
+      // Try alternate protocol exact match
+      if (mediaUrlMap.has(alternateProtocolUrl)) {
+        return mediaUrlMap.get(alternateProtocolUrl)!;
+      }
+      
+      // Try alternate protocol with dimension removal
+      const alternateOriginalUrl = removeWordPressDimensions(alternateProtocolUrl);
+      if (alternateOriginalUrl !== alternateProtocolUrl && mediaUrlMap.has(alternateOriginalUrl)) {
+        return mediaUrlMap.get(alternateOriginalUrl)!;
+      }
+    }
+    
+    return null;
+  };
+  
+  // Handle WordPress shortcodes FIRST (before they get expanded)
+  const videoShortcodeRe = /\[video([^\]]*)\](?:\s*\[\/video\])?/gi;
+  rewritten = rewritten.replace(videoShortcodeRe, (match, attrStr) => {
+    let newMatch = match;
+    let shortcodeChanged = false;
+    
+    // Extract attributes from shortcode
+    const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
+    let attrMatch: RegExpExecArray | null;
+    
+    while ((attrMatch = attrRe.exec(attrStr))) {
+      const key = attrMatch[1];
+      let value = attrMatch[2];
+      
+      if (!key || !value) continue;
+      
+      // Remove quotes if present
+      const originalValue = value;
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      
+      // Check if this is a media attribute and if we need to replace the URL
+      const mediaAttributes = ['mp4', 'webm', 'ogv', 'ogg', 'poster'];
+      if (mediaAttributes.includes(key.toLowerCase()) && isHttpUrl(value)) {
+        const newUrl = replaceUrl(value);
+        if (newUrl) {
+          // Replace the URL in the shortcode, preserving the original quote style
+          const quote = originalValue.startsWith('"') ? '"' : originalValue.startsWith("'") ? "'" : '';
+          const newAttr = `${key}=${quote}${newUrl}${quote}`;
+          const oldAttr = `${key}=${originalValue}`;
+          newMatch = newMatch.replace(oldAttr, newAttr);
+          shortcodeChanged = true;
+          replacementCount++;
+          
+          if (verbose) {
+            const isWordPress = removeWordPressDimensions(value) !== value;
+            console.log(`🎬 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in video shortcode [${key}]: ${value} -> ${newUrl}`);
+          }
+        }
+      }
+    }
+    
+    return newMatch;
+  });
+  
+  // Handle audio shortcodes
+  const audioShortcodeRe = /\[audio([^\]]*)\](?:\s*\[\/audio\])?/gi;
+  rewritten = rewritten.replace(audioShortcodeRe, (match, attrStr) => {
+    let newMatch = match;
+    
+    const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
+    let attrMatch: RegExpExecArray | null;
+    
+    while ((attrMatch = attrRe.exec(attrStr))) {
+      const key = attrMatch[1];
+      let value = attrMatch[2];
+      
+      if (!key || !value) continue;
+      
+      const originalValue = value;
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      
+      const mediaAttributes = ['mp3', 'ogg', 'wav', 'src'];
+      if (mediaAttributes.includes(key.toLowerCase()) && isHttpUrl(value)) {
+        const newUrl = replaceUrl(value);
+        if (newUrl) {
+          const quote = originalValue.startsWith('"') ? '"' : originalValue.startsWith("'") ? "'" : '';
+          const newAttr = `${key}=${quote}${newUrl}${quote}`;
+          const oldAttr = `${key}=${originalValue}`;
+          newMatch = newMatch.replace(oldAttr, newAttr);
+          replacementCount++;
+          
+          if (verbose) {
+            const isWordPress = removeWordPressDimensions(value) !== value;
+            console.log(`🎵 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in audio shortcode [${key}]: ${value} -> ${newUrl}`);
+          }
+        }
+      }
+    }
+    
+    return newMatch;
+  });
+  
+  // Replace URLs in all common HTML attributes using a comprehensive approach
+  const attributePatterns = [
+    // img src, data-src, poster
+    { pattern: /<img\b([^>]*\s(?:src|data-src)=["']([^"']+)["'][^>]*)>/gi, group: 2 },
+    // video src, poster
+    { pattern: /<video\b([^>]*\s(?:src|poster)=["']([^"']+)["'][^>]*)>/gi, group: 2 },
+    // source src
+    { pattern: /<source\b([^>]*\ssrc=["']([^"']+)["'][^>]*)>/gi, group: 2 },
+    // anchor href
+    { pattern: /<a\b([^>]*\shref=["']([^"']+)["'][^>]*)>/gi, group: 2 },
+  ];
+  
+  for (const { pattern, group } of attributePatterns) {
+    let match: RegExpExecArray | null;
+    const regex = new RegExp(pattern.source, pattern.flags);
+    
+    rewritten = rewritten.replace(regex, (fullMatch, ...groups) => {
+      const url = groups[group - 1]; // group is 1-based, groups array is 0-based
+      if (!url || !isHttpUrl(url)) return fullMatch;
+      
+      const newUrl = replaceUrl(url);
+      if (newUrl) {
+        if (verbose) {
+          const isWordPress = removeWordPressDimensions(url) !== url;
+          console.log(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL: ${url} -> ${newUrl}`);
+        }
+        replacementCount++;
+        return fullMatch.replace(url, newUrl);
+      }
+      
+      return fullMatch;
+    });
+  }
+  
+  // Handle special case: img tags with both src and dimensions that need width/height preservation
   const imgTagRe = /<img\b[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi;
   rewritten = rewritten.replace(imgTagRe, (match, src) => {
     if (!src || !isHttpUrl(src)) return match;
     
-    // Check if this looks like a WordPress dimensioned URL
+    // Check if this looks like a WordPress dimensioned URL that we've already replaced
     const originalUrl = removeWordPressDimensions(src);
     if (originalUrl !== src && mediaUrlMap.has(originalUrl)) {
-      // We have the original image downloaded, replace the dimensioned URL with local URL
-      // Also preserve the width/height attributes from the original img tag
-      const localUrl = mediaUrlMap.get(originalUrl)!;
-      
-      // Extract width/height attributes from the img tag if they exist
+      // Check if this img tag needs width/height attributes added from the URL dimensions
       const widthMatch = match.match(/\swidth=["']([^"']+)["']/i);
       const heightMatch = match.match(/\sheight=["']([^"']+)["']/i);
-      
-      let newMatch = match.replace(new RegExp(escapeRegExp(src), 'g'), localUrl);
       
       // If the img tag doesn't have width/height attributes, try to extract from WordPress dimensions
       if (!widthMatch || !heightMatch) {
@@ -403,55 +567,77 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): strin
           const width = dimensionMatch[1];
           const height = dimensionMatch[2];
           
+          let newMatch = match;
           if (!widthMatch && width) {
             newMatch = newMatch.replace('<img', `<img width="${width}"`);
+            if (verbose) {
+              console.log(`📐 Added width="${width}" to img tag`);
+            }
           }
           if (!heightMatch && height) {
             newMatch = newMatch.replace('<img', `<img height="${height}"`);
+            if (verbose) {
+              console.log(`📐 Added height="${height}" to img tag`);
+            }
           }
+          return newMatch;
         }
       }
-      
-      return newMatch;
     }
     
     return match;
   });
   
-  // Handle other attributes that might contain dimensioned URLs (srcset, href in anchors, etc.)
+  // Handle srcset attributes specifically (they can contain multiple URLs)
   const srcsetRe = /\ssrcset=["']([^"']+)["']/gi;
   rewritten = rewritten.replace(srcsetRe, (match, srcset) => {
     let newSrcset = srcset;
     const parts = srcset.split(',');
+    let srcsetChanged = false;
     
     for (let i = 0; i < parts.length; i++) {
       const urlPart = (parts[i].trim().split(/\s+/)[0] ?? "");
       if (urlPart && isHttpUrl(urlPart)) {
-        const originalUrl = removeWordPressDimensions(urlPart);
-        if (originalUrl !== urlPart && mediaUrlMap.has(originalUrl)) {
-          const localUrl = mediaUrlMap.get(originalUrl)!;
-          parts[i] = parts[i].replace(urlPart, localUrl);
+        const newUrl = replaceUrl(urlPart);
+        if (newUrl) {
+          parts[i] = parts[i].replace(urlPart, newUrl);
+          srcsetChanged = true;
+          if (verbose) {
+            const isWordPress = removeWordPressDimensions(urlPart) !== urlPart;
+            console.log(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in srcset: ${urlPart} -> ${newUrl}`);
+          }
+          replacementCount++;
         }
       }
     }
     
-    newSrcset = parts.join(',');
-    return match.replace(srcset, newSrcset);
-  });
-  
-  // Handle anchor href attributes
-  const anchorRe = /<a\b[^>]*\shref=["']([^"']+)["'][^>]*>/gi;
-  rewritten = rewritten.replace(anchorRe, (match, href) => {
-    if (!href || !isHttpUrl(href)) return match;
-    
-    const originalUrl = removeWordPressDimensions(href);
-    if (originalUrl !== href && mediaUrlMap.has(originalUrl)) {
-      const localUrl = mediaUrlMap.get(originalUrl)!;
-      return match.replace(new RegExp(escapeRegExp(href), 'g'), localUrl);
+    if (srcsetChanged) {
+      newSrcset = parts.join(',');
+      return match.replace(srcset, newSrcset);
     }
-    
     return match;
   });
+  
+  // Handle CSS url() in style attributes
+  const cssUrlRe = /url\((["']?)(https?:[^"')]+)\1\)/gi;
+  rewritten = rewritten.replace(cssUrlRe, (match, quote, url) => {
+    if (url && isHttpUrl(url)) {
+      const newUrl = replaceUrl(url);
+      if (newUrl) {
+        if (verbose) {
+          const isWordPress = removeWordPressDimensions(url) !== url;
+          console.log(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in CSS: ${url} -> ${newUrl}`);
+        }
+        replacementCount++;
+        return `url(${quote}${newUrl}${quote})`;
+      }
+    }
+    return match;
+  });
+  
+  if (verbose) {
+    console.log(`✅ URL rewriting completed. Total replacements: ${replacementCount}`);
+  }
   
   return rewritten;
 }
@@ -702,9 +888,10 @@ function isHttpUrl(u: string): boolean {
  * WordPress often generates URLs like "image-300x169.jpg" or "image-501x1024.png".
  * This function returns the original URL without those dimensions.
  * @param url The URL to process.
+ * @param verbose Whether to log dimension removal operations.
  * @returns The URL with WordPress dimension suffix removed.
  */
-function removeWordPressDimensions(url: string): string {
+function removeWordPressDimensions(url: string, verbose: boolean = false): string {
   if (!url) return url;
   
   // Match WordPress dimension patterns like -300x169, -1024x768, etc.
@@ -714,7 +901,12 @@ function removeWordPressDimensions(url: string): string {
   
   if (match) {
     // Remove the dimension part but keep the file extension
-    return url.replace(/-\d+x\d+(\.[a-zA-Z0-9]+)$/, '$1');
+    const originalUrl = url.replace(/-\d+x\d+(\.[a-zA-Z0-9]+)$/, '$1');
+    if (verbose) {
+      const dimensions = match[0].replace(/\.[a-zA-Z0-9]+$/, '').replace('-', '');
+      console.log(`🖼️  WordPress dimension removal: ${url} -> ${originalUrl} (removed: ${dimensions})`);
+    }
+    return originalUrl;
   }
   
   return url;
@@ -723,11 +915,16 @@ function removeWordPressDimensions(url: string): string {
 /**
  * Extracts all potential media URLs from an HTML string.
  * @param html The HTML content to scan.
+ * @param verbose Whether to log extraction details.
  * @returns A Set of unique media URLs found in the HTML.
  */
-function extractMediaUrlsFromHtml(html: string): Set<string> {
+function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<string> {
   const urls = new Set<string>();
   if (!html) return urls;
+
+  if (verbose) {
+    console.log(`🔍 Extracting media URLs from HTML content (${html.length} characters)`);
+  }
 
   // Helper to decide if an href should be considered a media asset
   const isLikelyMediaExtension = (url: string): boolean => {
@@ -754,8 +951,13 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
       const u = m?.[1] ?? "";
       if (u && isHttpUrl(u) && isLikelyMediaExtension(u)) {
         // Remove WordPress dimension suffixes to get original image URL
-        const originalUrl = removeWordPressDimensions(u);
+        const originalUrl = removeWordPressDimensions(u, verbose);
         urls.add(originalUrl);
+        if (verbose && originalUrl !== u) {
+          console.log(`📎 Found dimensioned image URL in src/data-src/poster: ${u}`);
+        } else if (verbose) {
+          console.log(`📎 Found media URL in src/data-src/poster: ${u}`);
+        }
       }
     }
   }
@@ -767,12 +969,18 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
     const raw = sm?.[1] ?? "";
     if (!raw) continue;
     const parts = raw.split(',');
+    if (verbose) {
+      console.log(`📎 Found srcset with ${parts.length} entries: ${raw.substring(0, 100)}${raw.length > 100 ? '...' : ''}`);
+    }
     for (const part of parts) {
       const urlPart = (part.trim().split(/\s+/)[0] ?? "");
       if (urlPart && isHttpUrl(urlPart)) {
         // Remove WordPress dimension suffixes to get original image URL
-        const originalUrl = removeWordPressDimensions(urlPart);
+        const originalUrl = removeWordPressDimensions(urlPart, verbose);
         urls.add(originalUrl);
+        if (verbose && originalUrl !== urlPart) {
+          console.log(`📎 Found dimensioned image URL in srcset: ${urlPart}`);
+        }
       }
     }
   }
@@ -784,6 +992,9 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
     const u = s?.[1] ?? "";
     if (u && isHttpUrl(u)) {
       urls.add(u);
+      if (verbose) {
+        console.log(`📎 Found media URL in source element: ${u}`);
+      }
     }
   }
 
@@ -794,8 +1005,11 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
     const u = c?.[2] ?? "";
     if (u && isLikelyMediaExtension(u)) {
       // Remove WordPress dimension suffixes to get original image URL
-      const originalUrl = removeWordPressDimensions(u);
+      const originalUrl = removeWordPressDimensions(u, verbose);
       urls.add(originalUrl);
+      if (verbose) {
+        console.log(`📎 Found media URL in CSS url(): ${u}`);
+      }
     }
   }
 
@@ -806,8 +1020,18 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
     const u = hm?.[1] ?? "";
     if (u && isHttpUrl(u) && isLikelyMediaExtension(u)) {
       // Remove WordPress dimension suffixes to get original image URL
-      const originalUrl = removeWordPressDimensions(u);
+      const originalUrl = removeWordPressDimensions(u, verbose);
       urls.add(originalUrl);
+      if (verbose) {
+        console.log(`📎 Found media URL in anchor href: ${u}`);
+      }
+    }
+  }
+
+  if (verbose) {
+    console.log(`✅ Extracted ${urls.size} unique media URLs from HTML`);
+    if (urls.size > 0) {
+      console.log(`   URLs found: ${Array.from(urls).join(', ')}`);
     }
   }
 
@@ -1076,12 +1300,21 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       for (const p of postItems) {
         const expandedHtml = expandShortcodes(p.html);
         processedPostContent.set(p.importedSystemId, expandedHtml);
-        for (const u of extractMediaUrlsFromHtml(expandedHtml)) {
+        if (verbose) {
+          console.log(`🔍 Processing post "${p.title}" for media URLs...`);
+        }
+        for (const u of extractMediaUrlsFromHtml(expandedHtml, verbose)) {
           allMedia.add(u);
         }
       }
 
       const medias = Array.from(allMedia);
+      if (verbose) {
+        console.log(`📊 Media processing summary:`);
+        console.log(`   - Found ${medias.length} unique media URLs across all posts`);
+        console.log(`   - Concurrency limit: ${concurrency}`);
+        console.log(`   - Allowed hosts: ${normalizedAllowedHosts.length > 0 ? normalizedAllowedHosts.join(', ') : 'all hosts'}`);
+      }
       if (verbose && medias.length) console.log(`📥 Downloading ${medias.length} media files (concurrency=${concurrency})...`);
 
       await runWithConcurrency(medias, concurrency, async (url) => {
@@ -1095,6 +1328,15 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         }
         return undefined as unknown as void;
       });
+      
+      if (verbose) {
+        const successCount = result.mediaUrls.size;
+        const failCount = medias.length - successCount;
+        console.log(`📊 Media download completed: ${successCount} succeeded, ${failCount} failed`);
+        if (successCount > 0) {
+          console.log(`   Successfully downloaded URLs: ${Array.from(result.mediaUrls.keys()).slice(0, 5).join(', ')}${result.mediaUrls.size > 5 ? ` ... and ${result.mediaUrls.size - 5} more` : ''}`);
+        }
+      }
     } else {
       // If skipping media, we still need to expand shortcodes for consistent processing in the main loop.
       if (verbose) console.log("🔍 Expanding shortcodes for all posts (media download skipped)...");
@@ -1131,7 +1373,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         });
 
   const sanitized = sanitizeWithIframes(withSyntaxHighlighting);
-  const rewritten = rewriteMediaUrls(sanitized, result.mediaUrls);
+  const rewritten = rewriteMediaUrls(sanitized, result.mediaUrls, verbose);
   const withImagePlaceholders = replaceRemoteImagesWithPlaceholder(rewritten, result.mediaUrls);
   const finalHtml = replaceRemoteVideosWithPlaceholder(withImagePlaceholders, result.mediaUrls);
 
