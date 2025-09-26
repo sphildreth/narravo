@@ -3,8 +3,9 @@
 # Narravo: A Modern Next.js Blog Engine 🚀
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19.1-61dafb?logo=react&logoColor=white)](https://react.dev/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-blue?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-blue?logo=drizzle&logoColor=white)](https://orm.drizzle.team/)
 [![Auth.js](https://img.shields.io/badge/Auth.js-blue?logo=next.js&logoColor=white)](https://authjs.dev/)
@@ -14,19 +15,20 @@ Narravo is a sleek, minimal, and feature-rich blog engine designed for developer
 
 ✨ **Key Features:**
 
-*   **Next.js 14 App Router:** Leverage Server Components, Server Actions, and advanced caching for optimal performance.
-*   **TypeScript:** Enjoy a fully typed codebase for enhanced reliability and developer experience.
-*   **Tailwind CSS:** Rapidly build beautiful, responsive UIs with a utility-first CSS framework.
-*   **PostgreSQL + Drizzle ORM:** A modern, type-safe ORM for seamless database interactions.
-*   **Auth.js (NextAuth):** Secure authentication with GitHub and Google OAuth providers out-of-the-box.
-*   **WordPress WXR Import:** Robustly import posts, comments, media, tags, and more from WordPress via the Admin UI or CLI.
-*   **Data Operations:** Complete backup/export, restore, and purge functionality with audit logging and confirmation flows.
-*   **Nested Comments & Reactions:** Engage your audience with threaded comments, attachments (image/video), and emoji-like reactions.
-*   **Admin Dashboard:** A powerful moderation queue to manage comments, attachments, and user content.
-*   **S3/R2 Media Uploads:** Scalable media storage with presigned URLs for AWS S3 or Cloudflare R2.
-*   **Config Service:** Centralized, database-backed configuration for dynamic feature and UX settings.
-*   **Dockerized Development:** Easy local setup with Docker Compose for PostgreSQL.
-*   **Comprehensive Testing:** Built with Vitest and Testing Library for robust code quality.
+*   **Next.js 15 App Router:** Server Components, Server Actions, ISR, and smart caching tuned for fast content delivery.
+*   **React 19 + TypeScript 5.9:** Strict typing, modern React patterns, and explicit null handling across the stack.
+*   **Tailwind CSS Design System:** Utility-first styling with theme tokens, dark mode, and Radix-powered primitives.
+*   **PostgreSQL + Drizzle ORM:** Type-safe queries, migrations, and transactions with first-class PostgreSQL support.
+*   **Auth.js (NextAuth):** GitHub/Google OAuth, admin allowlists, and session management ready to go.
+*   **Config Service & Feature Flags:** Database-backed settings power runtime toggles (themes, rate limits, UI modules).
+*   **WordPress WXR Import:** Resume-safe imports covering posts, media, redirects, excerpts, and CLI/admin workflows.
+*   **Data Operations Toolkit:** One-command backup/export, selective restore, purging, and manifest verification with audit logs.
+*   **Comments, Media & Reactions:** Threaded discussions, image/video uploads, emoji reactions, honeypot/rate-limited submissions.
+*   **Admin Control Center:** Moderation queue, system settings, analytics dashboards, and import/backups in one place.
+*   **S3/R2 Media Storage:** Presigned uploads with validation for AWS S3 or Cloudflare R2 plus local fallbacks.
+*   **Analytics & Observability:** Privacy-aware trending metrics, Core Web Vitals RUM pipeline, Server-Timing headers, and perf scripts.
+*   **Security Hardening:** CSP, HSTS, DOMPurify sanitization, hashed IP analytics, rate limits, and audit-friendly logging.
+*   **Dockerized Development & Testing:** Docker Compose Postgres, Vitest test suites, and perf/load tooling baked in.
 
 ---
 
@@ -48,8 +50,8 @@ pnpm install
 
 # 2) Configure environment variables
 cp .env.example .env
-# IMPORTANT: Ensure DATABASE_URL and NEXTAUTH_SECRET are set.
-# For local Docker, .env.example defaults usually work.
+# IMPORTANT: Ensure DATABASE_URL, NEXTAUTH_SECRET, ADMIN_EMAILS, and ANALYTICS_IP_SALT are set.
+# Adjust NEXTAUTH_URL and OAuth provider IDs as needed for your environment.
 
 # 3) Apply database schema (create tables)
 pnpm drizzle:push
@@ -66,6 +68,28 @@ pnpm dev
 ```
 
 > 💡 **Manual DB Setup:** If you prefer a manual PostgreSQL instance, update `DATABASE_URL` in your `.env` file and skip the `docker compose up -d db` step.
+
+---
+
+## 🚢 Deployment
+
+Narravo is designed for flexible deployment. You can host it on your own infrastructure using Docker or deploy it to a serverless platform like Vercel.
+
+*   **Option A: Docker Compose** - A single VM setup using Docker Compose to run the application and database. This is a good option for self-hosting.
+*   **Option B: Vercel + Neon** - A serverless setup using Vercel for the application and Neon for the database. This is a good option for a managed, scalable solution.
+
+For detailed deployment instructions, please refer to the [**Production Deployment Guide**](./deploy/README_DEPLOY.md).
+
+---
+
+## 🧱 Architecture Overview
+
+- **App Router Layout:** The `src/app` tree separates public routes (`(public)`), authentication (`(auth)`), and admin tooling (`(admin)`), leaning on React Server Components by default. Middleware injects route context and handles legacy redirect resolution at the edge.
+- **Domain Modules:** Business logic lives in `src/lib` with clear boundaries for posts, comments, reactions, imports, backups, rate limiting, analytics, and configuration. Server Actions validate input with Zod and revalidate cache tags after mutations.
+- **Data & Configuration:** Drizzle ORM drives the schema (`drizzle/schema.ts`) with migrations and transactions. A Config Service exposes database-backed feature flags (banner, theming, rate limits, render badges, etc.) to both server and client code.
+- **Engagement Pipeline:** Comments support nested threads, media attachments, moderation queues, and reaction toggles. Rate limiting, honeypots, media validation, and audit logging protect the workflow.
+- **Content Migration:** The WordPress importer coordinates resumable jobs, media rewriting, redirect creation, and excerpt rebuilding from either the Admin UI or CLI scripts.
+- **Observability:** Privacy-aware analytics aggregate daily view counts, power trending widgets, and surface dashboards. Real User Monitoring collects Core Web Vitals, while Server-Timing instrumentation and perf scripts keep regressions in check.
 
 ---
 
@@ -88,6 +112,10 @@ cp .env.example .env
 
 *   **OAuth:** `GITHUB_ID`, `GITHUB_SECRET`, `GOOGLE_ID`, `GOOGLE_SECRET`
 *   **Media Storage:** Configure either `S3_*` (AWS S3) or `R2_*` (Cloudflare R2) variables.
+*   **Analytics & Perf:**
+    * `ANALYTICS_IP_SALT` — salt used to hash IP addresses before persisting view events.
+    * `NEXT_PUBLIC_RUM_SAMPLING_RATE` / `RUM_SAMPLING_RATE` — client/server sampling (defaults to `0.1`).
+    * `PERF_LOG_SLOW_QUERIES` — enable verbose query timing in development/CI.
 
 ---
 
@@ -114,22 +142,48 @@ Narravo uses Drizzle ORM for type-safe database interactions and migrations.
 
 ---
 
-## 🛠️ Development Scripts
+## � Backups & Restore
+
+Narravo ships with first-class data lifecycle tooling powered by Drizzle and S3-compatible manifests.
+
+- **Full Backups:** `pnpm backup` creates a ZIP archive with JSON table exports, manifest hashes, and (optionally) media references.
+- **Selective Restore:** `pnpm restore -- <backup.zip> [--slugs slug-a,slug-b] [--start-date YYYY-MM-DD]` supports dry runs, slug/date filters, and skipping users/configuration.
+- **Media Awareness:** Manifests capture attachment URLs and hashes so you can verify remote assets before rehydration.
+- **Audit Friendly:** Both commands log counts, checksum data, and skip reasons to aid compliance reviews.
+
+```bash
+# Create a verbose backup without media payloads
+pnpm backup -- --skip-media --verbose
+
+# Preview restore scope for specific slugs before applying changes
+pnpm restore -- backups/blog-2025-09-01.zip --dry-run --slugs my-first-post,second-post
+```
+
+---
+
+## �🛠️ Development Scripts
 
 A quick reference for common development tasks:
 
-| Command                 | Description                                     |
-| :---------------------- | :---------------------------------------------- |
-| `pnpm dev`              | Start the Next.js development server            |
-| `pnpm build`            | Create a production-ready build                 |
-| `pnpm start`            | Start the production server                     |
-| `pnpm typecheck`        | Run TypeScript type checks                      |
-| `pnpm test`             | Execute the full test suite (Vitest)            |
-| `pnpm test:watch`       | Run tests in watch mode                         |
-| `pnpm drizzle:generate` | Generate new Drizzle migrations                 |
-| `pnpm drizzle:push`     | Apply schema changes to the database            |
-| `pnpm seed:config`      | Seed default configuration values               |
-| `pnpm seed:posts`       | Seed demo posts and comments                    |
+| Command                      | Description                                           |
+| :--------------------------- | :---------------------------------------------------- |
+| `pnpm dev`                   | Start the Next.js development server                  |
+| `pnpm build`                 | Create a production-ready build                       |
+| `pnpm start`                 | Start the production server                           |
+| `pnpm typecheck`             | Run TypeScript type checks                            |
+| `pnpm test`                  | Execute the full test suite (Vitest)                  |
+| `pnpm test:watch`            | Run tests in watch mode                               |
+| `pnpm drizzle:generate`      | Generate new Drizzle migrations                       |
+| `pnpm drizzle:push`          | Apply schema changes to the database                  |
+| `pnpm seed:config`           | Seed default configuration values                     |
+| `pnpm seed:posts`            | Seed demo posts and comments                          |
+| `pnpm wxr:import -- path=…`  | Launch the WordPress importer via CLI (supports flags) |
+| `pnpm backup`                | Create a manifested ZIP backup (see Backups section)   |
+| `pnpm restore -- <file>`     | Restore or dry run a backup archive                    |
+| `pnpm perf:benchmark`        | Run the combined performance benchmark suite           |
+| `pnpm perf:lighthouse`       | Execute Lighthouse CI checks                          |
+| `pnpm perf:loadtest`         | Run Autocannon smoke load testing                      |
+| `pnpm perf:weekly`           | Produce a weekly performance rollup report             |
 
 ---
 
@@ -183,6 +237,16 @@ pnpm wxr:import -- path=./export.xml --rebuild-excerpts --verbose
 
 ---
 
+## 📊 Analytics & Observability
+
+- **Trending & Dashboards:** View aggregation tables power the public "Trending Posts" widget and the `/admin/analytics` dashboard with sparklines, totals, and configurable date windows.
+- **Privacy-Aware Metrics:** View events dedupe by session/IP, respect bot filters, and hash IP addresses when `ANALYTICS_IP_SALT` is set.
+- **Real User Monitoring:** Drop `<RUMCollector />` into layouts to post Core Web Vitals to `/api/rum`. Control sampling with `NEXT_PUBLIC_RUM_SAMPLING_RATE` (client) and `RUM_SAMPLING_RATE` (server), both defaulting to 10%.
+- **Performance Instrumentation:** Middleware adds Server-Timing headers, and the config flag `VIEW.PUBLIC-SHOW-RENDER-BADGE` surfaces render times in the UI. Perf scripts (`perf:*`) automate Lighthouse, bundle analysis, and load testing—see [`docs/perf/README.md`](./docs/perf/README.md).
+- **Weekly Rollups & Benchmarks:** Use `pnpm perf:benchmark` or `pnpm perf:weekly` to archive reports in `docs/perf/` and catch regressions early.
+
+---
+
 ## 🧑 About Me Sidebar
 
 An optional About Me section can appear in the public sidebar.
@@ -197,6 +261,16 @@ You can manage these in the Admin Dashboard:
 - Toggle enable, edit the title and content, then Save Changes
 
 When enabled, the About Me section renders above the Recent posts list.
+
+---
+
+## 🔐 Security
+
+- **Sanitized Content:** All HTML passes through DOMPurify allowlists before storage/rendering, and markdown editors sanitize on save.
+- **Strict Headers:** CSP, HSTS, Referrer-Policy, and X-Content-Type-Options are enabled via Next config and middleware defaults.
+- **Rate Limiting & Abuse Controls:** Shared helpers cap comment/reaction/import rates, enforce submission delays, and add honeypots.
+- **Safe Media Handling:** Attachments validate MIME types, file signatures, byte limits, and generate poster images for videos.
+- **Privacy Respecting Analytics:** View tracking dedupes sessions, hashes IPs with `ANALYTICS_IP_SALT`, and honors DNT where possible.
 
 ---
 
