@@ -14,20 +14,21 @@ interface SearchParams {
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SearchParams>;
 }) {
-  const page = parseInt(searchParams.page || "1", 10);
+  const resolvedSearchParams = await searchParams;
+  const page = parseInt(resolvedSearchParams.page || "1", 10);
   
   const filter: UsersFilter = {
-    ...(searchParams.search && { search: searchParams.search }),
-    ...(searchParams.isAdmin !== undefined && { 
-      isAdmin: searchParams.isAdmin === "true" 
+    ...(resolvedSearchParams.search && { search: resolvedSearchParams.search }),
+    ...(resolvedSearchParams.isAdmin !== undefined && { 
+      isAdmin: resolvedSearchParams.isAdmin === "true" 
     }),
   };
   
   const sort: UsersSortOptions = {
-    field: searchParams.sortField || "email",
-    direction: searchParams.sortDirection || "asc",
+    field: resolvedSearchParams.sortField || "email",
+    direction: resolvedSearchParams.sortDirection || "asc",
   };
 
   return (

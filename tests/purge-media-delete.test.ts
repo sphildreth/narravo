@@ -29,7 +29,7 @@ describe("/api/admin/purge — hard delete removes imported-media files", () => 
   });
 
   it("deletes imported-media files referenced by posts and comment attachments", async () => {
-    const id = "33333333-3333-3333-3333-333333333333";
+    const id = "33333333-3333-4333-8333-333333333333";
 
     // Spy on local storage delete calls (fallback when S3 not configured)
     const delSpy = vi.spyOn(localStorageService, "deleteObject").mockResolvedValue();

@@ -30,7 +30,7 @@ export async function deletePostAction(formData: FormData) {
     const parsed = deletePostSchema.safeParse(data);
     if (!parsed.success) {
       return { 
-        error: parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ") 
+        error: parsed.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ") 
       };
     }
     

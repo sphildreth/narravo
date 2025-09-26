@@ -12,11 +12,12 @@ interface SearchParams {
 export default async function ModerationPage({
   searchParams,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SearchParams>;
 }) {
-  const status = searchParams.status;
-  const page = parseInt(searchParams.page || "1", 10);
-  const search = searchParams.search;
+  const resolvedSearchParams = await searchParams;
+  const status = resolvedSearchParams.status;
+  const page = parseInt(resolvedSearchParams.page || "1", 10);
+  const search = resolvedSearchParams.search;
 
   const filter = {
     ...(status && { status }),

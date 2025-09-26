@@ -5,18 +5,19 @@ import ArticleCard from "@/components/ArticleCard";
 import { searchPosts } from "@/lib/search";
 
 interface SearchPageProps {
-  searchParams: { q?: string; page?: string; pageSize?: string };
+  searchParams: Promise<{ q?: string; page?: string; pageSize?: string }>;
 }
 
 export const dynamic = "force-dynamic"; // user specific input; no cache
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const q = (searchParams.q ?? "").trim();
+  const resolvedSearchParams = await searchParams;
+  const q = (resolvedSearchParams.q ?? "").trim();
   if (!q) {
     redirect("/");
   }
-  const page = Number.parseInt(searchParams.page ?? "1", 10);
-  const pageSize = Number.parseInt(searchParams.pageSize ?? "10", 10);
+  const page = Number.parseInt(resolvedSearchParams.page ?? "1", 10);
+  const pageSize = Number.parseInt(resolvedSearchParams.pageSize ?? "10", 10);
 
   let result;
   try {

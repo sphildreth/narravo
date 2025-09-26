@@ -50,7 +50,7 @@ export async function createComment(params: {
 
   try {
     // Anti-abuse validation including rate limiting
-    const requestHeaders = headers();
+    const requestHeaders = await headers();
     const antiAbuseResult = await validateAntiAbuse(userId, "comment", {
       honeypot: params.honeypot ?? null,
       submitStartTime: params.submitStartTime ?? null,

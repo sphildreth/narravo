@@ -7,14 +7,15 @@ import { db } from "@/lib/db";
 import { formatDateSafe } from "@/lib/dateFormat";
 
 interface UserDetailPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function UserDetailPage({ params }: UserDetailPageProps) {
+  const resolvedParams = await params;
   const [user, adminInfo] = await Promise.all([
-    getUserDetails(params.id),
+    getUserDetails(resolvedParams.id),
     getAdminVisibility(),
   ]);
   // Server-side date format from configuration

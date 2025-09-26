@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import withBundleAnalyzer from '@next/bundle-analyzer'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Get S3 hostname for CSP
 const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || "";

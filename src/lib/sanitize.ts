@@ -1,5 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
-import DOMPurify from "isomorphic-dompurify";
+import DOMPurify from "dompurify";
+
+// For server-side rendering, we need to create a DOM environment
+let purifyInstance: typeof DOMPurify;
+
+if (typeof window !== 'undefined') {
+  // Client-side: use DOMPurify directly
+  purifyInstance = DOMPurify;
+} else {
+  // Server-side: create a DOM environment using jsdom
+  const { JSDOM } = require('jsdom');
+  const window = new JSDOM('<!DOCTYPE html><html><body></body></html>').window;
+  purifyInstance = DOMPurify(window as any);
+}
 
 /**
  * Sanitize HTML content to prevent XSS attacks
@@ -7,7 +20,7 @@ import DOMPurify from "isomorphic-dompurify";
  * and allows common formatting elements while blocking dangerous content.
  */
 export function sanitizeHtml(html: string): string {
-  let sanitized = DOMPurify.sanitize(html, {
+  let sanitized = purifyInstance.sanitize(html, {
     ALLOWED_TAGS: [
       "p", "a", "strong", "em", "code", "pre", "ul", "ol", "li", 
       "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6",
@@ -83,7 +96,7 @@ export function sanitizeHtml(html: string): string {
  * Comments should have fewer formatting options than posts
  */
 export function sanitizeCommentHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
+  return purifyInstance.sanitize(html, {
     // More restrictive tag list for comments
     ALLOWED_TAGS: [
       "p", "a", "strong", "em", "code", "ul", "ol", "li", 

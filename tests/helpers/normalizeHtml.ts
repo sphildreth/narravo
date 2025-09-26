@@ -1,5 +1,10 @@
-import cheerio from "cheerio";
-import DOMPurify from "isomorphic-dompurify";
+import * as cheerio from "cheerio";
+import DOMPurify from "dompurify";
+
+// For Node.js environment (tests), set up jsdom
+const { JSDOM } = require('jsdom');
+const window = new JSDOM('<!DOCTYPE html><html><body></body></html>').window;
+const purify = DOMPurify(window as any);
 
 // Based on Appendix B of TEST_REQUIREMENTS_WXR_IMPORT.md
 const ALLOWED_TAGS = [
@@ -76,7 +81,7 @@ export function normalizeHtml(html: string): string {
   }
 
   // 2. Use DOMPurify with very permissive settings, then apply our own rules
-  const sanitizedHtml = DOMPurify.sanitize(normalized, {
+  const sanitizedHtml = purify.sanitize(normalized, {
     ALLOWED_TAGS,
     // DOMPurify typings allow only string[] here – combine all attrs we permit
     ALLOWED_ATTR: [
@@ -102,7 +107,7 @@ export function normalizeHtml(html: string): string {
   const sanitizedHtmlNoNbsp = sanitizedHtml.replace(/\u00A0/g, ' ');
 
   // 3. Load into Cheerio for DOM manipulation
-  const $ = cheerio.load(sanitizedHtmlNoNbsp, { xmlMode: false, decodeEntities: false });
+  const $ = cheerio.load(sanitizedHtmlNoNbsp, { xmlMode: false });
 
   // 4. Process iframes: strip non-trusted ones, keep trusted ones
   $('iframe').each((i, elem) => {
@@ -203,7 +208,7 @@ export function normalizeHtml(html: string): string {
   const result = $('body').html() || '';
   
   // 12. Final cleanup - remove empty elements that shouldn't be empty
-  const finalCleanup = cheerio.load(result, { xmlMode: false, decodeEntities: true });
+  const finalCleanup = cheerio.load(result, { xmlMode: false });
   finalCleanup('p, span').each((i, elem) => {
     const el = finalCleanup(elem);
     if (el.text().trim() === '' && el.children().length === 0) {
@@ -228,7 +233,7 @@ export function normalizeHtml(html: string): string {
  */
 export function stripForbiddenAttributes(html: string): string {
   if (!html) return '';
-  const out = DOMPurify.sanitize(html, {
+  const out = purify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR: [
       'class', 'style', 'dir', 'data-*',
@@ -250,7 +255,7 @@ export function stripForbiddenAttributes(html: string): string {
  */
 export function extractTextContent(html: string): string {
   if (!html) return '';
-  const $ = cheerio.load(html, { decodeEntities: true, xmlMode: false });
+  const $ = cheerio.load(html, { xmlMode: false });
   // Collapse whitespace in the resulting text but trim ends for a clean result
   return $.root().text().replace(/\s+/g, ' ').trim();
 }

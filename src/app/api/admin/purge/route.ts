@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         ok: false,
         error: { 
           message: "Invalid request",
-          details: parsed.error.errors 
+          details: parsed.error.issues 
         }
       }), {
         status: 400,
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
         operationId,
       },
       status: "started",
-      ipAddress: req.ip || req.headers.get("x-forwarded-for") || "unknown",
+      ipAddress: req.headers.get("x-forwarded-for") || "unknown",
       userAgent: req.headers.get("user-agent") || "unknown",
     }).returning();
 

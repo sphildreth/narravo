@@ -257,7 +257,7 @@ export async function createAdminReply(formData: FormData) {
   const parsed = adminReplySchema.safeParse(data);
   if (!parsed.success) {
     return { 
-      error: parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ") 
+      error: parsed.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ") 
     };
   }
 

@@ -17,24 +17,23 @@ interface SearchParams {
 export default async function AdminPostsPage({
   searchParams,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SearchParams>;
 }) {
-  const page = parseInt(searchParams.page || "1", 10);
+  const resolvedSearchParams = await searchParams;
+  const page = parseInt(resolvedSearchParams.page || "1", 10);
   
   const filter: PostsFilter = {
-    ...(searchParams.search && { search: searchParams.search }),
-    ...(searchParams.status && { status: searchParams.status }),
-    ...(searchParams.dateFrom && { dateFrom: searchParams.dateFrom }),
-    ...(searchParams.dateTo && { dateTo: searchParams.dateTo }),
-    ...(searchParams.hasComments === "true" && { hasComments: true }),
-  };
-  
-  const sort: PostsSortOptions = {
-    field: searchParams.sortField || "updatedAt",
-    direction: searchParams.sortDirection || "desc",
+    ...(resolvedSearchParams.search && { search: resolvedSearchParams.search }),
+    ...(resolvedSearchParams.status && { status: resolvedSearchParams.status }),
+    ...(resolvedSearchParams.dateFrom && { dateFrom: resolvedSearchParams.dateFrom }),
+    ...(resolvedSearchParams.dateTo && { dateTo: resolvedSearchParams.dateTo }),
+    ...(resolvedSearchParams.hasComments && { hasComments: resolvedSearchParams.hasComments === "true" }),
   };
 
-  return (
+  const sort: PostsSortOptions = {
+    field: resolvedSearchParams.sortField || "updatedAt",
+    direction: resolvedSearchParams.sortDirection || "desc",
+  };  return (
     <main className="max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Posts</h1>

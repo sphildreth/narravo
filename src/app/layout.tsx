@@ -28,7 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-    const themeCookie = cookies().get("theme")?.value;
+    const themeCookie = (await cookies()).get("theme")?.value;
     let theme = themeCookie ?? "light";
     // Load site-wide date format from configuration
     let dateFormat = DEFAULT_DATE_FORMAT;

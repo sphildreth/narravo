@@ -21,11 +21,12 @@ import { measureAsync, createServerTimingHeader } from "@/lib/performance";
 import { formatDateSafe } from "@/lib/dateFormat";
 
 type Props = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const post = await getPostBySlug(params.slug);
+  const resolvedParams = await params;
+  const post = await getPostBySlug(resolvedParams.slug);
   if (!post) {
     return {
       title: "Post Not Found",
@@ -38,6 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PostPage({ params }: Props) {
   const renderStart = performance.now();
+  const resolvedParams = await params;
   
   // Measure config loading
   const { result: config, duration: configDuration } = await measureAsync(
@@ -61,7 +63,7 @@ export default async function PostPage({ params }: Props) {
   // Measure post loading (main data fetch)
   const { result: post, duration: postDuration } = await measureAsync(
     'post-load',
-    async () => getPostBySlugWithReactions(params.slug, userId)
+    async () => getPostBySlugWithReactions(resolvedParams.slug, userId)
   );
   
   if (!post) {

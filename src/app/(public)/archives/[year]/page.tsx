@@ -5,13 +5,14 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 
 interface YearPageProps {
-  params: { year: string };
-  searchParams: { page?: string };
+  params: Promise<{ year: string }>;
+  searchParams: Promise<{ page?: string }>;
 }
 
 export default async function YearPage({ params, searchParams }: YearPageProps) {
-  const year = parseInt(params.year, 10);
-  const page = parseInt(searchParams.page || "1", 10);
+  const [resolvedParams, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const year = parseInt(resolvedParams.year, 10);
+  const page = parseInt(resolvedSearchParams.page || "1", 10);
 
   if (isNaN(year)) {
     return <div>Invalid year</div>; // Or render a 404 page

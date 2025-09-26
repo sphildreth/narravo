@@ -13,7 +13,7 @@ vi.mock("@/lib/local-storage", () => ({ localStorageService: { putObject: vi.fn(
 
 describe("WXR: Versioning & Compatibility", () => {
   let tempDir: string;
-  let consoleWarnSpy: MockInstance<Parameters<typeof console.warn>, ReturnType<typeof console.warn>>;
+  let consoleWarnSpy: any;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "wxr-test-"));

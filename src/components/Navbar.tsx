@@ -13,7 +13,7 @@ import { cookies, headers } from "next/headers";
 export default async function Navbar({ context, variant }: { context?: "admin" | "site"; variant?: "default" | "hero" }) {
     // Auto-detect context from middleware header when not explicitly provided
     const hdrs = headers();
-    const detectedContext = hdrs.get("x-app-context") === "admin" ? "admin" : "site";
+    const detectedContext = (await hdrs).get("x-app-context") === "admin" ? "admin" : "site";
     const effectiveContext: "admin" | "site" = context ?? detectedContext;
 
     const session = await auth();
@@ -25,7 +25,7 @@ export default async function Navbar({ context, variant }: { context?: "admin" |
     const borderClass = variant === "hero" ? "border-b-0" : "border-b border-border";
 
     // Determine initial theme (mirror app/layout.tsx)
-    const themeCookie = cookies().get("theme")?.value;
+    const themeCookie = (await cookies()).get("theme")?.value;
     let theme: "light" | "dark" = (themeCookie === "dark" || themeCookie === "light") ? themeCookie : "light";
     if (!themeCookie) {
         try {

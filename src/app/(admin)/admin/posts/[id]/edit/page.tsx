@@ -4,13 +4,14 @@ import PostForm from "@/components/admin/posts/PostForm";
 import { notFound } from "next/navigation";
 
 interface EditPostPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function EditPostPage({ params }: EditPostPageProps) {
-  const post = await getPostForEdit(params.id);
+  const resolvedParams = await params;
+  const post = await getPostForEdit(resolvedParams.id);
   
   if (!post) {
     notFound();

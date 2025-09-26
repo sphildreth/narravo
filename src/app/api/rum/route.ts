@@ -2,7 +2,17 @@
 import { NextRequest } from "next/server";
 import { headers } from "next/headers";
 
-export const runtime = "nodejs";
+async function extractIpAddress(request: NextRequest): Promise<string> {
+  const headersList = await headers();
+  return (
+    headersList.get('x-forwarded-for')?.split(',')[0] ||
+    headersList.get('x-real-ip') ||
+    headersList.get('cf-connecting-ip') ||
+    'unknown'
+  );
+}
+
+const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface RUMMetric {
@@ -33,7 +43,7 @@ interface RUMPayload {
 export async function POST(request: NextRequest) {
   try {
     // Check Do Not Track header
-    const headersList = headers();
+    const headersList = await headers();
     const dnt = headersList.get('dnt') || headersList.get('DNT');
     if (dnt === '1') {
       return new Response(null, { status: 204 });
@@ -65,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract client IP for rate limiting (hashed)
-    const clientIp = getClientIp(request);
+    const clientIp = await getClientIp(request);
     
     // Rate limiting: max 60 requests per minute per IP
     if (await isRateLimited(clientIp)) {
@@ -121,13 +131,12 @@ function isValidMetric(metric: any): metric is RUMMetric {
 /**
  * Extract client IP with proxy support
  */
-function getClientIp(request: NextRequest): string {
-  const headersList = headers();
+async function getClientIp(request: NextRequest): Promise<string> {
+  const headersList = await headers();
   return (
     headersList.get('x-forwarded-for')?.split(',')[0] ||
     headersList.get('x-real-ip') ||
     headersList.get('cf-connecting-ip') ||
-    request.ip ||
     'unknown'
   );
 }

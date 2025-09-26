@@ -8,11 +8,12 @@ import ArticleCard from "@/components/ArticleCard";
 import Link from "next/link";
 
 type Props = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const category = await getCategoryBySlug(params.slug);
+  const resolvedParams = await params;
+  const category = await getCategoryBySlug(resolvedParams.slug);
   if (!category) {
     return {
       title: "Category Not Found",
@@ -27,12 +28,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CategoryPage({ params }: Props) {
-  const category = await getCategoryBySlug(params.slug);
+  const resolvedParams = await params;
+  const category = await getCategoryBySlug(resolvedParams.slug);
   if (!category) {
     notFound();
   }
 
-  const { items: posts } = await getPostsByCategory(params.slug, { limit: 10 });
+  const { items: posts } = await getPostsByCategory(resolvedParams.slug, { limit: 10 });
 
   return (
     <main className="max-w-screen mx-auto px-6 my-7">

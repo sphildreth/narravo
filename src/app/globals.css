@@ -2,6 +2,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 :root { --bg:#ffffff; --fg:#0a0a0a; --muted:#6b7280; --border:#e5e7eb; --brand:#0ea5e9; --brand-contrast:#ffffff; --card:#ffffff; --card-fg:#0a0a0a; --accent:#22c55e; --accent-contrast:#052e16; --radius:14px; --shadow:0 10px 30px rgba(0,0,0,.07); --maxw:1400px; --focus:#60a5fa; }
 :root[data-theme="dark"] { --bg:#0b1021; --fg:#e6e6eb; --muted:#9ca3af; --border:#202538; --brand:#6b9cff; --brand-contrast:#0b1021; --card:#11152a; --card-fg:#e6e6eb; --accent:#16a34a; --accent-contrast:#ecfdf5; --shadow:0 16px 40px rgba(0,0,0,.35); }
 :focus-visible { outline:2px solid var(--focus); outline-offset:2px }

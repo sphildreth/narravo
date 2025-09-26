@@ -15,7 +15,7 @@ import { createLowlight } from "lowlight";
 
 // Create lowlight instance (only really used outside tests)
 const lowlight = createLowlight();
-import DOMPurify from "isomorphic-dompurify";
+import DOMPurify from "dompurify";
 
 // Language loading for code blocks
 const SUPPORTED_LANGUAGES = [
@@ -167,18 +167,22 @@ export type TiptapEditorProps = {
 export const fromMarkdown = (markdown: string, editor?: Editor) => {
   if (!editor) return;
   
-  // Sanitize the markdown content before setting
-  const sanitizedMarkdown = DOMPurify.sanitize(markdown, {
-    ALLOWED_TAGS: [
-      'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'code', 'pre',
-      'ul', 'ol', 'li', 'blockquote', 'a', 'img', 'br', 'hr', 'table', 'thead',
-      'tbody', 'tr', 'td', 'th', 'figure', 'figcaption'
-    ],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'rel', 'target', 'class', 'style'],
-    ALLOW_DATA_ATTR: false,
-  });
+  // Only sanitize in browser environment
+  let content = markdown;
+  if (typeof window !== 'undefined') {
+    // Sanitize the markdown content before setting
+    content = DOMPurify.sanitize(markdown, {
+      ALLOWED_TAGS: [
+        'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'code', 'pre',
+        'ul', 'ol', 'li', 'blockquote', 'a', 'img', 'br', 'hr', 'table', 'thead',
+        'tbody', 'tr', 'td', 'th', 'figure', 'figcaption'
+      ],
+      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'rel', 'target', 'class', 'style'],
+      ALLOW_DATA_ATTR: false,
+    });
+  }
   
-  editor.commands.setContent(sanitizedMarkdown);
+  editor.commands.setContent(content);
 };
 
 export const toMarkdown = (editor?: Editor): string => {
@@ -389,7 +393,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
         // Then handle HTML/text paste with sanitization
         const html = event.clipboardData?.getData('text/html');
-        if (html) {
+        if (html && typeof window !== 'undefined') {
           event.preventDefault();
           const sanitizedHtml = DOMPurify.sanitize(html, {
             ALLOWED_TAGS: [

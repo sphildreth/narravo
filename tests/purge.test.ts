@@ -31,7 +31,7 @@ describe("/api/admin/purge — hard delete", () => {
       values: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: "log-1" }]) })),
     }));
 
-    const req = makeRequest({ type: "post", mode: "hard", dryRun: false, id: "11111111-1111-1111-1111-111111111111", confirmationPhrase: "WRONG" });
+    const req = makeRequest({ type: "post", mode: "hard", dryRun: false, id: "11111111-1111-4111-8111-111111111111", confirmationPhrase: "WRONG" });
 
     // Act
     const res = await purgePostHandler(req as any);
@@ -44,7 +44,7 @@ describe("/api/admin/purge — hard delete", () => {
   });
 
   it("performs hard delete by id with no preview when confirmation is correct", async () => {
-    const id = "22222222-2222-2222-2222-222222222222";
+    const id = "22222222-2222-4222-8222-222222222222";
 
     // 1) Audit log insert
     (db as any).insert = vi.fn(() => ({

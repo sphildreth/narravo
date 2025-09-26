@@ -1,0 +1,2 @@
+/* JSDOM default stylesheet fallback for server-side rendering */
+/* This file prevents jsdom from trying to read missing default-stylesheet.css during Next.js builds */

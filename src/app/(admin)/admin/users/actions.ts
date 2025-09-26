@@ -293,7 +293,7 @@ export async function anonymizeUser(formData: FormData) {
   const parsed = anonymizeUserSchema.safeParse(data);
   if (!parsed.success) {
     return { 
-      error: parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ") 
+      error: parsed.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ") 
     };
   }
   
@@ -356,7 +356,7 @@ export async function deleteUser(formData: FormData) {
   const parsed = deleteUserSchema.safeParse(data);
   if (!parsed.success) {
     return {
-      error: parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ")
+      error: parsed.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")
     };
   }
 
