@@ -13,17 +13,11 @@ export const MarkdownShortcodes = Extension.create({
         props: {
           transformPastedHTML(html) {
             const result = expandShortcodes(html);
-            if (html !== result) {
-              console.log('MarkdownShortcodes transformPastedHTML:', { input: html, output: result });
-            }
             return result;
           },
           transformPastedText(text) {
             // Also process video shortcodes in plain text markdown
             const result = expandShortcodes(text);
-            if (text !== result) {
-              console.log('MarkdownShortcodes transformPastedText:', { input: text, output: result });
-            }
             return result;
           },
         },

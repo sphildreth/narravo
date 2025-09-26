@@ -242,7 +242,6 @@ export const toMarkdown = (editor?: Editor): string => {
   try {
     isConverting = true;
     let markdown = (editor.storage as any)?.markdown?.getMarkdown?.() ?? '';
-    console.log('toMarkdown input markdown:', markdown);
 
     if (typeof markdown === 'string' && markdown.length) {
       // Only clean up placeholder divs, don't touch video elements
@@ -250,10 +249,8 @@ export const toMarkdown = (editor?: Editor): string => {
         .replace(/<div class="video-shortcode-placeholder"[\s\S]*?<\/div>/g, '');
     }
 
-    console.log('toMarkdown final output:', markdown);
     return markdown;
   } catch (e) {
-    console.error('toMarkdown error:', e);
     return '';
   } finally {
     isConverting = false;
@@ -974,18 +971,6 @@ const EditorToolbar = React.memo(({
             label: "Video", 
             onClick: triggerVideo,
             title: "Insert Video"
-          })}
-          {/* Debug button to test video shortcode HTML insertion */}
-          {btn({ 
-            label: "Test Video", 
-            onClick: () => {
-              if (editor) {
-                const testHTML = `<div data-video-shortcode="true" class="video-shortcode-frame"><video controls preload="metadata" data-shortcode-preview="true" src="http://localhost:3000/uploads/file_example_MP4_480_1_5MG.mp4" data-sources="%5B%7B%22src%22%3A%22http%3A%2F%2Flocalhost%3A3000%2Fuploads%2Ffile_example_MP4_480_1_5MG.mp4%22%2C%22type%22%3A%22video%2Fmp4%22%7D%5D" data-shortcode-src="http://localhost:3000/uploads/file_example_MP4_480_1_5MG.mp4"><source src="http://localhost:3000/uploads/file_example_MP4_480_1_5MG.mp4" type="video/mp4" /><a href="http://localhost:3000/uploads/file_example_MP4_480_1_5MG.mp4">Download video</a></video></div>`;
-                console.log('Inserting test video HTML:', testHTML);
-                editor.chain().focus().insertContent(testHTML).run();
-              }
-            },
-            title: "Test Video HTML"
           })}
           {btn({ 
             label: "HR", 

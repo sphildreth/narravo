@@ -119,40 +119,30 @@ export const VideoShortcode = Node.create({
   parseHTML() {
     return [
       {
-        tag: "div[data-video-shortcode]",
-        getAttrs: (dom) => {
-          console.log('VideoShortcode parseHTML: div[data-video-shortcode]', dom);
-          if (!(dom instanceof HTMLElement)) return false;
-          const video = dom.querySelector<HTMLVideoElement>("video[data-shortcode-preview]");
-          if (!video) return false;
-          const attrs = extractAttributes(video);
-          console.log('VideoShortcode parsed attributes from div wrapper:', attrs);
+        tag: 'div[data-video-shortcode]',
+        getAttrs: (element) => {
+          const videoEl = element.querySelector('video');
+          if (!videoEl) return false;
+          
+          const attrs = extractAttributes(videoEl as HTMLVideoElement);
           return attrs;
         },
       },
       {
-        tag: "video[data-shortcode-preview]",
-        getAttrs: (dom) => {
-          console.log('VideoShortcode parseHTML: video[data-shortcode-preview]', dom);
-          if (!(dom instanceof HTMLVideoElement)) return false;
-          const attrs = extractAttributes(dom);
-          console.log('VideoShortcode parsed attributes from direct video:', attrs);
+        tag: 'video[data-shortcode-preview]',
+        getAttrs: (element) => {
+          const attrs = extractAttributes(element as HTMLVideoElement);
           return attrs;
         },
       },
       {
         // Also handle plain video tags that might be created by markdown expansion
-        tag: "video",
-        getAttrs: (dom) => {
-          console.log('VideoShortcode parseHTML: video (plain)', dom);
-          if (!(dom instanceof HTMLVideoElement)) return false;
-          // Only parse videos that have data-shortcode attributes or are in the video container
-          const hasShortcodeData = dom.hasAttribute('data-shortcode-src') || 
-                                   dom.hasAttribute('data-sources') ||
-                                   dom.hasAttribute('data-shortcode-preview');
-          if (!hasShortcodeData) return false;
-          const attrs = extractAttributes(dom);
-          console.log('VideoShortcode parsed attributes from plain video:', attrs);
+        tag: 'video',
+        getAttrs: (element) => {
+          // Only parse if it doesn't already have data-shortcode-preview
+          if (element.hasAttribute('data-shortcode-preview')) return false;
+          
+          const attrs = extractAttributes(element as HTMLVideoElement);
           return attrs;
         },
       },
