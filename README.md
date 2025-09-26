@@ -10,7 +10,6 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-blue?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-blue?logo=drizzle&logoColor=white)](https://orm.drizzle.team/)
 [![Auth.js](https://img.shields.io/badge/Auth.js-blue?logo=next.js&logoColor=white)](https://authjs.dev/)
-[![Docker](https://img.shields.io/badge/Docker-blue?logo=docker&logoColor=white)](https://www.docker.com/)
 
 Narravo is a sleek, minimal, and feature-rich blog engine designed for developers who appreciate modern web technologies and a robust content management experience. Built with the latest Next.js App Router, TypeScript, and Drizzle ORM, it offers a powerful foundation for your next personal blog or content platform.
 
