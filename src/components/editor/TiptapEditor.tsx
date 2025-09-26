@@ -211,10 +211,9 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   console.log('Has HTML content:', hasHTML);
   
   if (hasHTML) {
-    // If shortcodes were expanded to HTML, use insertContent to handle HTML
-    console.log('Using insertContent for HTML content');
-    editor.commands.clearContent();
-    editor.commands.insertContent(previewReadyMarkdown);
+    // If shortcodes were expanded to HTML, use setContent to replace all content
+    console.log('Setting expanded HTML content');
+    editor.commands.setContent(previewReadyMarkdown);
   } else {
     // Pure markdown, let tiptap-markdown handle the conversion
     console.log('Using setContent for markdown content');
@@ -265,6 +264,14 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
   const [showMarkdownView, setShowMarkdownView] = useState(false);
   const [markdownContent, setMarkdownContent] = useState(initialMarkdown);
   const [isToolbarSticky, setIsToolbarSticky] = useState(false);
+  
+  // Capture initialMarkdown only once to prevent reactive updates
+  const stableInitialMarkdown = useRef(initialMarkdown);
+  
+  // Only update the stable ref if it's truly the first time (empty to non-empty)
+  if (!stableInitialMarkdown.current && initialMarkdown) {
+    stableInitialMarkdown.current = initialMarkdown;
+  }
 
   const uploadFile = useCallback(async (file: File): Promise<string | null> => {
     try {
@@ -427,7 +434,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       ? StarterKit.configure({ link: false as any, underline: false as any })
       : StarterKit.configure({ codeBlock: false, link: false as any, underline: false as any }),
     Markdown.configure({ 
-      html: false, // Try with html: false to prevent interference
+      html: true, // Enable HTML parsing for shortcode expansion
       linkify: false,  // We handle links through the Link extension
       breaks: false,   // Use default line break handling
       transformCopiedText: false,
@@ -481,7 +488,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     onUpdate: ({ editor }) => {
       try {
         const md = toMarkdown(editor);
-        setMarkdownContent(md);
+        // Never sync to markdown state during normal typing - only call parent onChange
         onChange?.(md);
       } catch (e) {
         // Markdown extraction failed, continue
@@ -561,11 +568,11 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
   // Debug: Expose editor globally for testing
   React.useEffect(() => {
-    // Initialize editor content if provided
-    if (editor && initialMarkdown && initialMarkdown !== editor.getHTML()) {
-      fromMarkdown(initialMarkdown, editor);
+    // Initialize editor content if provided (only on first mount)
+    if (editor && stableInitialMarkdown.current && stableInitialMarkdown.current !== editor.getHTML()) {
+      fromMarkdown(stableInitialMarkdown.current, editor);
     }
-  }, [editor, initialMarkdown]);
+  }, [editor]); // Remove initialMarkdown from dependencies
 
   // Ensure onChange is called at least once after editor mounts
   React.useEffect(() => {
@@ -579,13 +586,13 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
   // Load languages for initial markdown content
   React.useEffect(() => {
-    if (editor && initialMarkdown && typeof window !== 'undefined') {
+    if (editor && stableInitialMarkdown.current && typeof window !== 'undefined') {
       const loadInitialLanguages = async () => {
         const codeBlockRegex = /```(\w+)/g;
         let match;
         const languagesToLoad = new Set<string>();
         
-        while ((match = codeBlockRegex.exec(initialMarkdown)) !== null) {
+        while ((match = codeBlockRegex.exec(stableInitialMarkdown.current)) !== null) {
           const lang = match[1]?.toLowerCase();
           if (lang && SUPPORTED_LANGUAGES.includes(lang as any)) {
             languagesToLoad.add(lang);
@@ -605,7 +612,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       
       loadInitialLanguages().catch(() => {/* Language loading failed */});
     }
-  }, [editor, initialMarkdown]);
+  }, [editor]); // Remove initialMarkdown from dependencies
 
 
 
@@ -1049,7 +1056,9 @@ EditorToolbar.displayName = 'EditorToolbar';
       setMarkdownContent(currentMarkdown);
     } else {
       // Switching to visual view - set editor content from markdown
-      fromMarkdown(markdownContent, editor);
+      if (markdownContent) {
+        fromMarkdown(markdownContent, editor);
+      }
     }
   }, [showMarkdownView, editor]);
 
