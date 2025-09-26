@@ -130,7 +130,7 @@ SELECT id, title FROM posts ORDER BY created_at DESC;
 
 ## Video (Shortcode, not iframe)
 
-[video mp4="https://example.com/path/to/video.mp4"][/video]
+[video mp4="http://localhost:3000/uploads/file_example_MP4_480_1_5MG.mp4"][/video]
 
 > Use the **Video** button to insert; the editor will generate this shortcode automatically. Confirm playback in your renderer.
 

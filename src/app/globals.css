@@ -24,10 +24,20 @@
 .prose ul ul, .prose ul ol, .prose ol ul, .prose ol ol { @apply my-2 ml-6; }
 /* Paragraphs and blocks inside list items */
 .prose li > p { @apply my-2; }
+.prose li[data-type="taskItem"] > div > p {
+  display: block;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.prose li[data-type="taskItem"] > label > p {
+  display: block;
+  margin-top: 0;
+  margin-bottom: 0;
+}
 .prose li > :is(pre, table, blockquote) { @apply my-3; }
 
 /* Task list specific styles for TipTap editor */
-/* Standard TipTap task list structure */
+/* TipTap task list structure: <ul data-type="taskList"><li data-type="taskItem"><label><input><span>text</span></label></li></ul> */
 .prose ul[data-type="taskList"] {
   list-style: none;
   padding-left: 0;
@@ -39,16 +49,16 @@
   align-items: flex-start;
   gap: 0.75rem;
   margin: 0.5rem 0;
+  line-height: 1.6;
 }
 
 .prose li[data-type="taskItem"] > label {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
-  margin-top: 0.25rem;
   cursor: pointer;
-  font-size: 0.875rem;
-  color: var(--muted);
+  flex: 1;
+  width: 100%;
 }
 
 .prose li[data-type="taskItem"] > label > input[type="checkbox"] {
@@ -58,25 +68,45 @@
   border-radius: 0.375rem;
   border: 1px solid var(--border);
   accent-color: var(--brand);
+  margin-top: 0.125rem; /* Slight offset to align with first line of text */
 }
 
 .prose li[data-type="taskItem"] > label > span {
-  display: none;
+  flex: 1;
+  color: inherit;
+  font-size: inherit;
 }
 
+/* Content wrapper for task items (when not using label structure) */
 .prose li[data-type="taskItem"] > div {
   flex: 1;
 }
 
-/* Nested task lists */
+/* Task item content styling - ensure proper text wrapping and line height */
+.prose li[data-type="taskItem"] * {
+  line-height: 1.6;
+}
+
+.prose li[data-type="taskItem"] > label > span > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.prose li[data-type="taskItem"] > div > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Handle nested task lists */
 .prose ul[data-type="taskList"] ul[data-type="taskList"] {
   padding-left: 1.5rem;
   margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
 }
 
-/* Alternative structure: direct checkbox in li */
-.prose li[data-type="taskItem"] > input[type="checkbox"] {
-  margin-top: 0.25rem;
+/* Alternative structure: direct checkbox in li (fallback) */
+.prose li[data-type="taskItem"] > input[type="checkbox"]:not(label > input) {
+  margin-top: 0.125rem;
   margin-right: 0.5rem;
   width: 1rem;
   height: 1rem;
@@ -87,31 +117,21 @@
 }
 
 .prose li[data-type="taskItem"] > input[type="checkbox"] + div,
-.prose li[data-type="taskItem"] > input[type="checkbox"] + p,
-.prose li[data-type="taskItem"] > input[type="checkbox"] + span {
+.prose li[data-type="taskItem"] > input[type="checkbox"] + p {
   flex: 1;
 }
 
-/* Fallback: any checkbox in a list */
-.prose ul:has(input[type="checkbox"]) {
+/* General fallback for any checkboxes in lists (non-TipTap) */
+.prose ul:has(input[type="checkbox"]):not([data-type="taskList"]) {
   list-style: none;
   padding-left: 0;
 }
 
-.prose li:has(> input[type="checkbox"]) {
+.prose li:has(> input[type="checkbox"]):not([data-type="taskItem"]) {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 0.75rem;
   margin: 0.5rem 0;
-}
-
-.prose li > input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  accent-color: var(--brand);
 }
 
 /* Video shortcode preview styling */
