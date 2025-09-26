@@ -11,7 +11,11 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-
+    env:
+      NODE_ENV: test
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/narravo_test
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
