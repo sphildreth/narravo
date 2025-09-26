@@ -9,8 +9,8 @@ export function expandShortcodes(markdown: string): string {
   const videoRe = /\[video([^\]]*)\](?:\s*\[\/video\])?/gi;
 
   return markdown.replace(videoRe, (_full, attrStr: string) => {
-    // Create a new regex instance for each match to avoid lastIndex issues
-    const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
+    // Parse both valued attributes (key="value") and boolean attributes (key)
+    const attrRe = /(\w+)(?:=("[^"]*"|'[^']*'|[^\s"']+))?/g;
     const attrs: Record<string, string> = {};
     let m: RegExpExecArray | null;
     while ((m = attrRe.exec(attrStr))) {
@@ -18,10 +18,16 @@ export function expandShortcodes(markdown: string): string {
       if (!rawKey) continue;
       const key = rawKey.toLowerCase();
       let val = m[2] ?? "";
-      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-        val = val.slice(1, -1);
+      if (val) {
+        // Remove quotes if present
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        attrs[key] = val;
+      } else {
+        // Boolean attribute (no value)
+        attrs[key] = "";
       }
-      attrs[key] = val;
     }
 
     const sources: Array<{ src: string; type: string }> = [];
@@ -59,11 +65,11 @@ export function expandShortcodes(markdown: string): string {
       }
     })();
 
-    const autoplay = attrs.autoplay ? " autoplay" : "";
+    const autoplay = attrs.autoplay !== undefined ? " autoplay" : "";
     // If autoplay is set, muted and playsinline are typically required for browsers to auto-play inline
-    const muted = attrs.autoplay || attrs.muted ? " muted" : "";
-    const playsinline = attrs.autoplay || attrs.playsinline ? " playsinline" : "";
-    const loop = attrs.loop ? " loop" : "";
+    const muted = (attrs.autoplay !== undefined || attrs.muted !== undefined) ? " muted" : "";
+    const playsinline = (attrs.autoplay !== undefined || attrs.playsinline !== undefined) ? " playsinline" : "";
+    const loop = attrs.loop !== undefined ? " loop" : "";
 
     const sourcesHtml = sources
       .map(s => `<source src="${s.src}"${s.type ? ` type="${s.type}"` : ""} />`)
@@ -79,7 +85,7 @@ export function expandShortcodes(markdown: string): string {
       ? ` data-shortcode-src="${sources[0]!.src}"`
       : "";
 
-    return `<video controls preload="metadata" data-shortcode-preview="true"${srcAttr}${width}${height}${posterAttr}${autoplay}${muted}${playsinline}${loop}${sourcesData}${primarySrcData}>${sourcesHtml}${fallbackLink}</video>`;
+    return `<div data-video-shortcode="true" class="video-shortcode-frame"><video controls preload="metadata" data-shortcode-preview="true"${srcAttr}${width}${height}${posterAttr}${autoplay}${muted}${playsinline}${loop}${sourcesData}${primarySrcData}>${sourcesHtml}${fallbackLink}</video></div>`;
   });
 }
 

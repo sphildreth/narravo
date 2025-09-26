@@ -121,30 +121,39 @@ export const VideoShortcode = Node.create({
       {
         tag: "div[data-video-shortcode]",
         getAttrs: (dom) => {
+          console.log('VideoShortcode parseHTML: div[data-video-shortcode]', dom);
           if (!(dom instanceof HTMLElement)) return false;
           const video = dom.querySelector<HTMLVideoElement>("video[data-shortcode-preview]");
           if (!video) return false;
-          return extractAttributes(video);
+          const attrs = extractAttributes(video);
+          console.log('VideoShortcode parsed attributes from div wrapper:', attrs);
+          return attrs;
         },
       },
       {
         tag: "video[data-shortcode-preview]",
         getAttrs: (dom) => {
+          console.log('VideoShortcode parseHTML: video[data-shortcode-preview]', dom);
           if (!(dom instanceof HTMLVideoElement)) return false;
-          return extractAttributes(dom);
+          const attrs = extractAttributes(dom);
+          console.log('VideoShortcode parsed attributes from direct video:', attrs);
+          return attrs;
         },
       },
       {
         // Also handle plain video tags that might be created by markdown expansion
         tag: "video",
         getAttrs: (dom) => {
+          console.log('VideoShortcode parseHTML: video (plain)', dom);
           if (!(dom instanceof HTMLVideoElement)) return false;
           // Only parse videos that have data-shortcode attributes or are in the video container
           const hasShortcodeData = dom.hasAttribute('data-shortcode-src') || 
                                    dom.hasAttribute('data-sources') ||
                                    dom.hasAttribute('data-shortcode-preview');
           if (!hasShortcodeData) return false;
-          return extractAttributes(dom);
+          const attrs = extractAttributes(dom);
+          console.log('VideoShortcode parsed attributes from plain video:', attrs);
+          return attrs;
         },
       },
     ];
@@ -233,5 +242,21 @@ export const VideoShortcode = Node.create({
     }
 
     return ["div", wrapperAttrs, ...children];
+  },
+
+  renderText({ node }) {
+    const { src, webm, ogv, poster, autoplay, loop, muted } = node.attrs;
+    
+    let shortcode = '[video';
+    if (src) shortcode += ` mp4="${src}"`;
+    if (webm) shortcode += ` webm="${webm}"`;
+    if (ogv) shortcode += ` ogv="${ogv}"`;
+    if (poster) shortcode += ` poster="${poster}"`;
+    if (loop) shortcode += ` loop`;
+    if (muted) shortcode += ` muted`;
+    if (autoplay) shortcode += ` autoplay`;
+    shortcode += '][/video]';
+    
+    return shortcode;
   },
 });

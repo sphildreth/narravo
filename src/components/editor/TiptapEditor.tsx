@@ -199,8 +199,27 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   const expandedMarkdown = expandShortcodes(markdown);
   const previewReadyMarkdown = expandedMarkdown.replace(/<video(?![^>]*data-shortcode-preview)/g, '<video data-shortcode-preview="true"');
   
-  // Set the expanded markdown content - let tiptap-markdown handle the conversion
-  editor.commands.setContent(previewReadyMarkdown);
+  console.log('fromMarkdown processing:', {
+    originalMarkdown: markdown,
+    expandedMarkdown,
+    previewReadyMarkdown
+  });
+  
+  // Check if we have HTML (expanded shortcodes) vs plain markdown
+  const hasHTML = expandedMarkdown !== markdown && expandedMarkdown.includes('<');
+  
+  console.log('Has HTML content:', hasHTML);
+  
+  if (hasHTML) {
+    // If shortcodes were expanded to HTML, use insertContent to handle HTML
+    console.log('Using insertContent for HTML content');
+    editor.commands.clearContent();
+    editor.commands.insertContent(previewReadyMarkdown);
+  } else {
+    // Pure markdown, let tiptap-markdown handle the conversion
+    console.log('Using setContent for markdown content');
+    editor.commands.setContent(previewReadyMarkdown);
+  }
   
   // Force a reparse with a small delay to ensure content is set first
   setTimeout(() => {
@@ -215,21 +234,29 @@ const reparseLowlight = (editor: Editor) => {
   view.dispatch(transaction);
 };
 
+let isConverting = false;
+
 export const toMarkdown = (editor?: Editor): string => {
-  if (!editor) return '';
+  if (!editor || isConverting) return '';
+  
   try {
+    isConverting = true;
     let markdown = (editor.storage as any)?.markdown?.getMarkdown?.() ?? '';
+    console.log('toMarkdown input markdown:', markdown);
 
     if (typeof markdown === 'string' && markdown.length) {
+      // Only clean up placeholder divs, don't touch video elements
       markdown = markdown
-        .replace(/<div class="video-shortcode-placeholder"[\s\S]*?<\/div>/g, '')
-        .replace(/<div[^>]*data-video-shortcode="true"[^>]*>[\s\S]*?<\/div>/g, '')
-        .replace(/<video[^>]*data-shortcode-preview="true"[^>]*>[\s\S]*?<\/video>/g, '');
+        .replace(/<div class="video-shortcode-placeholder"[\s\S]*?<\/div>/g, '');
     }
 
+    console.log('toMarkdown final output:', markdown);
     return markdown;
   } catch (e) {
+    console.error('toMarkdown error:', e);
     return '';
+  } finally {
+    isConverting = false;
   }
 };
 
@@ -406,7 +433,10 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       html: true,
       linkify: false,  // We handle links through the Link extension
       breaks: false,   // Use default line break handling
+      transformCopiedText: false,
+      transformPastedText: false,
     }),
+    MarkdownShortcodes,
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     Link.configure({
       openOnClick: false,
@@ -473,6 +503,8 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         const html = event.clipboardData?.getData('text/html');
         const text = event.clipboardData?.getData('text/plain');
         
+        console.log('Paste event:', { html, text });
+        
         // Check if pasted content looks like markdown (has markdown syntax)
         const isMarkdown = text && (
           text.includes('# ') || text.includes('## ') || text.includes('### ') ||
@@ -481,8 +513,11 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
           text.includes('1. ') || text.includes('> ') || text.includes('---')
         );
         
+        console.log('Detected as markdown:', isMarkdown);
+        
         if (isMarkdown && typeof window !== 'undefined') {
           event.preventDefault();
+          console.log('Processing as markdown with fromMarkdown()');
           // Parse markdown directly into editor
           fromMarkdown(text, editor!).catch(() => {/* Ignore markdown parse errors */});
           return true;
@@ -492,9 +527,14 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
             ALLOWED_TAGS: [
               'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'code', 'pre',
               'ul', 'ol', 'li', 'blockquote', 'a', 'img', 'br', 'hr', 'table', 'thead',
-              'tbody', 'tr', 'td', 'th', 'figure', 'figcaption'
+              'tbody', 'tr', 'td', 'th', 'figure', 'figcaption', 'div', 'video', 'source'
             ],
-            ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'rel', 'target', 'class', 'style'],
+            ALLOWED_ATTR: [
+              'href', 'src', 'alt', 'title', 'rel', 'target', 'class', 'style',
+              'data-video-shortcode', 'data-shortcode-preview', 'data-shortcode-src', 
+              'data-sources', 'controls', 'preload', 'width', 'height', 'poster',
+              'autoplay', 'muted', 'playsinline', 'loop', 'type'
+            ],
             FORBID_ATTR: ['onclick', 'onload', 'onerror', 'javascript'],
           });
           
@@ -526,6 +566,14 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     // Avoid SSR hydration mismatches per Tiptap warning
     immediatelyRender: false,
   });
+
+  // Debug: Expose editor globally for testing
+  React.useEffect(() => {
+    if (editor && typeof window !== 'undefined') {
+      (window as any).editor = editor;
+      console.log('TipTap editor exposed globally as window.editor');
+    }
+  }, [editor]);
 
   // Ensure onChange is called at least once after editor mounts
   React.useEffect(() => {
@@ -926,6 +974,18 @@ const EditorToolbar = React.memo(({
             label: "Video", 
             onClick: triggerVideo,
             title: "Insert Video"
+          })}
+          {/* Debug button to test video shortcode HTML insertion */}
+          {btn({ 
+            label: "Test Video", 
+            onClick: () => {
+              if (editor) {
+                const testHTML = `<div data-video-shortcode="true" class="video-shortcode-frame"><video controls preload="metadata" data-shortcode-preview="true" src="http://localhost:3000/uploads/file_example_MP4_480_1_5MG.mp4" data-sources="%5B%7B%22src%22%3A%22http%3A%2F%2Flocalhost%3A3000%2Fuploads%2Ffile_example_MP4_480_1_5MG.mp4%22%2C%22type%22%3A%22video%2Fmp4%22%7D%5D" data-shortcode-src="http://localhost:3000/uploads/file_example_MP4_480_1_5MG.mp4"><source src="http://localhost:3000/uploads/file_example_MP4_480_1_5MG.mp4" type="video/mp4" /><a href="http://localhost:3000/uploads/file_example_MP4_480_1_5MG.mp4">Download video</a></video></div>`;
+                console.log('Inserting test video HTML:', testHTML);
+                editor.chain().focus().insertContent(testHTML).run();
+              }
+            },
+            title: "Test Video HTML"
           })}
           {btn({ 
             label: "HR", 
