@@ -30,6 +30,7 @@ const imgSrc = [
 
 const mediaSrc = [
   "'self'",
+  "https:",  // Allow all HTTPS media sources for admin flexibility
   s3Hostname,
 ].filter(Boolean).join(" ");
 

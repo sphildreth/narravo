@@ -134,6 +134,19 @@ export const VideoShortcode = Node.create({
           return extractAttributes(dom);
         },
       },
+      {
+        // Also handle plain video tags that might be created by markdown expansion
+        tag: "video",
+        getAttrs: (dom) => {
+          if (!(dom instanceof HTMLVideoElement)) return false;
+          // Only parse videos that have data-shortcode attributes or are in the video container
+          const hasShortcodeData = dom.hasAttribute('data-shortcode-src') || 
+                                   dom.hasAttribute('data-sources') ||
+                                   dom.hasAttribute('data-shortcode-preview');
+          if (!hasShortcodeData) return false;
+          return extractAttributes(dom);
+        },
+      },
     ];
   },
 

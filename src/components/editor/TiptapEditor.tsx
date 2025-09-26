@@ -17,12 +17,15 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "tiptap-markdown";
 import { createLowlight } from "lowlight";
+import { MarkdownShortcodes } from './extensions/MarkdownShortcodes';
+import { VideoShortcode } from './extensions/VideoShortcode';
+import 'highlight.js/styles/atom-one-dark.css';
 
 // Create lowlight instance (only really used outside tests)
 const lowlight = createLowlight();
 import DOMPurify from "dompurify";
 import { expandShortcodes } from "@/lib/markdown";
-import { VideoShortcode } from "./extensions/VideoShortcode";
+import { cn } from "@/lib/utils";
 
 // Language loading for code blocks
 const SUPPORTED_LANGUAGES = [
@@ -106,7 +109,7 @@ const loadLanguage = async (lang: string) => {
         break;
     }
   } catch (err) {
-    console.warn(`Failed to load language ${lang}:`, err);
+    // Language loading failed, continue with plain text
   }
 };
 
@@ -186,7 +189,7 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
       }
     }
     
-    // Load all languages found
+    // Load all languages found and wait for completion
     if (languagesToLoad.size > 0) {
       await Promise.all([...languagesToLoad].map(lang => loadLanguage(lang)));
     }
@@ -198,7 +201,11 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   
   // Set the expanded markdown content - let tiptap-markdown handle the conversion
   editor.commands.setContent(previewReadyMarkdown);
-  reparseLowlight(editor);
+  
+  // Force a reparse with a small delay to ensure content is set first
+  setTimeout(() => {
+    reparseLowlight(editor);
+  }, 100);
 };
 
 const reparseLowlight = (editor: Editor) => {
@@ -222,7 +229,6 @@ export const toMarkdown = (editor?: Editor): string => {
 
     return markdown;
   } catch (e) {
-    console.warn('Failed to get markdown from editor:', e);
     return '';
   }
 };
@@ -396,7 +402,11 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     process.env.NODE_ENV === 'test'
       ? StarterKit.configure({ link: false as any, underline: false as any })
       : StarterKit.configure({ codeBlock: false, link: false as any, underline: false as any }),
-    Markdown.configure({ html: true }),
+    Markdown.configure({ 
+      html: true,
+      linkify: false,  // We handle links through the Link extension
+      breaks: false,   // Use default line break handling
+    }),
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     Link.configure({
       openOnClick: false,
@@ -433,9 +443,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       const names = extensions.map(e => e?.name).filter(Boolean);
       const dupes = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
       if (dupes.length) {
-        // Surface any duplicates that slipped through our filtering (diagnostic only)
-        // eslint-disable-next-line no-console
-        console.warn('After dedupe, duplicate extension names still present:', dupes);
+        // Duplicate extensions found but continuing
       }
     } catch {/* ignore */}
   }
@@ -449,7 +457,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         setMarkdownContent(md);
         onChange?.(md);
       } catch (e) {
-        console.warn('Failed to get markdown on update:', e);
+        // Markdown extraction failed, continue
       }
     },
     editorProps: {
@@ -476,7 +484,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         if (isMarkdown && typeof window !== 'undefined') {
           event.preventDefault();
           // Parse markdown directly into editor
-          fromMarkdown(text, editor!).catch(console.warn);
+          fromMarkdown(text, editor!).catch(() => {/* Ignore markdown parse errors */});
           return true;
         } else if (html && typeof window !== 'undefined') {
           event.preventDefault();
@@ -555,26 +563,11 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         }
       };
       
-      loadInitialLanguages().catch(console.warn);
+      loadInitialLanguages().catch(() => {/* Language loading failed */});
     }
   }, [editor, initialMarkdown]);
 
-  // Debug: Log the actual HTML structure when content changes
-  React.useEffect(() => {
-    if (editor && typeof window !== 'undefined') {
-      const logContent = () => {
-        const html = editor.getHTML();
-        if (html.includes('task') || html.includes('checkbox')) {
-          console.log('TipTap Task List HTML:', html);
-        }
-      };
-      
-      editor.on('update', logContent);
-      return () => {
-        editor.off('update', logContent);
-      };
-    }
-  }, [editor]);
+
 
   // Handle sticky toolbar behavior
   React.useEffect(() => {
@@ -604,19 +597,35 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
     const scrollTarget: HTMLElement | Window = getScrollParent(placeholderEl);
 
+    // Calculate navbar height (sticky navbar with py-2.5 and content)
+    const getNavbarHeight = (): number => {
+      const navbar = document.querySelector('nav[class*="sticky"]');
+      if (navbar) {
+        return (navbar as HTMLElement).offsetHeight;
+      }
+      // Fallback: py-2.5 (20px) + estimated content height (~36px for h-9 elements)
+      return 56;
+    };
+
     const handleScroll = () => {
       if (!toolbarRef.current || !placeholderRef.current) return;
 
+      const navbarHeight = getNavbarHeight();
       const topBoundary = scrollTarget === window
-        ? 0
-        : (scrollTarget as HTMLElement).getBoundingClientRect().top;
+        ? navbarHeight  // Position below the navbar when using window scroll
+        : Math.max(navbarHeight, (scrollTarget as HTMLElement).getBoundingClientRect().top);
 
       const shouldStick = placeholderRef.current.getBoundingClientRect().top <= topBoundary;
 
       if (shouldStick) {
         placeholderRef.current.style.height = `${toolbarRef.current.offsetHeight}px`;
+        // Update toolbar position to account for navbar height when sticky
+        if (scrollTarget === window) {
+          toolbarRef.current.style.top = `${navbarHeight}px`;
+        }
       } else {
         placeholderRef.current.style.height = '0px';
+        toolbarRef.current.style.top = '';
       }
 
       setIsToolbarSticky(prev => {
@@ -636,6 +645,9 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       scrollTarget.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleScroll);
       placeholderEl.style.height = '0px';
+      if (toolbarRef.current) {
+        toolbarRef.current.style.top = '';
+      }
     };
   }, [editor]);
 
@@ -765,11 +777,12 @@ const EditorToolbar = React.memo(({
     return (
       <div 
         ref={toolbarRef}
-        className={`flex flex-wrap gap-2 p-2 border border-border rounded-t-lg bg-muted/10 transition-all duration-200 ${
+        className={`flex flex-wrap gap-2 p-2 border-b border-border bg-muted/10 transition-all duration-200 ${
           isSticky 
-            ? 'fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm shadow-lg rounded-none border-b border-border' 
-            : ''
+            ? 'fixed z-40 bg-card/95 backdrop-blur-sm shadow-lg' 
+            : 'rounded-t-lg'
         }`}
+        style={isSticky ? { left: toolbarRef.current?.getBoundingClientRect().left, width: toolbarRef.current?.offsetWidth } : {}}
       >
         {/* Text Formatting */}
         <div className="flex gap-1">
