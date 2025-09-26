@@ -21,6 +21,8 @@ interface Post {
   bodyMd?: string | null;
   publishedAt: Date | null;
   updatedAt: Date | null;
+  featuredImageUrl?: string | null;
+  featuredImageAlt?: string | null;
 }
 
 interface PostFormProps {
@@ -42,6 +44,8 @@ export default function PostForm({ post }: PostFormProps) {
     // Prefer Markdown when available; otherwise fall back to existing HTML so editor is populated for legacy posts
     bodyMd: ((post as any)?.bodyMd ?? (post as any)?.bodyHtml ?? (post as any)?.html) || "",
     publishedAt: post?.publishedAt ? new Date(post.publishedAt).toISOString().slice(0, 16) : "",
+    featuredImageUrl: post?.featuredImageUrl || "",
+    featuredImageAlt: post?.featuredImageAlt || "",
   });
 
   // Validate slug format
@@ -127,6 +131,8 @@ export default function PostForm({ post }: PostFormProps) {
         submitData.append("slug", formData.slug);
         submitData.append("excerpt", formData.excerpt);
         submitData.append("bodyMd", formData.bodyMd);
+        submitData.append("featuredImageUrl", formData.featuredImageUrl);
+        submitData.append("featuredImageAlt", formData.featuredImageAlt);
         
         // Handle publish action
         if (action === "publish") {
@@ -278,6 +284,60 @@ export default function PostForm({ post }: PostFormProps) {
           <p className="mt-1 text-xs text-muted-foreground">
             {formData.excerpt.length}/300 characters
           </p>
+        </div>
+
+        {/* Featured Image */}
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            Featured Image
+          </label>
+          <div className="space-y-3">
+            {/* Current featured image display */}
+            {formData.featuredImageUrl && (
+              <div className="relative inline-block">
+                <img 
+                  src={formData.featuredImageUrl} 
+                  alt={formData.featuredImageAlt || "Featured image preview"}
+                  className="max-w-sm h-32 object-cover rounded-md border border-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, featuredImageUrl: "", featuredImageAlt: "" }))}
+                  className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-700 transition-colors"
+                  disabled={isPending}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            
+            {/* Featured image URL input */}
+            <div>
+              <input
+                type="url"
+                value={formData.featuredImageUrl}
+                onChange={(e) => setFormData(prev => ({ ...prev, featuredImageUrl: e.target.value }))}
+                className="w-full px-3 py-2 border border-border rounded-md text-sm"
+                placeholder="Enter image URL (https://...)"
+                disabled={isPending}
+              />
+            </div>
+            
+            {/* Featured image alt text */}
+            {formData.featuredImageUrl && (
+              <div>
+                <input
+                  type="text"
+                  value={formData.featuredImageAlt}
+                  onChange={(e) => setFormData(prev => ({ ...prev, featuredImageAlt: e.target.value }))}
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm"
+                  placeholder="Alternative text for accessibility"
+                  maxLength={255}
+                  disabled={isPending}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Content */}

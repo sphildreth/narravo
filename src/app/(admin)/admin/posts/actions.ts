@@ -34,6 +34,8 @@ const createPostBaseSchema = z.object({
   html: z.string().optional(),
   bodyMd: z.string().optional(),
   publishedAt: z.string().optional().nullable(),
+  featuredImageUrl: z.string().url().optional().or(z.literal("")),
+  featuredImageAlt: z.string().max(255).optional(),
 });
 
 const createPostSchema = createPostBaseSchema.refine((data) => !!(data.bodyMd?.trim() || data.html?.trim()), {
@@ -206,6 +208,8 @@ export async function createPost(formData: FormData) {
     html: (formData.get("html") as string) || undefined,
     bodyMd: (formData.get("bodyMd") as string) || undefined,
     publishedAt: formData.get("publishedAt") as string || null,
+    featuredImageUrl: (formData.get("featuredImageUrl") as string) || undefined,
+    featuredImageAlt: (formData.get("featuredImageAlt") as string) || undefined,
   };
   
   // Validate input
@@ -216,7 +220,7 @@ export async function createPost(formData: FormData) {
     };
   }
   
-  const { title, slug, excerpt, html, bodyMd, publishedAt } = parsed.data;
+  const { title, slug, excerpt, html, bodyMd, publishedAt, featuredImageUrl, featuredImageAlt } = parsed.data;
   
   try {
     // Generate slug if not provided or ensure uniqueness
@@ -245,6 +249,8 @@ export async function createPost(formData: FormData) {
         bodyHtml: fromMd ? renderedHtml : null,
         html: renderedHtml, // keep legacy column in sync
         publishedAt: publishedAt ? new Date(publishedAt) : null,
+        featuredImageUrl: featuredImageUrl || null,
+        featuredImageAlt: featuredImageAlt || null,
       })
       .returning();
     
@@ -275,6 +281,8 @@ export async function updatePost(formData: FormData) {
     bodyMd: (formData.get("bodyMd") as string) || undefined,
     publishedAt: formData.get("publishedAt") as string || null,
     updatedAt: formData.get("updatedAt") as string,
+    featuredImageUrl: (formData.get("featuredImageUrl") as string) || undefined,
+    featuredImageAlt: (formData.get("featuredImageAlt") as string) || undefined,
   };
   
   // Validate input
@@ -285,7 +293,7 @@ export async function updatePost(formData: FormData) {
     };
   }
   
-  const { id, title, slug, excerpt, html, bodyMd, publishedAt, updatedAt } = parsed.data;
+  const { id, title, slug, excerpt, html, bodyMd, publishedAt, updatedAt, featuredImageUrl, featuredImageAlt } = parsed.data;
   
   try {
     // Check for concurrent updates
@@ -330,6 +338,8 @@ export async function updatePost(formData: FormData) {
         html: renderedHtml,
         publishedAt: publishedAt ? new Date(publishedAt) : null,
         updatedAt: new Date(),
+        featuredImageUrl: featuredImageUrl || null,
+        featuredImageAlt: featuredImageAlt || null,
       })
       .where(eq(posts.id, id))
       .returning();
