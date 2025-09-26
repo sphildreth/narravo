@@ -33,7 +33,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Install pnpm
+      run: npm install -g pnpm   
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -42,8 +45,7 @@ jobs:
         cache-dependency-path: |
           pnpm-lock.yaml
     
-    - name: Enable Corepack (pnpm)
-    
+    - name: Enable Corepack (pnpm)    
       run: corepack enable
     
     - name: Install dependencies
