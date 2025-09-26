@@ -42,6 +42,17 @@ function greet(name) {
 - Second item 
 - Third item
 
+### Task Lists
+- [x] Completed task with **bold text**
+- [ ] Incomplete task with *italic text*
+- [x] Another completed task with \`inline code\`
+- [ ] Parent task with nested items
+  - [x] Nested completed task
+  - [ ] Nested incomplete task with longer text that should wrap properly and align with the checkbox
+  - [ ] Another nested task
+    - [x] Third level task
+    - [ ] Third level incomplete with even longer text that definitely should wrap and test our alignment
+
 ### Numbered Lists
 1. Step one
 2. Step two

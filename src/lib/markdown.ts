@@ -8,9 +8,9 @@ export function expandShortcodes(markdown: string): string {
   // Video shortcode: [video mp4="..." webm="..." ogv="..." width="400" height="300" poster="..."][/video]
   const videoRe = /\[video([^\]]*)\](?:\s*\[\/video\])?/gi;
 
-  const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
-
   return markdown.replace(videoRe, (_full, attrStr: string) => {
+    // Create a new regex instance for each match to avoid lastIndex issues
+    const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
     const attrs: Record<string, string> = {};
     let m: RegExpExecArray | null;
     while ((m = attrRe.exec(attrStr))) {
