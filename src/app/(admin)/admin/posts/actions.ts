@@ -488,3 +488,91 @@ export async function checkSlugAvailability(slug: string, excludeId?: string) {
     return { available: false, error: "Failed to check slug availability" };
   }
 }
+
+// Toggle post lock status
+export async function togglePostLock(postId: string) {
+  await requireAdmin();
+  
+  if (!postId) {
+    return { error: "Post ID is required" };
+  }
+  
+  try {
+    // Get current lock status
+    const [currentPost] = await db
+      .select({ isLocked: posts.isLocked, slug: posts.slug })
+      .from(posts)
+      .where(eq(posts.id, postId))
+      .limit(1);
+      
+    if (!currentPost) {
+      return { error: "Post not found" };
+    }
+    
+    // Toggle the lock status
+    const [updatedPost] = await db
+      .update(posts)
+      .set({ 
+        isLocked: !currentPost.isLocked,
+        updatedAt: new Date(),
+      })
+      .where(eq(posts.id, postId))
+      .returning({ isLocked: posts.isLocked, slug: posts.slug });
+    
+    // Revalidate caches
+    await revalidateAfterPostChange(postId, updatedPost.slug);
+    
+    return { 
+      success: true, 
+      isLocked: updatedPost.isLocked,
+      message: updatedPost.isLocked ? "Post locked" : "Post unlocked"
+    };
+  } catch (error) {
+    console.error("Error toggling post lock:", error);
+    return { error: "Failed to toggle post lock" };
+  }
+}
+
+// Unpublish a single post
+export async function unpublishPost(postId: string) {
+  await requireAdmin();
+  
+  if (!postId) {
+    return { error: "Post ID is required" };
+  }
+  
+  try {
+    // Check if post is currently published
+    const [currentPost] = await db
+      .select({ publishedAt: posts.publishedAt, slug: posts.slug })
+      .from(posts)
+      .where(eq(posts.id, postId))
+      .limit(1);
+      
+    if (!currentPost) {
+      return { error: "Post not found" };
+    }
+    
+    if (!currentPost.publishedAt) {
+      return { error: "Post is already unpublished" };
+    }
+    
+    // Unpublish the post
+    const [updatedPost] = await db
+      .update(posts)
+      .set({ 
+        publishedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(posts.id, postId))
+      .returning({ slug: posts.slug });
+    
+    // Revalidate caches
+    await revalidateAfterPostChange(postId, updatedPost.slug);
+    
+    return { success: true, message: "Post unpublished" };
+  } catch (error) {
+    console.error("Error unpublishing post:", error);
+    return { error: "Failed to unpublish post" };
+  }
+}

@@ -185,6 +185,12 @@ export default function PostForm({ post }: PostFormProps) {
             type="text"
             value={formData.title}
             onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+            onBlur={async () => {
+              // Auto-generate slug only for new posts (no existing post ID)
+              if (!post && formData.title.trim() && !formData.slug.trim()) {
+                await handleGenerateSlug();
+              }
+            }}
             className={`w-full px-3 py-2 border rounded-md ${
               errors.title ? "border-red-300" : "border-border"
             }`}
@@ -252,6 +258,17 @@ export default function PostForm({ post }: PostFormProps) {
             id="excerpt"
             value={formData.excerpt}
             onChange={(e) => setFormData(prev => ({ ...prev, excerpt: e.target.value }))}
+            onKeyDown={(e) => {
+              // When Tab is pressed, focus the editor content area
+              if (e.key === 'Tab' && !e.shiftKey) {
+                e.preventDefault();
+                // Focus the TiptapEditor content area using ProseMirror's class
+                const editorContent = document.querySelector('.ProseMirror') as HTMLElement;
+                if (editorContent) {
+                  editorContent.focus();
+                }
+              }
+            }}
             className="w-full px-3 py-2 border border-border rounded-md"
             rows={3}
             maxLength={300}

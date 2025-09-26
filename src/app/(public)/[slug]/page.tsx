@@ -13,6 +13,8 @@ import { ViewTracker } from "@/components/analytics/ViewTracker";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import DeletePostButton from "@/components/admin/DeletePostButton";
+import LockPostButton from "@/components/admin/posts/LockPostButton";
+import UnpublishPostButton from "@/components/admin/posts/UnpublishPostButton";
 import Link from "next/link";
 import Prose from "@/components/Prose";
 import { RenderTimeBadge } from "@/components/RenderTimeBadge";
@@ -133,6 +135,10 @@ export default async function PostPage({ params }: Props) {
                                 </svg>
                                 Edit
                             </Link>
+                            <LockPostButton postId={post.id} isLocked={!!(post as any).isLocked} />
+                            {post.publishedAt && (
+                              <UnpublishPostButton postId={post.id} isPublished={!!post.publishedAt} />
+                            )}
                             <DeletePostButton postId={post.id} postTitle={post.title} />
                         </div>
                     </div>
@@ -160,7 +166,7 @@ export default async function PostPage({ params }: Props) {
                   )}
                 </div>
                 <h1 className="text-3xl md:text-4xl font-extrabold leading-tight mt-1">
-                  {post.title}
+                  {(post as any).isLocked ? "🔒" : ""}{post.title}
                 </h1>
               </header>
 
@@ -252,7 +258,19 @@ export default async function PostPage({ params }: Props) {
             </nav>
           )}
           
-          <CommentsSection postId={post.id} />
+          {(post as any).isLocked ? (
+            <div className="border border-border rounded-xl bg-card shadow-soft p-6 text-center">
+              <div className="flex items-center justify-center mb-3">
+                <svg className="w-5 h-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span className="text-gray-600 font-medium">Comments are disabled</span>
+              </div>
+              <p className="text-gray-500 text-sm">This post is locked and no longer accepts comments.</p>
+            </div>
+          ) : (
+            <CommentsSection postId={post.id} />
+          )}
         </div>
       </main>
       <RenderTimeBadge serverMs={Math.round(totalRenderTime)} showBadge={showRenderBadge} />

@@ -89,7 +89,8 @@ export async function getPostBySlug(slug: string) {
            p.html, p.published_at as "publishedAt",
            p.category_id as "categoryId",
            p.featured_image_url as "featuredImageUrl",
-           p.featured_image_alt as "featuredImageAlt"${selectViews}
+           p.featured_image_alt as "featuredImageAlt",
+           p.is_locked as "isLocked"${selectViews}
     from posts p
     where p.slug = ${slug}
       and p.deleted_at is null
@@ -108,6 +109,7 @@ export async function getPostBySlug(slug: string) {
           categoryId: row.categoryId,
           featuredImageUrl: row.featuredImageUrl ?? null,
           featuredImageAlt: row.featuredImageAlt ?? null,
+          isLocked: row.isLocked ?? false,
       };
       
       // Get tags and category in parallel
