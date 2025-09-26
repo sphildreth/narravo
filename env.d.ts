@@ -6,7 +6,9 @@ declare namespace NodeJS {
     GITHUB_CLIENT_SECRET?: string;
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
+  NEXTAUTH_URL?: string;
     NEXTAUTH_SECRET?: string;
+  ADMIN_EMAILS?: string; // comma-separated
     // S3/R2 configuration
     S3_REGION?: string;
     S3_ENDPOINT?: string;
