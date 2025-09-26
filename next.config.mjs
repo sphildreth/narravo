@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import withBundleAnalyzer from '@next/bundle-analyzer'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Get S3 hostname for CSP
 const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || "";
@@ -27,6 +31,10 @@ const mediaSrc = [
   "'self'",
   s3Hostname,
 ].filter(Boolean).join(" ");
+
+// Domains allowed to be embedded in iframes (e.g., YouTube)
+import { FRAME_SRC_HOSTS } from "./src/lib/frame-src.mjs";
+const frameSrc = ["'self'", ...FRAME_SRC_HOSTS].join(" ");
 
 const connectSrc = [
   "'self'",
@@ -57,6 +65,7 @@ const securityHeaders = [
       `style-src 'self' 'unsafe-inline';` +
       `img-src ${imgSrc};` +
       `media-src ${mediaSrc};` +
+      `frame-src ${frameSrc};` +
       `connect-src ${connectSrc};` +
       `font-src 'self';` +
       `object-src 'none';` +

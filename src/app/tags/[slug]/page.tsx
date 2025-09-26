@@ -8,11 +8,12 @@ import ArticleCard from "@/components/ArticleCard";
 import Link from "next/link";
 
 type Props = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const tag = await getTagBySlug(params.slug);
+  const resolvedParams = await params;
+  const tag = await getTagBySlug(resolvedParams.slug);
   if (!tag) {
     return {
       title: "Tag Not Found",
@@ -26,13 +27,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function TagPage({ params }: Props) {
-  const tag = await getTagBySlug(params.slug);
-  if (!tag) {
-    notFound();
-  }
+interface TagPageProps {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ page?: string }>;
+}
 
-  const { items: posts } = await getPostsByTag(params.slug, { limit: 10 });
+export default async function TagPage({ params, searchParams }: TagPageProps) {
+  const [resolvedParams, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const postsResult = await getPostsByTag(resolvedParams.slug);
+  const tag = postsResult.items.length > 0 ? postsResult.items[0]?.tags?.find((t: any) => t.slug === resolvedParams.slug) : null;
+  const page = parseInt(resolvedSearchParams.page || "1", 10);
 
   return (
     <main className="max-w-screen mx-auto px-6 my-7">
@@ -46,16 +50,16 @@ export default async function TagPage({ params }: Props) {
         </nav>
         
         <h1 className="text-4xl font-extrabold text-fg mb-2">
-          Posts tagged with "{tag.name}"
+          Posts tagged with "{tag?.name || resolvedParams.slug}"
         </h1>
         <p className="text-muted">
-          {posts.length} {posts.length === 1 ? 'post' : 'posts'} found
+          {postsResult.items.length} {postsResult.items.length === 1 ? 'post' : 'posts'} found
         </p>
       </div>
 
       <div className="grid gap-6">
-        {posts.length > 0 ? (
-          posts.map((post) => (
+        {postsResult.items.length > 0 ? (
+          postsResult.items.map((post: any) => (
             <ArticleCard key={post.id} post={post} />
           ))
         ) : (

@@ -80,10 +80,11 @@ vi.mock("@/lib/s3", () => {
 });
 
 // Mock fetch to return PNG bytes for the expected URL
-const IMAGE_URL = "http://www.shildreth.com/wp-content/uploads/2019/11/800px-FAA_Phonetic_and_Morse_Chart2.svg_-501x1024.png";
+const DIMENSIONED_IMAGE_URL = "http://www.shildreth.com/wp-content/uploads/2019/11/800px-FAA_Phonetic_and_Morse_Chart2.svg_-501x1024.png";
+const ORIGINAL_IMAGE_URL = "http://www.shildreth.com/wp-content/uploads/2019/11/800px-FAA_Phonetic_and_Morse_Chart2.svg_.png";
 const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   const url = String(input);
-  if (url === IMAGE_URL) {
+  if (url === ORIGINAL_IMAGE_URL) {
     return {
       ok: true,
       status: 200,
@@ -111,20 +112,126 @@ describe("WXR Import single image handling", () => {
     fetchMock.mockClear();
   });
 
-  it("downloads the image and creates a media mapping for the <img> src URL", async () => {
+  it("downloads the original image (without dimensions) and creates a media mapping", async () => {
     const result = await importWxr("test.xml", {
       dryRun: true,
       verbose: true,
       allowedHosts: ["www.shildreth.com"],
     });
 
-    // One image should be fetched and uploaded
+    // One image should be fetched and uploaded (the original URL, not the dimensioned one)
     expect(putCalls.length).toBe(1);
 
-    // The mapping should be present for the exact source URL
-    expect(result.mediaUrls.has(IMAGE_URL)).toBe(true);
-    const newUrl = result.mediaUrls.get(IMAGE_URL)!;
+    // The mapping should be present for the original (non-dimensioned) URL
+    expect(result.mediaUrls.has(ORIGINAL_IMAGE_URL)).toBe(true);
+    const newUrl = result.mediaUrls.get(ORIGINAL_IMAGE_URL)!;
     expect(newUrl.startsWith("https://storage.example.com/mock-bucket/imported-media/")).toBe(true);
+    
+    // The fetch should have been called with the original URL, not the dimensioned one
+    expect(fetchMock).toHaveBeenCalledWith(ORIGINAL_IMAGE_URL, expect.any(Object));
+    expect(fetchMock).not.toHaveBeenCalledWith(DIMENSIONED_IMAGE_URL, expect.any(Object));
+  });
+
+  it("downloads image when allowedHosts includes scheme and path (normalization)", async () => {
+    const result = await importWxr("test.xml", {
+      dryRun: true,
+      verbose: true,
+      allowedHosts: ["https://www.shildreth.com/some/path/"],
+    });
+    expect(putCalls.length).toBe(1);
+    expect(result.mediaUrls.size).toBe(1);
+  });
+
+  it("skips image download when host not in allowlist", async () => {
+    const result = await importWxr("test.xml", {
+      dryRun: true,
+      verbose: true,
+      allowedHosts: ["example.com"],
+    });
+    expect(putCalls.length).toBe(0);
+    expect(result.mediaUrls.size).toBe(0);
+  });
+
+  it("allows subdomain when base domain is in allowlist", async () => {
+    putCalls.length = 0;
+    const result = await importWxr("test.xml", {
+      dryRun: true,
+      verbose: true,
+      allowedHosts: ["shildreth.com"],
+    });
+    expect(putCalls.length).toBe(1);
+    expect(result.mediaUrls.size).toBe(1);
+  });
+  
+  it("replaces dimensioned URLs with local URLs and preserves/adds width/height attributes", async () => {
+    // Create a mock with explicit width/height attributes
+    const wxrWithDimensions = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <item>
+      <title><![CDATA[Test Image with Dimensions]]></title>
+      <link>https://example.com/test</link>
+      <pubDate>Sat, 16 Nov 2019 21:11:33 +0000</pubDate>
+      <dc:creator><![CDATA[steven]]></dc:creator>
+      <guid isPermaLink="false">https://example.com/?p=123</guid>
+      <content:encoded><![CDATA[
+        <img class="aligncenter wp-image-419 size-medium" src="http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934-300x169.jpg" alt="" width="300" height="169" />
+        <img src="http://www.shildreth.com/wp-content/uploads/2017/07/another-image-150x100.png" alt="Another image" />
+      ]]></content:encoded>
+      <wp:post_id>123</wp:post_id>
+      <wp:post_date><![CDATA[2019-11-16 16:11:33]]></wp:post_date>
+      <wp:post_date_gmt><![CDATA[2019-11-16 21:11:33]]></wp:post_date_gmt>
+      <wp:post_name><![CDATA[test-image]]></wp:post_name>
+      <wp:status><![CDATA[publish]]></wp:status>
+      <wp:post_parent>0</wp:post_parent>
+      <wp:post_type><![CDATA[post]]></wp:post_type>
+    </item>
+  </channel>
+</rss>`;
+
+    // Mock multiple original URLs
+    const fetchMockMultiple = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934.jpg" ||
+          url === "http://www.shildreth.com/wp-content/uploads/2017/07/another-image.png") {
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { get: (h: string) => (h.toLowerCase() === "content-type" ? "image/jpeg" : null) },
+          arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+        } as any;
+      }
+      return {
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        headers: { get: () => null },
+        arrayBuffer: async () => new Uint8Array().buffer,
+      } as any;
+    });
+
+    // Mock readFile to return our test content
+    const mockReadFile = vi.mocked(await import("node:fs/promises")).readFile;
+    mockReadFile.mockResolvedValueOnce(wxrWithDimensions);
+    
+    vi.stubGlobal("fetch", fetchMockMultiple);
+    putCalls.length = 0;
+
+    const result = await importWxr("test-dimensions.xml", {
+      dryRun: false,
+      verbose: true,
+      allowedHosts: ["www.shildreth.com"],
+    });
+
+    // Should download 2 original images
+    expect(putCalls.length).toBe(2);
+    
+    // Should have mappings for both original URLs
+    expect(result.mediaUrls.has("http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934.jpg")).toBe(true);
+    expect(result.mediaUrls.has("http://www.shildreth.com/wp-content/uploads/2017/07/another-image.png")).toBe(true);
+    
+    vi.unstubAllGlobals();
+    fetchMockMultiple.mockClear();
   });
 });
-

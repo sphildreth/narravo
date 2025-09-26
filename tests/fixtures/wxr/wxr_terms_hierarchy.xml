@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+>
+<channel>
+    <wp:category>
+        <wp:term_id>1</wp:term_id>
+        <wp:category_nicename>parent</wp:category_nicename>
+        <wp:category_parent></wp:category_parent>
+        <wp:cat_name><![CDATA[Parent]]></wp:cat_name>
+    </wp:category>
+    <wp:category>
+        <wp:term_id>2</wp:term_id>
+        <wp:category_nicename>child</wp:category_nicename>
+        <wp:category_parent>parent</wp:category_parent>
+        <wp:cat_name><![CDATA[Child]]></wp:cat_name>
+    </wp:category>
+</channel>
+</rss>

@@ -36,7 +36,7 @@ export function extractBeforeMore(html: string): string {
  */
 export function stripUnwanted(html: string, opts?: ExcerptOptions): string {
   const o = { ...DEFAULTS, ...(opts || {}) } satisfies Required<ExcerptOptions>;
-  const $ = cheerio.load(html ?? "", { decodeEntities: true });
+  const $ = cheerio.load(html ?? "", {});
 
   const drop =
     "img,video,audio,iframe,script,style,svg,canvas,form,noscript,object,embed,figure";

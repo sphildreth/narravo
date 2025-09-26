@@ -2,18 +2,24 @@
 import { getUserDetails, getAdminVisibility } from "@/app/(admin)/admin/users/actions";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ConfigServiceImpl } from "@/lib/config";
+import { db } from "@/lib/db";
+import { formatDateSafe } from "@/lib/dateFormat";
 
 interface UserDetailPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function UserDetailPage({ params }: UserDetailPageProps) {
+  const resolvedParams = await params;
   const [user, adminInfo] = await Promise.all([
-    getUserDetails(params.id),
+    getUserDetails(resolvedParams.id),
     getAdminVisibility(),
   ]);
+  // Server-side date format from configuration
+  const dateFormat = (await new ConfigServiceImpl({ db }).getString("VIEW.DATE-FORMAT")) ?? "MMMM d, yyyy";
   
   if (!user) {
     notFound();
@@ -92,7 +98,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                 Recent Comments ({user.recentComments.length} of {user.commentsCount})
               </h2>
               <div className="space-y-4">
-                {user.recentComments.map((comment) => (
+                {user.recentComments.map((comment: any) => (
                   <div key={comment.id} className="border border-border rounded-md p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -123,7 +129,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                           {comment.status}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(comment.createdAt).toLocaleDateString()}
+                          {formatDateSafe(comment.createdAt, dateFormat)}
                         </span>
                       </div>
                     </div>

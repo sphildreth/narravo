@@ -76,7 +76,7 @@ describe("WXR Import", () => {
 
       expect(result).toEqual({
         type: "post",
-        guid: "https://example.com/?p=1",
+        importedSystemId: "https://example.com/?p=1",
         title: "Test Post",
         slug: "test-post",
         html: "<p>Test content</p>",
@@ -108,7 +108,7 @@ describe("WXR Import", () => {
       const result = parseWxrItem(item);
 
       expect(result).toEqual({
-        guid: "https://example.com/?attachment=4",
+        importedSystemId: "https://example.com/?attachment=4",
         title: "Test Image",
         attachmentUrl: "https://example.com/wp-content/uploads/2024/01/test.jpg",
         alt: "Test image alt text",
@@ -307,6 +307,69 @@ describe("WXR Import", () => {
       expect(result.summary.totalItems).toBe(3);
       expect(result.summary.postsImported).toBe(2); // Draft + private
       expect(result.summary.skipped).toBe(1); // Published post skipped
+    });
+
+    it("should derive featured image from first image when no _thumbnail_id present", async () => {
+      const insertedPosts: any[] = [];
+      // Patch db.transaction mock implementation to also capture posts in onConflictDoUpdate chain
+      // @ts-ignore
+      db.transaction = vi.fn(async (fn: any) => {
+        const tx = {
+          insert: (_table: any) => ({
+            values: (row: any) => ({
+              onConflictDoUpdate: () => ({
+                returning: () => {
+                  // Capture post insertion (heuristic: presence of slug & html) even when conflict clause used
+                  if (row.slug && row.html) {
+                    insertedPosts.push(row);
+                    return Promise.resolve([{ id: 'post1', ...row }]);
+                  }
+                  return Promise.resolve([{ id: row.guid ? 'user1' : 'gen', ...row }]);
+                }
+              }),
+              onConflictDoNothing: () => Promise.resolve(),
+              returning: () => {
+                if (row.slug && row.html) {
+                  insertedPosts.push(row);
+                  return Promise.resolve([{ id: 'post1', ...row }]);
+                }
+                return Promise.resolve([{ id: row.guid ? 'user1' : 'gen', ...row }]);
+              }
+            })
+          }),
+          update: vi.fn(() => ({ where: vi.fn(() => Promise.resolve()) })),
+          delete: vi.fn(() => ({ where: vi.fn(() => Promise.resolve()) })),
+          select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve([])) })) })) })),
+        };
+        await fn(tx);
+      });
+
+      // XML with a single post containing an anchor-wrapped thumbnail image but no attachment meta
+      const fullSize = 'https://example.com/wp-content/uploads/2017/07/20170723_175934.jpg';
+      const thumb = 'https://example.com/wp-content/uploads/2017/07/20170723_175934-300x169.jpg';
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+          <channel>
+            <item>
+              <title>Fallback Featured Image Post</title>
+              <guid>https://example.com/?p=99</guid>
+              <wp:post_type>post</wp:post_type>
+              <wp:status>publish</wp:status>
+              <content:encoded><![CDATA[<p>Intro paragraph.</p><a href="${fullSize}" target="_blank" rel="noopener"><img class="aligncenter size-medium" src="${thumb}" alt="Concert photo" width="300" height="169" /></a><p>More text.</p>]]></content:encoded>
+            </item>
+          </channel>
+        </rss>`;
+
+      vi.mocked(readFile).mockResolvedValue(xml);
+      vi.mocked(db.execute).mockResolvedValue({ rows: [] });
+
+      const result = await importWxr('fallback.xml', { dryRun: false, skipMedia: true });
+
+      expect(result.summary.postsImported).toBe(1);
+      expect(insertedPosts.length).toBe(1);
+      const inserted = insertedPosts[0];
+      expect(inserted.featuredImageUrl).toBe(fullSize);
+      expect(inserted.featuredImageAlt).toBe('Concert photo');
     });
   });
 });

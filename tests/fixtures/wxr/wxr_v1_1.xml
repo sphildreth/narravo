@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+>
+<channel>
+    <wp:wxr_version>1.1</wp:wxr_version>
+</channel>
+</rss>

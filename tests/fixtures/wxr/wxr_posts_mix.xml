@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+>
+<channel>
+    <item>
+        <title>Test Post</title>
+        <wp:post_type>post</wp:post_type>
+        <content:encoded><![CDATA[This is a test post.]]></content:encoded>
+    </item>
+    <item>
+        <title>Test Page</title>
+        <wp:post_type>page</wp:post_type>
+        <content:encoded><![CDATA[This is a test page.]]></content:encoded>
+    </item>
+    <item>
+        <title>Test Product</title>
+        <wp:post_type>product</wp:post_type>
+        <content:encoded><![CDATA[This is a test product.]]></content:encoded>
+    </item>
+</channel>
+</rss>

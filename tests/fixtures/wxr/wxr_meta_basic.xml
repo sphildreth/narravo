@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+>
+<channel>
+    <item>
+        <title>Post with meta</title>
+        <wp:postmeta>
+            <wp:meta_key>_thumbnail_id</wp:meta_key>
+            <wp:meta_value><![CDATA[123]]></wp:meta_value>
+        </wp:postmeta>
+    </item>
+</channel>
+</rss>

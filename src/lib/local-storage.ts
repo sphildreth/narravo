@@ -70,6 +70,18 @@ export class LocalStorageService {
     }
   }
 
+  // New: delete all files under a given prefix (e.g., "imported-media")
+  async deletePrefix(prefix: string): Promise<void> {
+    if (!prefix || prefix === "/") return; // safety guard
+    // Resolve target under uploadDir and ensure containment
+    const target = path.resolve(this.uploadDir, prefix);
+    if (!target.startsWith(this.uploadDir)) {
+      // Do not allow deleting outside uploadDir
+      return;
+    }
+    await fs.rm(target, { recursive: true, force: true });
+  }
+
   async exists(key: string): Promise<boolean> {
     try {
       const filePath = path.join(this.uploadDir, key);

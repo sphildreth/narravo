@@ -117,7 +117,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
             .from(posts)
             .where(
               post.guid 
-                ? eq(posts.guid, post.guid)
+                ? eq(posts.importedSystemId, post.guid)
                 : eq(posts.slug, post.slug)
             )
             .limit(1);
@@ -166,7 +166,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
           .from(posts)
           .where(
             post.guid 
-              ? eq(posts.guid, post.guid)
+              ? eq(posts.importedSystemId, post.guid)
               : eq(posts.slug, post.slug)
           )
           .limit(1);

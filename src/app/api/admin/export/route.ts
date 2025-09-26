@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       userId: null, // TODO: Get from session when auth is implemented
       details: { includeMedia, dateFrom, dateTo, operationId },
       status: "started",
-      ipAddress: req.ip || req.headers.get("x-forwarded-for") || "unknown",
+      ipAddress: req.headers.get("x-forwarded-for") || "unknown",
       userAgent: req.headers.get("user-agent") || "unknown",
     }).returning();
 

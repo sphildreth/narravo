@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+<channel>
+    <title>Encoding Test</title>
+    <item>
+        <title>Emoji and Accents</title>
+        <content:encoded><![CDATA[Here are some emoji: 😊👍 and some accents: áéíóú.]]></content:encoded>
+    </item>
+</channel>
+</rss>

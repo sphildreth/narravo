@@ -5,6 +5,8 @@ import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { performBulkAction, type PostsFilter, type PostsSortOptions } from "@/app/(admin)/admin/posts/actions";
+import { useDateFormat } from "@/lib/dateFormat.client";
+import { formatDateSafe } from "@/lib/dateFormat";
 
 interface Post {
   id: string;
@@ -38,6 +40,7 @@ interface PostsManagerProps {
 
 export default function PostsManager({ initialData, filter, sort, page }: PostsManagerProps) {
   const router = useRouter();
+  const fmt = useDateFormat();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -328,14 +331,10 @@ export default function PostsManager({ initialData, filter, sort, page }: PostsM
                     </span>
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
-                    {post.publishedAt
-                      ? new Date(post.publishedAt).toLocaleDateString()
-                      : "—"}
+                    {post.publishedAt ? formatDateSafe(post.publishedAt, fmt) : "—"}
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
-                    {post.updatedAt
-                      ? new Date(post.updatedAt).toLocaleDateString()
-                      : "—"}
+                    {post.updatedAt ? formatDateSafe(post.updatedAt, fmt) : "—"}
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+>
+<channel>
+    <item>
+        <title>CDATA Content</title>
+        <wp:post_type>post</wp:post_type>
+        <content:encoded><![CDATA[<p>This is some HTML content.</p>]]></content:encoded>
+    </item>
+</channel>
+</rss>

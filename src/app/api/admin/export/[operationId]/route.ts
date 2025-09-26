@@ -7,12 +7,13 @@ import { eq, and, sql } from "drizzle-orm";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { operationId: string } }
+  { params }: { params: Promise<{ operationId: string }> }
 ) {
   try {
     await requireAdmin();
     
-    const { operationId } = params;
+    const resolvedParams = await params;
+    const { operationId } = resolvedParams;
     
     // Find the export operation
     const [operation] = await db

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand, DeleteObjectCommand, ListObjectsV2CommandOutput, _Object } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { nanoid } from "nanoid";
 
@@ -87,6 +87,48 @@ export class S3Service {
     await this.client.send(command);
   }
 
+  // New: delete a single object by key (best-effort)
+  async deleteObject(key: string): Promise<void> {
+    try {
+      const cmd = new DeleteObjectCommand({ Bucket: this.bucket, Key: key });
+      await this.client.send(cmd);
+    } catch (err) {
+      // swallow errors for idempotency; callers may ignore missing keys
+    }
+  }
+
+  // New: delete all objects under a given prefix (handles pagination, batches up to 1000 per call)
+  async deletePrefix(prefix: string): Promise<void> {
+    let ContinuationToken: string | undefined = undefined;
+    const cap = 1000;
+    do {
+      const list: ListObjectsV2CommandOutput = await this.client.send(new ListObjectsV2Command({
+        Bucket: this.bucket,
+        Prefix: prefix,
+        ContinuationToken,
+        MaxKeys: cap,
+      }));
+
+      const contents = (list.Contents ?? []) as _Object[];
+      const keys: string[] = contents
+        .map((obj: _Object) => obj.Key)
+        .filter((k: string | undefined): k is string => typeof k === "string" && k.length > 0);
+
+      if (keys.length > 0) {
+        // Batch delete
+        await this.client.send(new DeleteObjectsCommand({
+          Bucket: this.bucket,
+          Delete: {
+            Objects: keys.map((k: string) => ({ Key: k })),
+            Quiet: true,
+          },
+        }));
+      }
+
+      ContinuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
+    } while (ContinuationToken);
+  }
+
   getPublicUrl(key: string): string {
     if (this.config.endpoint) {
       // For R2 or custom endpoints
@@ -123,7 +165,7 @@ export function getStorageService(): S3Service | null {
   const s3Config = getS3Config();
   if (s3Config) {
     return new S3Service(s3Config);
-  }
+    }
   return null; // Use local storage fallback in import script
 }
 

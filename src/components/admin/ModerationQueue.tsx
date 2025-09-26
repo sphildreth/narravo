@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { performModerationAction } from "@/app/(admin)/admin/moderation/actions";
 import type { ModerationResult, ModerationComment, ModerationFilter } from "@/lib/moderation";
 import type { ModerateAction } from "@/lib/adminModeration";
+import { useDateFormat } from "@/lib/dateFormat.client";
+import { formatDateSafe } from "@/lib/dateFormat";
 
 interface ModerationQueueProps {
   initialData: ModerationResult;
@@ -279,6 +281,7 @@ function CommentCard({
   onModerationAction: (action: ModerateAction, ids?: string[], editData?: { id: string; bodyMd: string }) => void;
   isPending: boolean;
 }) {
+  const fmt = useDateFormat();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.bodyMd || "");
@@ -372,7 +375,7 @@ function CommentCard({
                 {comment.author.name || comment.author.email || "Anonymous"}
               </span>
               <span>•</span>
-              <span>{new Date(comment.createdAt).toLocaleDateString()}</span>
+              <span>{formatDateSafe(comment.createdAt, fmt)}</span>
               <span>•</span>
               <a 
                 href={`/${comment.postSlug}`}

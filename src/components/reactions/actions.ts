@@ -23,7 +23,7 @@ export async function toggleReactionAction(
     }
 
     // Anti-abuse validation including rate limiting
-    const requestHeaders = headers();
+    const requestHeaders = await headers();
     const antiAbuseResult = await validateAntiAbuse(session.user.id, "reaction", {
       honeypot: options?.honeypot ?? null,
       submitStartTime: options?.submitStartTime ?? null,

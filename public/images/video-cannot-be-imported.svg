@@ -1,0 +1,74 @@
+<!--?xml version="1.0" encoding="UTF-8"?-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img" aria-labelledby="title desc">
+  <title id="title">Video Cannot Be Imported</title>
+  <desc id="desc">A neutral placeholder with the same style as the image placeholder: light card, dot grid, video frame, and broken badge.</desc>
+  <defs>
+    <linearGradient id="bgFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6f7f9"></stop>
+      <stop offset="100%" stop-color="#eef1f5"></stop>
+    </linearGradient>
+    <clipPath id="cardClip">
+      <rect x="40" y="40" width="720" height="420" rx="24" ry="24"></rect>
+    </clipPath>
+    <style>
+      .card { fill: url(#bgFade); stroke: #9aa4b2; stroke-width: 2; }
+      .frame, .play, .timeline, .controls {
+        fill: none; stroke: #768395; stroke-width: 2.5;
+        stroke-linecap: round; stroke-linejoin: round;
+      }
+      .badge { fill: #fff; stroke: #d64545; stroke-width: 3; }
+      .badge-mark { stroke: #d64545; stroke-width: 6; stroke-linecap: round; }
+      .caption {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
+        font-weight: 600; fill: #4b5563; text-anchor: middle;
+      }
+      .subcaption {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
+        font-weight: 400; fill: #4b5563; opacity: .75; text-anchor: middle;
+      }
+    </style>
+  </defs>
+
+  <!-- Card background -->
+  <rect class="card" x="40" y="40" width="720" height="420" rx="24" ry="24"></rect>
+
+  <g clip-path="url(#cardClip)">
+    <!-- Decorative grid dots -->
+    <g opacity=".12">
+      <defs>
+        <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+          <circle cx="1.5" cy="1.5" r="1.5" fill="#9aa4b2"></circle>
+        </pattern>
+      </defs>
+      <rect x="40" y="40" width="720" height="420" fill="url(#dots)"></rect>
+    </g>
+  </g>
+
+  <!-- Video frame -->
+  <rect x="160" y="90" width="480" height="280" rx="12" ry="12" class="frame"></rect>
+  <rect x="175" y="105" width="450" height="250" rx="8" ry="8" class="frame"></rect>
+
+  <!-- Play icon -->
+  <polygon class="play" points="382,250 382,200 447,225 512,250 447,275 382,300"></polygon>
+
+  <!-- Timeline -->
+  <line class="timeline" x1="200" y1="360" x2="600" y2="360"></line>
+  <circle class="timeline" cx="360" cy="360" r="6"></circle>
+
+  <!-- Controls -->
+  <g class="controls" transform="translate(565, 115)">
+    <circle cx="0" cy="0" r="3"></circle>
+    <circle cx="-12" cy="0" r="3"></circle>
+    <circle cx="-24" cy="0" r="3"></circle>
+  </g>
+
+  <!-- Broken badge -->
+  <g transform="translate(560, 80)">
+    <circle r="26" class="badge"></circle>
+    <path class="badge-mark" d="M-10 -10 L10 10 M10 -10 L-10 10"></path>
+  </g>
+
+  <!-- Captions -->
+  <text class="caption" x="400" y="410" font-size="28">Video Cannot Be Imported</text>
+  <text class="subcaption" x="400" y="440" font-size="18">The source failed to load or isn't supported</text>
+</svg>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+>
+<channel>
+    <item>
+        <title>Parent Post</title>
+        <wp:post_id>1</wp:post_id>
+        <wp:post_type>post</wp:post_type>
+        <content:encoded><![CDATA[This post has an attachment.]]></content:encoded>
+    </item>
+    <item>
+        <title>Attachment</title>
+        <wp:post_type>attachment</wp:post_type>
+        <wp:attachment_url>http://example.com/attachment.jpg</wp:attachment_url>
+        <wp:post_parent>1</wp:post_parent>
+        <wp:status>inherit</wp:status>
+    </item>
+</channel>
+</rss>

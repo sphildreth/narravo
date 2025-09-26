@@ -18,13 +18,15 @@ import Prose from "@/components/Prose";
 import { RenderTimeBadge } from "@/components/RenderTimeBadge";
 import { RUMCollector } from "@/components/RUMCollector";
 import { measureAsync, createServerTimingHeader } from "@/lib/performance";
+import { formatDateSafe } from "@/lib/dateFormat";
 
 type Props = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const post = await getPostBySlug(params.slug);
+  const resolvedParams = await params;
+  const post = await getPostBySlug(resolvedParams.slug);
   if (!post) {
     return {
       title: "Post Not Found",
@@ -37,6 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PostPage({ params }: Props) {
   const renderStart = performance.now();
+  const resolvedParams = await params;
   
   // Measure config loading
   const { result: config, duration: configDuration } = await measureAsync(
@@ -60,7 +63,7 @@ export default async function PostPage({ params }: Props) {
   // Measure post loading (main data fetch)
   const { result: post, duration: postDuration } = await measureAsync(
     'post-load',
-    async () => getPostBySlugWithReactions(params.slug, userId)
+    async () => getPostBySlugWithReactions(resolvedParams.slug, userId)
   );
   
   if (!post) {
@@ -76,9 +79,12 @@ export default async function PostPage({ params }: Props) {
     ])
   );
   
-  const date = post.publishedAt
-    ? new Date(post.publishedAt).toLocaleDateString()
-    : "";
+  // Use configured date format
+  // Note: This is a Server Component; DateFormatProvider context is for client side.
+  // For server rendering, read config directly with a safe default.
+  const configForDate = new ConfigServiceImpl({ db });
+  const df = (await configForDate.getString("VIEW.DATE-FORMAT")) ?? "MMMM d, yyyy";
+  const date = formatDateSafe(post.publishedAt ?? null, df);
 
   const { title: siteName, url: siteUrl } = getSiteMetadata();
   const jsonLd = generatePostJsonLd(post, siteUrl, siteName);
@@ -130,6 +136,18 @@ export default async function PostPage({ params }: Props) {
                             <DeletePostButton postId={post.id} postTitle={post.title} />
                         </div>
                     </div>
+                </div>
+            )}
+            {/* Featured Image Display - below admin actions as requested */}
+            {post.featuredImageUrl && (
+                <div className="border border-border rounded-xl bg-card shadow-soft overflow-hidden">
+                    <img
+                        src={post.featuredImageUrl}
+                        alt={post.featuredImageAlt || post.title}
+                        className="w-full h-auto object-cover"
+                        loading="eager"
+                        style={{ maxHeight: '500px' }}
+                    />
                 </div>
             )}
           <article className="article border border-border rounded-xl bg-card shadow-soft">

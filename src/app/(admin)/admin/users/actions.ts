@@ -117,11 +117,11 @@ export async function getUsersWithFilters(
   const total = totalResult?.count ?? 0;
   
   // Get stats for each user
-  const userIds = items.map(u => u.id);
+  const userIds = items.map((u: any) => u.id);
   const userStats = await getUserStats(userIds);
   
   // Apply admin filter if specified
-  const usersWithStats = items.map(user => {
+  const usersWithStats = items.map((user: any) => {
     const stats = userStats[user.id] || { commentsCount: 0, reactionsCount: 0, recentComments: [] };
     const isAdmin = isEmailAdmin(user.email);
     
@@ -131,7 +131,7 @@ export async function getUsersWithFilters(
       isAdmin,
       ...stats,
     };
-  }).filter(user => {
+  }).filter((user: any) => {
     if (filter.isAdmin !== undefined) {
       return filter.isAdmin ? user.isAdmin : !user.isAdmin;
     }
@@ -293,7 +293,7 @@ export async function anonymizeUser(formData: FormData) {
   const parsed = anonymizeUserSchema.safeParse(data);
   if (!parsed.success) {
     return { 
-      error: parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ") 
+      error: parsed.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ") 
     };
   }
   
@@ -356,7 +356,7 @@ export async function deleteUser(formData: FormData) {
   const parsed = deleteUserSchema.safeParse(data);
   if (!parsed.success) {
     return {
-      error: parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ")
+      error: parsed.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")
     };
   }
 

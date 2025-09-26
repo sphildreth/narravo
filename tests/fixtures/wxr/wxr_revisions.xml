@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+>
+<channel>
+    <item>
+        <title>Post with Revisions</title>
+        <wp:post_type>post</wp:post_type>
+        <content:encoded><![CDATA[This is the final content.]]></content:encoded>
+    </item>
+    <item>
+        <title>Post with Revisions</title>
+        <wp:post_type>revision</wp:post_type>
+        <wp:post_parent>1</wp:post_parent>
+        <content:encoded><![CDATA[This is a revision.]]></content:encoded>
+    </item>
+</channel>
+</rss>

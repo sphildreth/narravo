@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+>
+<channel>
+    <wp:term>
+        <wp:term_id>1</wp:term_id>
+        <wp:term_taxonomy>genre</wp:term_taxonomy>
+        <wp:term_slug>sci-fi</wp:term_slug>
+        <wp:term_name><![CDATA[Sci-Fi]]></wp:term_name>
+    </wp:term>
+    <item>
+        <title>A Space Odyssey</title>
+        <category domain="genre" nicename="sci-fi"><![CDATA[Sci-Fi]]></category>
+    </item>
+</channel>
+</rss>

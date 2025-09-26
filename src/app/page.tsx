@@ -9,6 +9,9 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import { unstable_cache as cache } from "next/cache";
 
+// This page reads DB-backed config and latest posts; ensure it's not pre-rendered at build time
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   const config = new ConfigServiceImpl({ db });
   const revalidateSeconds = await config.getNumber("PUBLIC.HOME.REVALIDATE-SECONDS");
@@ -41,7 +44,7 @@ export default async function Page() {
   return (
     <>
       <Header />
-      <div className="max-w-screen mx-auto px-3 my-7 grid gap-7 md:grid-cols-[280px_1fr]">
+      <div className="max-w-screen mx-auto px-3 my-7 grid gap-7 md:grid-cols-[320px_1fr]">
         <div className="order-2 md:order-1">
           <div className="space-y-6">
             <Sidebar />

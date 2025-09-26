@@ -3,6 +3,9 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 
+// Avoid prerendering this page at build time since it depends on DB-backed config
+export const dynamic = "force-dynamic";
+
 export default async function DisclaimerPage() {
   const config = new ConfigServiceImpl({ db });
   const enabled = await config.getBoolean("SITE.DISCLAIMER.ENABLED");
@@ -15,7 +18,7 @@ export default async function DisclaimerPage() {
   const style = await config.getString("SITE.DISCLAIMER.STYLE");
 
   return (
-    <div className="prose dark:prose-invert mx-auto py-8">
+    <div className="prose dark:prose-invert mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8 md:py-12">
       <style>{style}</style>
       <h1>Disclaimer</h1>
       <div dangerouslySetInnerHTML={{ __html: text ?? "" }} />

@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toggleReactionAction } from "./actions";
 import type { TargetType, ReactionKind, ReactionCounts, UserReactions } from "@/lib/reactions";
 
@@ -42,6 +42,8 @@ export default function ReactionButtons({
   const [localCounts, setLocalCounts] = useState(counts);
   const [localUserReactions, setLocalUserReactions] = useState(userReactions);
   const [isPending, startTransition] = useTransition();
+  // Track when the component mounted to satisfy anti-abuse minimum submit time
+  const submitStartRef = useRef<number>(Date.now());
 
   const handleToggle = (kind: ReactionKind) => {
     if (isPending) return;
@@ -67,7 +69,9 @@ export default function ReactionButtons({
     // Server action
     startTransition(async () => {
       try {
-        const result = await toggleReactionAction(targetType, targetId, kind);
+        const result = await toggleReactionAction(targetType, targetId, kind, {
+          submitStartTime: submitStartRef.current,
+        });
         if (result.error) {
           // Revert optimistic update on error
           setLocalCounts(counts);

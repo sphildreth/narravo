@@ -56,7 +56,8 @@ export function PurgeSection() {
     }
   };
 
-  const canPurge = Boolean(validId || targetSlug);
+  // Allow purge when we have an explicit target OR when doing a confirmed hard delete (BULK)
+  const canPurge = Boolean(validId || targetSlug || (!dryRun && purgeMode === "hard"));
   const needsConfirmation = purgeMode === "hard" && !dryRun;
 
   return (

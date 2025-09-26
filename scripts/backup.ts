@@ -161,7 +161,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
     
     // Collect all media URLs from comment attachments
     const mediaUrls = new Set<string>();
-    attachmentsData.forEach(attachment => {
+    attachmentsData.forEach((attachment: any) => {
       if (attachment.url) mediaUrls.add(attachment.url);
       if (attachment.posterUrl) mediaUrls.add(attachment.posterUrl);
     });

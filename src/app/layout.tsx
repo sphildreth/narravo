@@ -6,6 +6,8 @@ import { cookies } from "next/headers";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import Navbar from "@/components/Navbar";
+import { DEFAULT_DATE_FORMAT } from "@/lib/dateFormat";
+import { DateFormatProvider } from "@/lib/dateFormat.client";
 
 export async function generateMetadata(): Promise<Metadata> {
     try {
@@ -26,22 +28,30 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-    const themeCookie = cookies().get("theme")?.value;
+    const themeCookie = (await cookies()).get("theme")?.value;
     let theme = themeCookie ?? "light";
-    if (!themeCookie) {
-        try {
-            const config = new ConfigServiceImpl({ db });
+    // Load site-wide date format from configuration
+    let dateFormat = DEFAULT_DATE_FORMAT;
+    try {
+        const config = new ConfigServiceImpl({ db });
+        if (!themeCookie) {
             const configured = await config.getString("THEME.DEFAULT");
             if (configured === "light" || configured === "dark") theme = configured;
-        } catch {}
-    }
+        }
+        const cfgDate = await config.getString("VIEW.DATE-FORMAT");
+        if (cfgDate && typeof cfgDate === "string" && cfgDate.trim().length > 0) {
+            dateFormat = cfgDate.trim();
+        }
+    } catch {}
     return (
         <html lang="en" data-theme={theme} suppressHydrationWarning>
         <body>
             <Navbar />
-            <main className="min-h-screen bg-bg text-fg">
-                {children}
-            </main>
+            <DateFormatProvider value={dateFormat}>
+                <main className="min-h-screen bg-bg text-fg">
+                    {children}
+                </main>
+            </DateFormatProvider>
         </body>
         </html>
     );

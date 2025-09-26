@@ -23,7 +23,7 @@ interface WebVitalMetric {
  */
 export function RUMCollector() {
   const metrics = useRef<WebVitalMetric[]>([]);
-  const sendTimeout = useRef<NodeJS.Timeout>();
+  const sendTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const handleMetric = (metric: WebVitalMetric) => {
     metrics.current.push(metric);

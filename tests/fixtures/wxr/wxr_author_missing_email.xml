@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+>
+<channel>
+    <wp:author>
+        <wp:author_id>1</wp:author_id>
+        <wp:author_login>author1</wp:author_login>
+        <wp:author_display_name><![CDATA[Author One]]></wp:author_display_name>
+    </wp:author>
+</channel>
+</rss>

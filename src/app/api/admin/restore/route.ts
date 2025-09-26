@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         fileSize: file.size,
       },
       status: "started",
-      ipAddress: req.ip || req.headers.get("x-forwarded-for") || "unknown",
+      ipAddress: req.headers.get("x-forwarded-for") || "unknown",
       userAgent: req.headers.get("user-agent") || "unknown",
     }).returning();
 

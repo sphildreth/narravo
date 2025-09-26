@@ -13,11 +13,13 @@ const querySchema = z.object({
 });
 
 export async function GET(
-  request: NextRequest, 
-  { params }: { params: { slug: string } }
+  req: NextRequest,
+  { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const { slug } = params;
+    const resolvedParams = await params;
+    const { slug } = resolvedParams;
+    const url = new URL(req.url);
     
     // Verify tag exists
     const tag = await getTagBySlug(slug);
@@ -28,7 +30,7 @@ export async function GET(
       );
     }
 
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = url;
     
     // Parse cursor from query params if present
     let cursor = null;
@@ -66,7 +68,15 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error(`Error in /api/tags/${params.slug}/posts:`, error);
+    // Use a fallback slug since resolvedParams might not be available in catch
+    const slug = 'unknown';
+    try {
+      const resolvedParams = await params;
+      const actualSlug = resolvedParams.slug;
+      console.error(`Error in /api/tags/${actualSlug}/posts:`, error);
+    } catch {
+      console.error(`Error in /api/tags/${slug}/posts:`, error);
+    }
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: "Internal server error" } },
       { status: 500 }

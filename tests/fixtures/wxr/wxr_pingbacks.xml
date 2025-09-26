@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+>
+<channel>
+    <item>
+        <title>Post with pingbacks</title>
+        <wp:comment>
+            <wp:comment_id>1</wp:comment_id>
+            <wp:comment_type>pingback</wp:comment_type>
+        </wp:comment>
+        <wp:comment>
+            <wp:comment_id>2</wp:comment_id>
+            <wp:comment_type>trackback</wp:comment_type>
+        </wp:comment>
+    </item>
+</channel>
+</rss>

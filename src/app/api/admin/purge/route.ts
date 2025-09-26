@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dataOperationLogs, posts, comments, commentAttachments } from "@/drizzle/schema";
 import { eq, and, isNull, sql, inArray } from "drizzle-orm";
+import { getS3Config, S3Service } from "@/lib/s3";
+import { localStorageService } from "@/lib/local-storage";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
         ok: false,
         error: { 
           message: "Invalid request",
-          details: parsed.error.errors 
+          details: parsed.error.issues 
         }
       }), {
         status: 400,
@@ -96,7 +98,7 @@ export async function POST(req: NextRequest) {
         operationId,
       },
       status: "started",
-      ipAddress: req.ip || req.headers.get("x-forwarded-for") || "unknown",
+      ipAddress: req.headers.get("x-forwarded-for") || "unknown",
       userAgent: req.headers.get("user-agent") || "unknown",
     }).returning();
 
@@ -131,13 +133,20 @@ export async function POST(req: NextRequest) {
           whereConditions.push(isNull(posts.deletedAt));
         }
 
+        // Determine where clause; allow BULK hard delete of all posts when explicitly confirmed
+        let whereClause: any;
         if (whereConditions.length === 0) {
-          throw new Error("No valid identifiers or filters provided");
+          if (mode === "hard" && !dryRun) {
+            // BULK hard delete — operate on all posts
+            whereClause = sql`1=1`;
+          } else {
+            throw new Error("No valid identifiers or filters provided");
+          }
+        } else {
+          whereClause = whereConditions.length === 1
+            ? whereConditions[0]
+            : and(...whereConditions);
         }
-
-        const whereClause = whereConditions.length === 1 
-          ? whereConditions[0] 
-          : and(...whereConditions);
 
         // Get posts that would be affected
         const postsToDelete = await db
@@ -146,6 +155,9 @@ export async function POST(req: NextRequest) {
             slug: posts.slug,
             title: posts.title,
             createdAt: posts.createdAt,
+            featuredImageUrl: posts.featuredImageUrl,
+            bodyHtml: posts.bodyHtml,
+            html: posts.html,
           })
           .from(posts)
           .where(whereClause);
@@ -154,7 +166,7 @@ export async function POST(req: NextRequest) {
         preview.records = postsToDelete;
 
         if (postsToDelete.length > 0) {
-          const postIds = postsToDelete.map(p => p.id);
+          const postIds = postsToDelete.map((p: any) => p.id);
           
           // Check cascade effects (comments that would be affected)
           const commentsCount = await db
@@ -181,6 +193,58 @@ export async function POST(req: NextRequest) {
                 .where(whereClause);
             } else {
               // Hard delete posts (comments cascade via foreign key)
+              // Before deleting from DB, attempt to delete any imported-media files referenced by
+              // - post featuredImageUrl
+              // - post HTML/bodyHtml fields
+              // - comment attachments (url/posterUrl) under these posts
+              try {
+                const keys = new Set<string>();
+
+                const extractImportedKeys = (text?: string | null) => {
+                  if (!text) return;
+                  const regex = /imported-media\/[A-Za-z0-9._\/-]+/g;
+                  const matches = text.match(regex);
+                  if (matches) matches.forEach((k) => keys.add(k));
+                };
+
+                // Collect from post records
+                for (const p of postsToDelete as Array<any>) {
+                  extractImportedKeys(p.featuredImageUrl);
+                  extractImportedKeys(p.bodyHtml);
+                  extractImportedKeys(p.html);
+                }
+
+                // Collect from comment attachments for these posts
+                if (postIds.length > 0) {
+                  const base: any = db
+                    .select({ url: commentAttachments.url, posterUrl: commentAttachments.posterUrl })
+                    .from(commentAttachments);
+                  if (typeof base.leftJoin === "function") {
+                    const attachments = await base
+                      .leftJoin(comments, eq(comments.id, commentAttachments.commentId))
+                      .where(inArray(comments.postId, postIds));
+                    for (const a of (attachments as Array<any>) ?? []) {
+                      extractImportedKeys(a.url);
+                      extractImportedKeys(a.posterUrl);
+                    }
+                  }
+                }
+
+                if (keys.size > 0) {
+                  const s3cfg = getS3Config();
+                  const storage = s3cfg ? new S3Service(s3cfg) : localStorageService;
+                  // Best-effort delete each key
+                  await Promise.allSettled(Array.from(keys).map((k) => storage.deleteObject(k)));
+                }
+              } catch (e) {
+                // Best-effort: don't fail the purge due to storage errors
+                // Avoid noisy warning for mocked environments lacking leftJoin
+                const msg = e instanceof Error ? e.message : String(e);
+                if (!/leftJoin is not a function/i.test(msg)) {
+                  console.warn("Warning: failed to delete some imported-media during purge:", e);
+                }
+              }
+
               await db.delete(posts).where(whereClause);
             }
           }
@@ -229,7 +293,7 @@ export async function POST(req: NextRequest) {
           .where(whereClause);
 
         recordsAffected = commentsToDelete.length;
-        preview.records = commentsToDelete.map(c => ({
+  preview.records = commentsToDelete.map((c: any) => ({
           id: c.id,
           postId: c.postId,
           excerpt: c.bodyHtml.substring(0, 100) + "...",

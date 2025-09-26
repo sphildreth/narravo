@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+>
+<channel>
+    <item>
+        <title>More Tag</title>
+        <wp:post_type>post</wp:post_type>
+        <content:encoded><![CDATA[This is the excerpt.<!--more-->This is the rest of the content.]]></content:encoded>
+    </item>
+    <item>
+        <title>Multiple More Tags</title>
+        <wp:post_type>post</wp:post_type>
+        <content:encoded><![CDATA[This is the excerpt.<!--more-->This is the rest of the content.<!--more-->This should be ignored.]]></content:encoded>
+    </item>
+</channel>
+</rss>

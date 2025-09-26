@@ -7,11 +7,12 @@ import Link from "next/link";
 import { ArrowLeft, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 
 interface Props {
-  params: { jobId: string };
+  params: Promise<{ jobId: string }>;
 }
 
 export default async function ImportJobDetailsPage({ params }: Props) {
-  const [job] = await db.select().from(importJobs).where(eq(importJobs.id, params.jobId));
+  const resolvedParams = await params;
+  const [job] = await db.select().from(importJobs).where(eq(importJobs.id, resolvedParams.jobId));
   
   if (!job) {
     notFound();
@@ -20,7 +21,7 @@ export default async function ImportJobDetailsPage({ params }: Props) {
   const errors = await db
     .select()
     .from(importJobErrors)
-    .where(eq(importJobErrors.jobId, params.jobId))
+    .where(eq(importJobErrors.jobId, resolvedParams.jobId))
     .orderBy(importJobErrors.createdAt);
 
   const formatDate = (date: Date | null) => {
@@ -148,11 +149,11 @@ export default async function ImportJobDetailsPage({ params }: Props) {
           </h2>
           
           <div className="space-y-4">
-            {errors.map((error, index) => (
+            {errors.map((error: any, index: number) => (
               <div key={error.id} className="border border-red-200 rounded p-4 bg-red-50">
                 <div className="flex justify-between items-start mb-2">
                   <div className="font-medium text-red-800">
-                    {error.errorType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    {error.errorType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                   </div>
                   <div className="text-xs text-red-600">
                     {formatDate(error.createdAt)}

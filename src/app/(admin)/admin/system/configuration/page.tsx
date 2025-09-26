@@ -13,7 +13,7 @@ export default async function ConfigurationPage() {
 
   // Dedupe keys in case of duplicates (shouldn't happen with unique index)
   const seen = new Set<string>();
-  const items = rows.filter((r) => (seen.has(r.key) ? false : (seen.add(r.key), true)));
+  const items = rows.filter((r: any) => (seen.has(r.key) ? false : (seen.add(r.key), true)));
 
   return (
     <div className="space-y-4">

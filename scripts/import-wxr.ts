@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+/* eslint-disable no-console */
 import { parseStringPromise } from "xml2js";
 import { db } from "@/lib/db";
 import { posts, redirects, categories, tags, postTags, comments, users, importJobs, importJobErrors } from "@/drizzle/schema";
@@ -11,113 +12,11 @@ import crypto from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import { expandShortcodes } from "@/lib/markdown";
 import { generateExcerpt } from "@/lib/excerpts/ExcerptService";
+import { validateAndProtectIframes, restoreProtectedIframes, defaultProviders } from "./iframe-allowlist";
 
 /**
- * Gutenberg block wrapper remover.
- * Strips <!-- wp:* --> and <!-- /wp:* --> comments while preserving inner HTML.
- * Safe fallback for importers that don't interpret blocks semantically.
+ * Represents the structure of an <item> element in a WordPress WXR export file.
  */
-function stripGutenbergBlockComments(html: string): string {
-  if (!html) return html;
-  return html
-    // Remove opening/closing block comments but keep everything between them
-    .replace(/<!--\s*\/?wp:[\s\S]*?-->\s*/g, "");
-}
-
-/**
- * Quicktags handler.
- * - <!--more-->: returns excerpt (text before) if none provided, removes the marker from HTML.
- * - <!--nextpage-->: replaces with a marker <hr data-wp-nextpage="true" /> to preserve intent.
- */
-
-function applyQuicktags(html: string): { html: string; excerptFromMore?: string; pageBreaks: number } {
-  if (!html) return { html, pageBreaks: 0 };
-  let excerptFromMoreValue: string | undefined;
-  let pageBreaks = 0;
-
-  if (html.includes("<!--more-->")) {
-    const idx = html.indexOf("<!--more-->");
-    const before = idx >= 0 ? html.slice(0, idx) : "";
-    const after = idx >= 0 ? html.slice(idx + "<!--more-->".length) : "";
-    excerptFromMoreValue = before.trim();
-    html = (before + after);
-  }
-
-  html = html.replace(/<!--\s*nextpage\s*-->/gi, () => {
-    pageBreaks += 1;
-    return '<hr data-wp-nextpage="true" />';
-  });
-
-  const base = { html, pageBreaks };
-  return excerptFromMoreValue !== undefined ? { ...base, excerptFromMore: excerptFromMoreValue } : base;
-}
-
-/**
- * Minimal auto-embed detection.
- * Converts standalone YouTube/Vimeo URLs (or [embed]URL[/embed]) on their own line into
- * <a class="wp-embed" data-embed="provider" href="...">...</a>
- * This avoids sanitizer iframe stripping while preserving intent for the renderer.
- */
-function transformAutoEmbeds(html: string): string {
-  if (!html) return html;
-
-  const lineEmbed = (url: string) => {
-    const u = url.trim();
-    let provider: string | null = null;
-    if (/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(u)) provider = "youtube";
-    else if (/^(https?:\/\/)?(player\.)?vimeo\.com\//i.test(u)) provider = "vimeo";
-    else provider = null;
-    if (!provider) return url;
-    const escaped = u.replace(/"/g, "&quot;");
-    return `<p><a class="wp-embed" data-embed="${provider}" href="${escaped}">${escaped}</a></p>`;
-  };
-
-  // [embed]URL[/embed] -> embedded anchor
-  html = html.replace(/\[embed\]([\s\S]*?)\[\/embed\]/gi, (_, url) => lineEmbed(url));
-
-  // Standalone provider URLs: detect URLs that are in their own paragraph or on separate lines.
-  html = html.replace(
-    /(?:^|\n|\r|\r\n)\s*(https?:\/\/[^\s<>"']+)\s*(?=$|\n|\r|\r\n)/g,
-    (m, url) => "\n" + lineEmbed(url)
-  );
-
-  return html;
-}
-
-/**
- * Minimal shortcode helpers.
- * - [caption] <img ... /> Caption text [/caption] -> <figure><img ... /><figcaption>Caption text</figcaption></figure>
- * Leaves unknown shortcodes intact to avoid data loss.
- */
-function transformBasicShortcodes(html: string): string {
-  if (!html) return html;
-  // naive [caption] transform
-  html = html.replace(/\[caption[^\]]*\]([\s\S]*?)\[\/caption\]/gi, (_m, inner) => {
-    // Try to split out the first <img ...>
-    const imgMatch = inner.match(/<img[\s\S]*?>/i);
-    if (!imgMatch) return inner; // fallback
-    const img = imgMatch[0];
-    const rest = inner.replace(img, "").trim();
-    const caption = rest ? `<figcaption>${rest}</figcaption>` : "";
-    return `<figure class="wp-caption">${img}${caption}</figure>`;
-  });
-  return html;
-}
-
-/**
- * Utility to safely set excerpt if missing.
- */
-function chooseExcerpt(existing: string | undefined, excerptFromMore?: string): string | undefined {
-  if (existing && existing.trim().length > 0) return existing;
-  if (excerptFromMore && excerptFromMore.trim().length > 0) return excerptFromMore;
-  return existing;
-}
-
-// --- Enhanced content processing pipeline additions ---
-interface EmbedOptions {
-  allowedEmbedHosts?: string[]; // informational for renderers; sanitization still happens downstream
-}
-
 export interface WxrItem {
   title?: string;
   link?: string;
@@ -134,11 +33,11 @@ export interface WxrItem {
   "wp:post_type"?: string;
   "wp:post_parent"?: string;
   "wp:attachment_url"?: string;
-  "wp:postmeta"?: Array<{
+  "wp:postmeta"?: Array<{ 
     "wp:meta_key": string;
     "wp:meta_value": string;
   }>;
-  "wp:comment"?: Array<{
+  "wp:comment"?: Array<{ 
     "wp:comment_id": string;
     "wp:comment_author": string;
     "wp:comment_author_email": string;
@@ -149,7 +48,7 @@ export interface WxrItem {
     "wp:comment_type": string;
     "wp:comment_parent": string;
   }>;
-  category?: Array<{
+  category?: Array<{ 
     _: string;
     "$": {
       domain: string;
@@ -158,9 +57,12 @@ export interface WxrItem {
   }>;
 }
 
+/**
+ * Represents a parsed WordPress post, ready for import.
+ */
 export interface ParsedPost {
   type: "post";
-  guid: string;
+  importedSystemId: string;
   title: string;
   slug: string;
   html: string;
@@ -171,7 +73,7 @@ export interface ParsedPost {
   featuredImageId?: string | undefined;
   categories: Array<{ name: string; slug: string }>;
   tags: Array<{ name: string; slug: string }>;
-  comments: Array<{
+  comments: Array<{ 
     id: string;
     author: string;
     authorEmail?: string | undefined;
@@ -182,14 +84,20 @@ export interface ParsedPost {
   }>;
 }
 
+/**
+ * Represents a parsed WordPress attachment (media item).
+ */
 export interface ParsedAttachment {
   type: "attachment";
-  guid: string;
+  importedSystemId: string;
   title: string;
   attachmentUrl: string;
   alt?: string | undefined;
 }
 
+/**
+ * Options to configure the WXR import process.
+ */
 export interface ImportOptions {
   dryRun?: boolean;
   skipMedia?: boolean;
@@ -202,6 +110,9 @@ export interface ImportOptions {
   rebuildExcerpts?: boolean; // new flag
 }
 
+/**
+ * The result of an import operation, including a summary and any errors.
+ */
 export interface ImportResult {
   summary: {
     totalItems: number;
@@ -215,17 +126,22 @@ export interface ImportResult {
   mediaUrls: Map<string, string>; // old URL -> new URL mapping
 }
 
+/**
+ * Parses a raw WXR item object into a structured `ParsedPost`, `ParsedAttachment`, or null.
+ * @param item The raw item object from xml2js.
+ * @returns A parsed object or null if the item type is not supported or invalid.
+ */
 export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | null {
   const postType = item["wp:post_type"];
 
-  // Extract GUID
-  let guid: string;
+  // Extract importedSystemId (WordPress GUID)  
+  let importedSystemId: string;
   if (typeof item.guid === "string") {
-    guid = item.guid;
+    importedSystemId = item.guid;
   } else if (item.guid && typeof item.guid === "object" && item.guid._) {
-    guid = item.guid._;
+    importedSystemId = item.guid._;
   } else {
-    return null; // No GUID, skip
+    return null; // No guid, skip
   }
 
   if (postType === "post") {
@@ -279,7 +195,7 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
 
     return {
       type: "post",
-      guid,
+      importedSystemId,
       title: item.title || "Untitled",
       slug: item["wp:post_name"] || slugify(item.title || "untitled", { lower: true, strict: true }),
       html: item["content:encoded"] || "",
@@ -305,7 +221,7 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
 
     return {
       type: "attachment",
-      guid,
+      importedSystemId,
       title: item.title || "Untitled",
       attachmentUrl: item["wp:attachment_url"] || "",
       alt,
@@ -315,6 +231,12 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
   return null; // Skip other post types
 }
 
+/**
+ * Guesses the MIME type of a file based on its URL's extension.
+ * @param url The URL of the file.
+ * @param fallback The content type to return if no match is found.
+ * @returns The guessed MIME type string.
+ */
 function guessContentType(url: string, fallback: string = 'application/octet-stream'): string {
   const lower = url.toLowerCase();
   if (lower.endsWith('.png')) return 'image/png';
@@ -329,6 +251,11 @@ function guessContentType(url: string, fallback: string = 'application/octet-str
   return fallback;
 }
 
+/**
+ * Extracts the file extension from a URL.
+ * @param url The URL to parse.
+ * @returns The file extension in lowercase, or "bin" as a fallback.
+ */
 function getExtensionFromUrl(url: string): string {
   try {
     const u = new URL(url);
@@ -347,6 +274,15 @@ function getExtensionFromUrl(url: string): string {
   return "bin";
 }
 
+/**
+ * Downloads a media file from a given URL and uploads it to the configured storage (S3 or local).
+ * @param url The URL of the media file to download.
+ * @param s3Service An S3 service instance, or null.
+ * @param localService A local storage service instance, or null.
+ * @param allowedHosts A list of allowed hostnames to download from.
+ * @param opts Options for the download process (e.g., dryRun, verbose).
+ * @returns The new public URL of the uploaded media, or null if the download failed or was skipped.
+ */
 async function downloadMedia(
   url: string,
   s3Service: S3Service | null,
@@ -385,6 +321,10 @@ async function downloadMedia(
       throw new Error(`Host ${hostname} not in allowlist`);
     }
 
+    if (verbose) {
+      console.log(`📥 Downloading media: ${url}`);
+    }
+
     // Download file
     const response = await fetch(url, {
       headers: {
@@ -406,48 +346,475 @@ async function downloadMedia(
     // Upload to S3 or local storage
     const contentType = response.headers.get('content-type') || guessContentType(url);
     
+    if (verbose) {
+      console.log(`💾 Uploading ${buffer.length} bytes as ${key} (${contentType})`);
+    }
+    
     if (s3Service) {
       await s3Service.putObject(key, buffer, contentType);
-      return s3Service.getPublicUrl(key);
+      const publicUrl = s3Service.getPublicUrl(key);
+      if (verbose) {
+        console.log(`✅ Successfully uploaded to S3: ${url} -> ${publicUrl}`);
+      }
+      return publicUrl;
     } else if (localService) {
       await localService.putObject(key, buffer, contentType);
-      return localService.getPublicUrl(key);
+      const publicUrl = localService.getPublicUrl(key);
+      if (verbose) {
+        console.log(`✅ Successfully uploaded to local storage: ${url} -> ${publicUrl}`);
+      }
+      return publicUrl;
     }
     
     return null;
   } catch (error) {
     if (verbose) {
+      console.error(`❌ Failed to download media ${url}:`, error);
+    } else {
       console.warn(`Skipping media ${url}:`, error);
     }
     return null;
   }
 }
 
-function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>): string {
+/**
+ * Rewrites all occurrences of old media URLs in an HTML string with their new URLs.
+ * @param html The HTML content to process.
+ * @param mediaUrlMap A map of old URLs to new URLs.
+ * @param verbose Whether to log rewriting operations.
+ * @returns The HTML content with rewritten URLs.
+ */
+function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbose: boolean = false): string {
   let rewritten = html;
+  let replacementCount = 0;
   
-  for (const [oldUrl, newUrl] of mediaUrlMap) {
-    // Replace any occurrence (src, href, srcset, poster, CSS url())
-    rewritten = rewritten.replace(
-      new RegExp(escapeRegExp(oldUrl), 'g'),
-      newUrl
-    );
+  if (verbose) {
+    console.log(`🔄 Rewriting media URLs in HTML content (${html.length} characters, ${mediaUrlMap.size} mappings available)`);
+  }
+  
+  // Create a comprehensive URL replacement function that handles both exact matches and WordPress dimensions
+  const replaceUrl = (url: string): string | null => {
+    // First, try exact match
+    if (mediaUrlMap.has(url)) {
+      return mediaUrlMap.get(url)!;
+    }
+    
+    // Second, if this looks like a WordPress dimensioned URL, try the original
+    if (isHttpUrl(url)) {
+      const originalUrl = removeWordPressDimensions(url);
+      if (originalUrl !== url && mediaUrlMap.has(originalUrl)) {
+        return mediaUrlMap.get(originalUrl)!;
+      }
+    }
+    
+    // Third, try protocol variations (http vs https)
+    if (isHttpUrl(url)) {
+      const alternateProtocolUrl = url.startsWith('https://') ? 
+        url.replace('https://', 'http://') : 
+        url.replace('http://', 'https://');
+      
+      // Try alternate protocol exact match
+      if (mediaUrlMap.has(alternateProtocolUrl)) {
+        return mediaUrlMap.get(alternateProtocolUrl)!;
+      }
+      
+      // Try alternate protocol with dimension removal
+      const alternateOriginalUrl = removeWordPressDimensions(alternateProtocolUrl);
+      if (alternateOriginalUrl !== alternateProtocolUrl && mediaUrlMap.has(alternateOriginalUrl)) {
+        return mediaUrlMap.get(alternateOriginalUrl)!;
+      }
+    }
+    
+    return null;
+  };
+  
+  // Handle WordPress shortcodes FIRST (before they get expanded)
+  const videoShortcodeRe = /\[video([^\]]*)\](?:\s*\[\/video\])?/gi;
+  rewritten = rewritten.replace(videoShortcodeRe, (match, attrStr) => {
+    let newMatch = match;
+    let shortcodeChanged = false;
+    
+    // Extract attributes from shortcode
+    const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
+    let attrMatch: RegExpExecArray | null;
+    
+    while ((attrMatch = attrRe.exec(attrStr))) {
+      const key = attrMatch[1];
+      let value = attrMatch[2];
+      
+      if (!key || !value) continue;
+      
+      // Remove quotes if present
+      const originalValue = value;
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      
+      // Check if this is a media attribute and if we need to replace the URL
+      const mediaAttributes = ['mp4', 'webm', 'ogv', 'ogg', 'poster'];
+      if (mediaAttributes.includes(key.toLowerCase()) && isHttpUrl(value)) {
+        const newUrl = replaceUrl(value);
+        if (newUrl) {
+          // Replace the URL in the shortcode, preserving the original quote style
+          const quote = originalValue.startsWith('"') ? '"' : originalValue.startsWith("'") ? "'" : '';
+          const newAttr = `${key}=${quote}${newUrl}${quote}`;
+          const oldAttr = `${key}=${originalValue}`;
+          newMatch = newMatch.replace(oldAttr, newAttr);
+          shortcodeChanged = true;
+          replacementCount++;
+          
+          if (verbose) {
+            const isWordPress = removeWordPressDimensions(value) !== value;
+            console.log(`🎬 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in video shortcode [${key}]: ${value} -> ${newUrl}`);
+          }
+        }
+      }
+    }
+    
+    return newMatch;
+  });
+  
+  // Handle audio shortcodes
+  const audioShortcodeRe = /\[audio([^\]]*)\](?:\s*\[\/audio\])?/gi;
+  rewritten = rewritten.replace(audioShortcodeRe, (match, attrStr) => {
+    let newMatch = match;
+    
+    const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
+    let attrMatch: RegExpExecArray | null;
+    
+    while ((attrMatch = attrRe.exec(attrStr))) {
+      const key = attrMatch[1];
+      let value = attrMatch[2];
+      
+      if (!key || !value) continue;
+      
+      const originalValue = value;
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      
+      const mediaAttributes = ['mp3', 'ogg', 'wav', 'src'];
+      if (mediaAttributes.includes(key.toLowerCase()) && isHttpUrl(value)) {
+        const newUrl = replaceUrl(value);
+        if (newUrl) {
+          const quote = originalValue.startsWith('"') ? '"' : originalValue.startsWith("'") ? "'" : '';
+          const newAttr = `${key}=${quote}${newUrl}${quote}`;
+          const oldAttr = `${key}=${originalValue}`;
+          newMatch = newMatch.replace(oldAttr, newAttr);
+          replacementCount++;
+          
+          if (verbose) {
+            const isWordPress = removeWordPressDimensions(value) !== value;
+            console.log(`🎵 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in audio shortcode [${key}]: ${value} -> ${newUrl}`);
+          }
+        }
+      }
+    }
+    
+    return newMatch;
+  });
+  
+  // Replace URLs in all common HTML attributes using a comprehensive approach
+  const attributePatterns = [
+    // img src, data-src, poster
+    { pattern: /<img\b([^>]*\s(?:src|data-src)=["']([^"']+)["'][^>]*)>/gi, group: 2 },
+    // video src, poster
+    { pattern: /<video\b([^>]*\s(?:src|poster)=["']([^"']+)["'][^>]*)>/gi, group: 2 },
+    // source src
+    { pattern: /<source\b([^>]*\ssrc=["']([^"']+)["'][^>]*)>/gi, group: 2 },
+    // anchor href
+    { pattern: /<a\b([^>]*\shref=["']([^"']+)["'][^>]*)>/gi, group: 2 },
+  ];
+  
+  for (const { pattern, group } of attributePatterns) {
+    let match: RegExpExecArray | null;
+    const regex = new RegExp(pattern.source, pattern.flags);
+    
+    rewritten = rewritten.replace(regex, (fullMatch, ...groups) => {
+      const url = groups[group - 1]; // group is 1-based, groups array is 0-based
+      if (!url || !isHttpUrl(url)) return fullMatch;
+      
+      const newUrl = replaceUrl(url);
+      if (newUrl) {
+        if (verbose) {
+          const isWordPress = removeWordPressDimensions(url) !== url;
+          console.log(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL: ${url} -> ${newUrl}`);
+        }
+        replacementCount++;
+        return fullMatch.replace(url, newUrl);
+      }
+      
+      return fullMatch;
+    });
+  }
+  
+  // Handle special case: img tags with both src and dimensions that need width/height preservation
+  const imgTagRe = /<img\b[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi;
+  rewritten = rewritten.replace(imgTagRe, (match, src) => {
+    if (!src || !isHttpUrl(src)) return match;
+    
+    // Check if this looks like a WordPress dimensioned URL that we've already replaced
+    const originalUrl = removeWordPressDimensions(src);
+    if (originalUrl !== src && mediaUrlMap.has(originalUrl)) {
+      // Check if this img tag needs width/height attributes added from the URL dimensions
+      const widthMatch = match.match(/\swidth=["']([^"']+)["']/i);
+      const heightMatch = match.match(/\sheight=["']([^"']+)["']/i);
+      
+      // If the img tag doesn't have width/height attributes, try to extract from WordPress dimensions
+      if (!widthMatch || !heightMatch) {
+        const dimensionMatch = src.match(/-(\d+)x(\d+)\.[a-zA-Z0-9]+$/);
+        if (dimensionMatch) {
+          const width = dimensionMatch[1];
+          const height = dimensionMatch[2];
+          
+          let newMatch = match;
+          if (!widthMatch && width) {
+            newMatch = newMatch.replace('<img', `<img width="${width}"`);
+            if (verbose) {
+              console.log(`📐 Added width="${width}" to img tag`);
+            }
+          }
+          if (!heightMatch && height) {
+            newMatch = newMatch.replace('<img', `<img height="${height}"`);
+            if (verbose) {
+              console.log(`📐 Added height="${height}" to img tag`);
+            }
+          }
+          return newMatch;
+        }
+      }
+    }
+    
+    return match;
+  });
+  
+  // Handle srcset attributes specifically (they can contain multiple URLs)
+  const srcsetRe = /\ssrcset=["']([^"']+)["']/gi;
+  rewritten = rewritten.replace(srcsetRe, (match, srcset) => {
+    let newSrcset = srcset;
+    const parts = srcset.split(',');
+    let srcsetChanged = false;
+    
+    for (let i = 0; i < parts.length; i++) {
+      const urlPart = (parts[i].trim().split(/\s+/)[0] ?? "");
+      if (urlPart && isHttpUrl(urlPart)) {
+        const newUrl = replaceUrl(urlPart);
+        if (newUrl) {
+          parts[i] = parts[i].replace(urlPart, newUrl);
+          srcsetChanged = true;
+          if (verbose) {
+            const isWordPress = removeWordPressDimensions(urlPart) !== urlPart;
+            console.log(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in srcset: ${urlPart} -> ${newUrl}`);
+          }
+          replacementCount++;
+        }
+      }
+    }
+    
+    if (srcsetChanged) {
+      newSrcset = parts.join(',');
+      return match.replace(srcset, newSrcset);
+    }
+    return match;
+  });
+  
+  // Handle CSS url() in style attributes
+  const cssUrlRe = /url\((["']?)(https?:[^"')]+)\1\)/gi;
+  rewritten = rewritten.replace(cssUrlRe, (match, quote, url) => {
+    if (url && isHttpUrl(url)) {
+      const newUrl = replaceUrl(url);
+      if (newUrl) {
+        if (verbose) {
+          const isWordPress = removeWordPressDimensions(url) !== url;
+          console.log(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in CSS: ${url} -> ${newUrl}`);
+        }
+        replacementCount++;
+        return `url(${quote}${newUrl}${quote})`;
+      }
+    }
+    return match;
+  });
+  
+  if (verbose) {
+    console.log(`✅ URL rewriting completed. Total replacements: ${replacementCount}`);
   }
   
   return rewritten;
 }
 
-// Normalize common WordPress list markup issues prior to sanitization
+/**
+ * Replace any remaining remote image elements with a local placeholder image.
+ * Only images that were successfully downloaded (present in mediaUrlMap values)
+ * or are same-origin relative URLs are allowed to remain.
+ */
+function replaceRemoteImagesWithPlaceholder(html: string, mediaUrlMap: Map<string, string>): string {
+  if (!html) return html;
+
+  const PLACEHOLDER_SRC = "/images/image-cannot-be-downloaded.svg";
+  const allowedNewUrls = new Set<string>(Array.from(mediaUrlMap.values()));
+
+  const isAllowedImageUrl = (u: string): boolean => {
+    if (!u) return false;
+    // Allow same-origin relative URLs
+    if (u.startsWith('/')) return true;
+    // Allow any URL that we produced via download step
+    if (allowedNewUrls.has(u)) return true;
+    // Check if this is a WordPress dimensioned URL that we have the original for
+    if (isHttpUrl(u)) {
+      const originalUrl = removeWordPressDimensions(u);
+      if (originalUrl !== u && mediaUrlMap.has(originalUrl)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Replace <picture> blocks if any contained image/source is remote
+  html = html.replace(/<picture\b[\s\S]*?<\/picture>/gi, (block) => {
+    // Any http(s) URL still present that isn't allowed?
+    const urls: string[] = [];
+    // src attributes
+    Array.from(block.matchAll(/\s(?:src|srcset)=["']([^"']+)["']/gi)).forEach((m) => {
+      if (m[1]) urls.push(m[1]);
+    });
+    // Extract potential URLs from srcset list
+    const expanded: string[] = [];
+    for (const entry of urls) {
+      if (entry.includes(',')) {
+        for (const p of entry.split(',')) {
+          const candidate = (p.trim().split(/\s+/)[0] ?? '').trim();
+          if (candidate) expanded.push(candidate);
+        }
+      } else {
+        expanded.push(entry);
+      }
+    }
+    const hasDisallowed = expanded.some((u) => isHttpUrl(u) && !isAllowedImageUrl(u));
+    if (hasDisallowed) {
+      return `<img class="image-placeholder" src="${PLACEHOLDER_SRC}" alt="Image cannot be downloaded" />`;
+    }
+    return block;
+  });
+
+  // Replace standalone <img ...>
+  html = html.replace(/<img\b[^>]*>/gi, (tag) => {
+    const sm = tag.match(/\ssrc=["']([^"']+)["']/i);
+    const src = sm?.[1] ?? "";
+    if (!src) return tag;
+    if (isHttpUrl(src) && !isAllowedImageUrl(src)) {
+      return `<img class="image-placeholder" src="${PLACEHOLDER_SRC}" alt="Image cannot be downloaded" />`;
+    }
+    // Also scrub remote srcset entries by removing the attribute entirely if any are disallowed
+    const srcsetMatch = tag.match(/\ssrcset=["']([^"']+)["']/i);
+    if (srcsetMatch?.[1]) {
+      const entries = srcsetMatch[1].split(',').map(s => (s.trim().split(/\s+/)[0] ?? '').trim()).filter(Boolean);
+      const disallowed = entries.some((u) => isHttpUrl(u) && !isAllowedImageUrl(u));
+      if (disallowed) {
+        // Drop srcset attribute
+        return tag.replace(/\s+srcset=["'][^"']+["']/i, '');
+      }
+    }
+    return tag;
+  });
+
+  return html;
+}
+
+/**
+ * Replace any remaining remote video elements with a local placeholder image.
+ * Any <video>, its <source> children, or poster attributes still pointing to a remote URL
+ * after rewriteMediaUrls must be replaced, unless their URL was remapped to a local one
+ * (present in mediaUrlMap values) or is already a same-origin relative URL.
+ *
+ * Policy: Never display a video from a remote domain. Only local (rewritten) URLs are allowed.
+ */
+export function replaceRemoteVideosWithPlaceholder(html: string, mediaUrlMap: Map<string, string>): string {
+  if (!html) return html;
+
+  const PLACEHOLDER_SRC = "/images/video-cannot-be-imported.svg";
+  const allowedNewUrls = new Set<string>(Array.from(mediaUrlMap.values()));
+  const allowedOldUrls = new Set<string>(Array.from(mediaUrlMap.keys()));
+
+  const isAllowedVideoUrl = (u: string): boolean => {
+    if (!u) return false;
+    // Allow same-origin relative URLs only
+    if (u.startsWith('/')) return true;
+    // Allow any URL that we produced via download step
+    if (allowedNewUrls.has(u)) return true;
+    return false;
+  };
+
+  // Strategy: Replace entire <video>...</video> blocks that reference any disallowed remote URL
+  html = html.replace(/<video\b[\s\S]*?<\/video>/gi, (block) => {
+    // Collect src/poster from the <video> tag
+    const videoTagMatch = block.match(/<video\b[^>]*>/i);
+    const openTag = videoTagMatch?.[0] ?? "";
+    const posterMatch = openTag.match(/\sposter=["']([^"']+)["']/i);
+    const srcMatch = openTag.match(/\ssrc=["']([^"']+)["']/i);
+    const poster = posterMatch?.[1] ?? "";
+    const src = srcMatch?.[1] ?? "";
+
+    // Collect <source src="...">
+    const sourceUrls: string[] = [];
+    Array.from(block.matchAll(/<source\b[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi)).forEach((m) => {
+      const url = m[1];
+      if (url) sourceUrls.push(url);
+    });
+
+    const candidates = [poster, src, ...sourceUrls].filter(Boolean);
+    const hasDisallowed = candidates.some((u) => {
+      if (!isHttpUrl(u)) return false; // relative URLs are fine
+      // If this URL is slated to be rewritten (present as an old URL key), allow it
+      if (allowedOldUrls.has(u)) return false;
+      // Else, only allow if it's already a local rewritten URL (should be rare if isHttpUrl)
+      return !isAllowedVideoUrl(u);
+    });
+    if (hasDisallowed) {
+      return `<img class="video-placeholder" src="${PLACEHOLDER_SRC}" alt="Video cannot be imported" />`;
+    }
+    return block;
+  });
+
+  // Also handle stray self-closing <video ... /> (edge case; uncommon in WP HTML)
+  html = html.replace(/<video\b[^>]*\/>/gi, (tag) => {
+    const posterMatch = tag.match(/\sposter=["']([^"']+)["']/i);
+    const srcMatch = tag.match(/\ssrc=["']([^"']+)["']/i);
+    const poster = posterMatch?.[1] ?? "";
+    const src = srcMatch?.[1] ?? "";
+    const candidates = [poster, src].filter(Boolean);
+    const hasDisallowed = candidates.some((u) => {
+      if (!isHttpUrl(u)) return false;
+      if (allowedOldUrls.has(u)) return false;
+      return !isAllowedVideoUrl(u);
+    });
+    if (hasDisallowed) {
+      return `<img class="video-placeholder" src="${PLACEHOLDER_SRC}" alt="Video cannot be imported" />`;
+    }
+    return tag;
+  });
+
+  return html;
+}
+
+/**
+ * Normalizes common WordPress list markup issues (e.g., `<p>` tags wrapping lists)
+ * before HTML sanitization.
+ * @param html The raw HTML from WordPress.
+ * @returns The normalized HTML.
+ */
 function normalizeWpLists(html: string): string {
   if (!html) return html;
   let out = html;
 
   // Unwrap <p> that directly wraps <ul> or <ol>
-  out = out.replace(/<p>\s*(<(?:ul|ol)\b[^>]*>)/gi, "$1");
-  out = out.replace(/(<\/(?:ul|ol)>\s*)<\/p>/gi, "$1");
+  // Handle optional attributes on <p> and optional HTML comments between <p> and the list
+  // Example WP markup: <p class="has-text-color">\n<!-- wp:list --><ul>... </ul><!-- /wp:list -->\n</p>
+  out = out.replace(/<p\b[^>]*>\s*(?:<!--[\s\S]*?-->\s*)*(<(?:ul|ol)\b[^>]*>)/gi, "$1");
+  out = out.replace(/(<\/(?:ul|ol)>\s*(?:<!--[\s\S]*?-->\s*)*)<\/p>/gi, "$1");
 
   // Unwrap <p> inside list items: <li><p>text</p></li> -> <li>text</li>
-  out = out.replace(/<li>\s*<p>/gi, "<li>");
+  // Allow attributes on the inner <p>
+  out = out.replace(/<li>\s*<p\b[^>]*>/gi, "<li>");
   out = out.replace(/<\/p>\s*<\/li>/gi, "</li>");
 
   // Sometimes editors place lists inside blockquotes incorrectly wrapped
@@ -456,10 +823,41 @@ function normalizeWpLists(html: string): string {
   return out;
 }
 
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * Transform WordPress syntax highlighting blocks (hcb_wrap) into standard code blocks
+ * Converts: <div class="hcb_wrap"><pre class="prism ... lang-bash" data-lang="Bash"><code>content</code></pre></div>
+ * To: <pre data-language="bash"><code>content</code></pre>
+ */
+function transformSyntaxHighlighting(html: string): string {
+  if (!html) return html;
+  
+  // Match hcb_wrap divs with prism pre elements
+  return html.replace(
+    /<div\s+class="hcb_wrap"[^>]*>\s*<pre\s+class="[^"]*"\s+data-lang="([^"]*)"[^>]*>\s*<code>([\s\S]*?)<\/code>\s*<\/pre>\s*<\/div>/gi,
+    (match, lang, code) => {
+      // Normalize language name to lowercase for consistency
+      const normalizedLang = lang.toLowerCase();
+      return `<pre data-language="${normalizedLang}"><code>${code}</code></pre>`;
+    }
+  );
 }
 
+/**
+ * Escapes special characters in a string for use in a regular expression.
+ * @param input The string to escape.
+ * @returns The escaped string.
+ */
+function escapeRegExp(input: string): string {
+  // Escape special regex characters: . * + ? ^ $ { } ( ) | [ ] \
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Generates a unique slug by appending a counter if the base slug already exists.
+ * @param baseSlug The desired slug.
+ * @param existingSlugs A set of slugs that are already in use.
+ * @returns A unique slug.
+ */
 function generateSlugWithFallback(baseSlug: string, existingSlugs: Set<string>): string {
   if (!existingSlugs.has(baseSlug)) {
     return baseSlug;
@@ -476,13 +874,57 @@ function generateSlugWithFallback(baseSlug: string, existingSlugs: Set<string>):
   return candidateSlug;
 }
 
+/**
+ * Checks if a string is an HTTP or HTTPS URL.
+ * @param u The string to check.
+ * @returns True if the string starts with "http://" or "https://".
+ */
 function isHttpUrl(u: string): boolean {
-  return u.startsWith("http://") || u.startsWith("https://");
+  return u.startsWith("http://") || u.startsWith("https://") || u.startsWith("//");
 }
 
-function extractMediaUrlsFromHtml(html: string): Set<string> {
+/**
+ * Removes WordPress dimension suffixes from image URLs.
+ * WordPress often generates URLs like "image-300x169.jpg" or "image-501x1024.png".
+ * This function returns the original URL without those dimensions.
+ * @param url The URL to process.
+ * @param verbose Whether to log dimension removal operations.
+ * @returns The URL with WordPress dimension suffix removed.
+ */
+function removeWordPressDimensions(url: string, verbose: boolean = false): string {
+  if (!url) return url;
+  
+  // Match WordPress dimension patterns like -300x169, -1024x768, etc.
+  // The pattern is: dash, digits, 'x', digits, followed by file extension
+  const dimensionPattern = /-\d+x\d+(\.[a-zA-Z0-9]+)$/;
+  const match = url.match(dimensionPattern);
+  
+  if (match) {
+    // Remove the dimension part but keep the file extension
+    const originalUrl = url.replace(/-\d+x\d+(\.[a-zA-Z0-9]+)$/, '$1');
+    if (verbose) {
+      const dimensions = match[0].replace(/\.[a-zA-Z0-9]+$/, '').replace('-', '');
+      console.log(`🖼️  WordPress dimension removal: ${url} -> ${originalUrl} (removed: ${dimensions})`);
+    }
+    return originalUrl;
+  }
+  
+  return url;
+}
+
+/**
+ * Extracts all potential media URLs from an HTML string.
+ * @param html The HTML content to scan.
+ * @param verbose Whether to log extraction details.
+ * @returns A Set of unique media URLs found in the HTML.
+ */
+function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<string> {
   const urls = new Set<string>();
   if (!html) return urls;
+
+  if (verbose) {
+    console.log(`🔍 Extracting media URLs from HTML content (${html.length} characters)`);
+  }
 
   // Helper to decide if an href should be considered a media asset
   const isLikelyMediaExtension = (url: string): boolean => {
@@ -500,7 +942,7 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
 
   // src, data-src, poster on media tags
   const attrPatterns = [
-    /\s(?:src|data-src|poster)=["']([^"']+)["']/gi,
+    /\s(?:src|data-src|poster)=["\']([^"\']+)["']/gi,
   ];
 
   for (const re of attrPatterns) {
@@ -508,57 +950,125 @@ function extractMediaUrlsFromHtml(html: string): Set<string> {
     while ((m = re.exec(html)) !== null) {
       const u = m?.[1] ?? "";
       if (u && isHttpUrl(u) && isLikelyMediaExtension(u)) {
-        urls.add(u);
+        // Remove WordPress dimension suffixes to get original image URL
+        const originalUrl = removeWordPressDimensions(u, verbose);
+        urls.add(originalUrl);
+        if (verbose && originalUrl !== u) {
+          console.log(`📎 Found dimensioned image URL in src/data-src/poster: ${u}`);
+        } else if (verbose) {
+          console.log(`📎 Found media URL in src/data-src/poster: ${u}`);
+        }
       }
     }
   }
 
   // srcset handling: URLs separated by commas, with descriptors
-  const srcsetRe = /\ssrcset=["']([^"']+)["']/gi;
+  const srcsetRe = /\ssrcset=["\']([^"\']+)["']/gi;
   let sm: RegExpExecArray | null;
   while ((sm = srcsetRe.exec(html)) !== null) {
     const raw = sm?.[1] ?? "";
     if (!raw) continue;
     const parts = raw.split(',');
+    if (verbose) {
+      console.log(`📎 Found srcset with ${parts.length} entries: ${raw.substring(0, 100)}${raw.length > 100 ? '...' : ''}`);
+    }
     for (const part of parts) {
       const urlPart = (part.trim().split(/\s+/)[0] ?? "");
       if (urlPart && isHttpUrl(urlPart)) {
-        urls.add(urlPart);
+        // Remove WordPress dimension suffixes to get original image URL
+        const originalUrl = removeWordPressDimensions(urlPart, verbose);
+        urls.add(originalUrl);
+        if (verbose && originalUrl !== urlPart) {
+          console.log(`📎 Found dimensioned image URL in srcset: ${urlPart}`);
+        }
       }
     }
   }
 
   // <source src="...">
-  const sourceRe = /<source\b[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi;
+  const sourceRe = /<source\b[^>]*\ssrc=["\']([^"\']+)["'][^>]*>/gi;
   let s: RegExpExecArray | null;
   while ((s = sourceRe.exec(html)) !== null) {
     const u = s?.[1] ?? "";
     if (u && isHttpUrl(u)) {
       urls.add(u);
+      if (verbose) {
+        console.log(`📎 Found media URL in source element: ${u}`);
+      }
     }
   }
 
   // CSS url(...) in style attributes
-  const cssUrlRe = /url\(("|')?(https?:[^"')]+)\1?\)/gi;
+  const cssUrlRe = /url\( ("|')?(https?:[^"\')]+)\1?\)/gi;
   let c: RegExpExecArray | null;
   while ((c = cssUrlRe.exec(html)) !== null) {
     const u = c?.[2] ?? "";
-    if (u && isLikelyMediaExtension(u)) urls.add(u);
+    if (u && isLikelyMediaExtension(u)) {
+      // Remove WordPress dimension suffixes to get original image URL
+      const originalUrl = removeWordPressDimensions(u, verbose);
+      urls.add(originalUrl);
+      if (verbose) {
+        console.log(`📎 Found media URL in CSS url(): ${u}`);
+      }
+    }
   }
 
   // Anchor hrefs: only consider as media if the href looks like a media/document file
-  const hrefRe = /\shref=["']([^"']+)["']/gi;
+  const hrefRe = /\shref=["\']([^"\']+)["']/gi;
   let hm: RegExpExecArray | null;
   while ((hm = hrefRe.exec(html)) !== null) {
     const u = hm?.[1] ?? "";
     if (u && isHttpUrl(u) && isLikelyMediaExtension(u)) {
-      urls.add(u);
+      // Remove WordPress dimension suffixes to get original image URL
+      const originalUrl = removeWordPressDimensions(u, verbose);
+      urls.add(originalUrl);
+      if (verbose) {
+        console.log(`📎 Found media URL in anchor href: ${u}`);
+      }
+    }
+  }
+
+  if (verbose) {
+    console.log(`✅ Extracted ${urls.size} unique media URLs from HTML`);
+    if (urls.size > 0) {
+      console.log(`   URLs found: ${Array.from(urls).join(', ')}`);
     }
   }
 
   return urls;
 }
 
+/**
+ * Extract the first image candidate (anchor href preferred over img src) and alt text from raw HTML.
+ */
+function extractFirstImageFromHtml(html: string): { url: string; alt?: string } | null {
+  if (!html) return null;
+  // Anchor-wrapped image preferred
+  const anchorImgRe = /<a[^>]*href=["']([^"']+)["'][^>]*>\s*<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>\s*<\/a>/i;
+  const imgRe = /<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>/i;
+  const m = anchorImgRe.exec(html);
+  if (m) {
+    const href = m[1] ?? "";
+    const imgSrc = m[2] ?? "";
+    const alt = (m[3] ?? "").trim();
+    const preferred = choosePreferredImageUrl(href, imgSrc);
+    if (preferred) return { url: preferred, alt };
+  }
+  const im = imgRe.exec(html);
+  if (im) {
+    const url = im[1] ?? "";
+    const alt = (im[2] ?? "").trim();
+    if (url) return { url, alt };
+  }
+  return null;
+}
+
+/**
+ * Main function to import posts, media, and comments from a WordPress WXR file.
+ * @param filePath The path to the WXR XML file.
+ * @param options Configuration options for the import process.
+ * @returns A promise that resolves to an `ImportResult` object summarizing the import.
+ */
 export async function importWxr(filePath: string, options: ImportOptions = {}): Promise<ImportResult> {
   const { 
     dryRun = false, 
@@ -572,6 +1082,22 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     rebuildExcerpts = false,
   } = options;
   
+  // Normalize allowedHosts to accept user-provided values like https://example.com/ or with paths
+  const normalizedAllowedHosts = allowedHosts
+    .map(h => {
+      if (!h) return "";
+      let s = h.trim().toLowerCase();
+      // Remove protocol
+      s = s.replace(/^https?:\/\//, "");
+      // Drop everything after first slash (paths)
+      const slashIdx = s.indexOf("/");
+      if (slashIdx !== -1) s = s.slice(0, slashIdx);
+      // Drop leading dots
+      s = s.replace(/^\.+/, "");
+      return s;
+    })
+    .filter(Boolean);
+
   const result: ImportResult = {
     summary: {
       totalItems: 0,
@@ -605,7 +1131,12 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     }
   }
 
-  // Simple concurrency limiter
+  /**
+   * A simple concurrency limiter to run async tasks in parallel with a controlled limit.
+   * @param items The array of items to process.
+   * @param limit The maximum number of concurrent workers.
+   * @param worker The async function to execute for each item.
+   */
   const runWithConcurrency = async <T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> => {
     const results: R[] = new Array(items.length) as R[];
     let i = 0;
@@ -629,7 +1160,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     // Update job status if provided
     if (jobId && !dryRun) {
       await db.update(importJobs)
-        .set({ 
+        .set({
           status: "running",
           startedAt: sql`now()`,
           updatedAt: sql`now()`
@@ -648,7 +1179,27 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       await db.delete(categories);
       await db.delete(tags);
       await db.delete(redirects);
-      
+
+      // Also purge previously imported media from storage
+      try {
+        const prefix = "imported-media/";
+        // Initialize a storage service if not already prepared (e.g., when skipMedia was true)
+        if (!s3Service && !localService) {
+          const s3cfg = getS3Config();
+          if (s3cfg) s3Service = new S3Service(s3cfg);
+          else localService = localStorageService;
+        }
+        if (s3Service) {
+          await s3Service.deletePrefix(prefix);
+          if (verbose) console.log("🧹 S3/R2 storage purged:", prefix);
+        } else if (localService) {
+          await localService.deletePrefix(prefix);
+          if (verbose) console.log("🧹 Local storage purged:", prefix);
+        }
+      } catch (e) {
+        if (verbose) console.warn("Warning: failed to purge imported media prefix:", e);
+      }
+
       if (verbose) console.log("✅ Purge completed");
     }
 
@@ -676,7 +1227,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     // Get existing slugs to avoid conflicts
     if (!dryRun) {
       const existingPosts = await db.execute(sql`SELECT slug FROM posts`);
-      (existingPosts.rows || []).forEach((row: any) => {
+      (existingPosts.rows || []).forEach((row: { slug: string }) => {
         if (row?.slug) existingSlugs.add(row.slug);
       });
     }
@@ -701,7 +1252,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         
         // Build attachment map for featured images (post_id -> url)
         if (parsed.type === "attachment") {
-          const postId = (item as any)["wp:post_id"];
+          const postId = (item as WxrItem)["wp:post_id"];
           if (postId) {
             attachmentIdToUrl.set(postId, parsed.attachmentUrl);
           }
@@ -732,27 +1283,44 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         .where(eq(importJobs.id, jobId));
     }
 
-    // Pre-collect all media URLs (attachments + referenced in posts), then download with concurrency & dedupe
+    // Pre-process posts to expand shortcodes and collect all media URLs.
+    // This ensures that media from expanded shortcodes (e.g., galleries) is included before download.
+    const processedPostContent = new Map<string, string>(); // guid -> expanded HTML
+
     if (!skipMedia && (s3Service || localService)) {
       const allMedia = new Set<string>();
-      // Attachment direct URLs
+      if (verbose) console.log("🔍 Expanding shortcodes and scanning for media in all posts...");
+
+      // Add attachment URLs first
       for (const a of attachmentItems) {
         if (a.attachmentUrl) allMedia.add(a.attachmentUrl);
       }
-      // Media referenced in posts
+
+      // Then process posts: expand shortcodes, store the result, and collect media URLs
       for (const p of postItems) {
-        for (const u of extractMediaUrlsFromHtml(p.html)) {
+        const expandedHtml = expandShortcodes(p.html);
+        processedPostContent.set(p.importedSystemId, expandedHtml);
+        if (verbose) {
+          console.log(`🔍 Processing post "${p.title}" for media URLs...`);
+        }
+        for (const u of extractMediaUrlsFromHtml(expandedHtml, verbose)) {
           allMedia.add(u);
         }
       }
 
       const medias = Array.from(allMedia);
+      if (verbose) {
+        console.log(`📊 Media processing summary:`);
+        console.log(`   - Found ${medias.length} unique media URLs across all posts`);
+        console.log(`   - Concurrency limit: ${concurrency}`);
+        console.log(`   - Allowed hosts: ${normalizedAllowedHosts.length > 0 ? normalizedAllowedHosts.join(', ') : 'all hosts'}`);
+      }
       if (verbose && medias.length) console.log(`📥 Downloading ${medias.length} media files (concurrency=${concurrency})...`);
 
       await runWithConcurrency(medias, concurrency, async (url) => {
         try {
           if (!result.mediaUrls.has(url)) {
-            const newUrl = await downloadMedia(url, s3Service, localService, allowedHosts, { dryRun, verbose });
+            const newUrl = await downloadMedia(url, s3Service, localService, normalizedAllowedHosts, { dryRun, verbose });
             if (newUrl) result.mediaUrls.set(url, newUrl);
           }
         } catch (e) {
@@ -760,6 +1328,21 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         }
         return undefined as unknown as void;
       });
+      
+      if (verbose) {
+        const successCount = result.mediaUrls.size;
+        const failCount = medias.length - successCount;
+        console.log(`📊 Media download completed: ${successCount} succeeded, ${failCount} failed`);
+        if (successCount > 0) {
+          console.log(`   Successfully downloaded URLs: ${Array.from(result.mediaUrls.keys()).slice(0, 5).join(', ')}${result.mediaUrls.size > 5 ? ` ... and ${result.mediaUrls.size - 5} more` : ''}`);
+        }
+      }
+    } else {
+      // If skipping media, we still need to expand shortcodes for consistent processing in the main loop.
+      if (verbose) console.log("🔍 Expanding shortcodes for all posts (media download skipped)...");
+      for (const p of postItems) {
+        processedPostContent.set(p.importedSystemId, expandShortcodes(p.html));
+      }
     }
 
     if (verbose && postItems.length > 0) {
@@ -773,31 +1356,54 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     for (const post of postItems) {
       try {
-        // Prepare HTML: expand shortcodes, normalize lists, sanitize, then rewrite media URLs
-        const expanded = expandShortcodes(post.html);
+  // Prepare HTML: expand shortcodes, normalize lists, transform syntax highlighting, sanitize, then rewrite media URLs
+        const expanded = processedPostContent.get(post.importedSystemId) || "";
         const withIframes = transformIframeVideos(expanded);
         const normalized = normalizeWpLists(withIframes);
+        const withSyntaxHighlighting = transformSyntaxHighlighting(normalized);
+
+  // Determine a featured image fallback from raw content BEFORE placeholders/sanitization
+  const rawFeatured = extractFirstImageFromHtml(expanded);
 
         // Compute excerpt BEFORE sanitize to preserve <!--more--> markers if any
-        let computedExcerpt = generateExcerpt(normalized, {
+        const computedExcerpt = generateExcerpt(withSyntaxHighlighting, {
           maxChars: EXCERPT_MAX,
           ellipsis: EXCERPT_ELLIPSIS,
           dropBlockCode: !INCLUDE_BLOCK_CODE,
         });
 
-        const sanitized = sanitizeHtml(normalized);
-        const finalHtml = rewriteMediaUrls(sanitized, result.mediaUrls);
+  const sanitized = sanitizeWithIframes(withSyntaxHighlighting);
+  const rewritten = rewriteMediaUrls(sanitized, result.mediaUrls, verbose);
+  const withImagePlaceholders = replaceRemoteImagesWithPlaceholder(rewritten, result.mediaUrls);
+  const finalHtml = replaceRemoteVideosWithPlaceholder(withImagePlaceholders, result.mediaUrls);
 
         // Handle featured image
         let featuredImageUrl: string | undefined;
         let featuredImageAlt: string | undefined = undefined;
         if (post.featuredImageId && attachmentIdToUrl.has(post.featuredImageId)) {
           const originalUrl = attachmentIdToUrl.get(post.featuredImageId)!;
-          featuredImageUrl = result.mediaUrls.get(originalUrl) || originalUrl;
+          // Only accept downloaded/mapped URL; never keep a remote original
+          const mapped = result.mediaUrls.get(originalUrl);
+          featuredImageUrl = mapped || undefined;
+        }
+
+        // Fallback: if no featuredImageUrl resolved via attachment meta, pick first image from RAW (pre-sanitize) content
+        if (!featuredImageUrl && rawFeatured) {
+          const candidate = rawFeatured.url;
+          const allowed = !isHttpUrl(candidate) || Array.from(result.mediaUrls.values()).includes(candidate) || skipMedia;
+          if (candidate && allowed) {
+            featuredImageUrl = candidate;
+            featuredImageAlt = rawFeatured.alt && rawFeatured.alt.length > 0 ? rawFeatured.alt : post.title;
+          }
+        }
+
+        // Guard against placeholder-derived alt leaking into featured alt
+        if (featuredImageAlt === 'Image cannot be downloaded') {
+          featuredImageAlt = rawFeatured?.alt && rawFeatured.alt.length > 0 ? rawFeatured.alt : post.title;
         }
 
         if (!dryRun) {
-          await db.transaction(async (tx) => {
+          await db.transaction(async (tx: any) => {
             // Get or create author (cache by login/name)
             let authorId: string | undefined = authorCache.get(post.author);
             if (!authorId) {
@@ -845,7 +1451,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
             // Determine whether to recompute excerpt on update by checking existing row
             const existing = await tx.select({ id: posts.id, html: posts.html, excerpt: posts.excerpt })
               .from(posts)
-              .where(eq(posts.guid, post.guid))
+              .where(eq(posts.importedSystemId, post.importedSystemId))
               .limit(1);
             const existingRow = existing[0];
 
@@ -855,7 +1461,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
             const excerptToUse = shouldRecompute ? (computedExcerpt || null) : (existingRow?.excerpt ?? computedExcerpt ?? null);
 
-            // Insert or update post using GUID for idempotency
+            // Insert or update post using importedSystemId for idempotency
             const insertedPost = await tx.insert(posts).values({
               slug: post.slug,
               title: post.title,
@@ -863,13 +1469,13 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               bodyHtml: finalHtml,
               bodyMd: null,
               excerpt: excerptToUse,
-              guid: post.guid,
+              importedSystemId: post.importedSystemId,
               publishedAt: post.publishedAt || null,
               categoryId: primaryCategoryId,
               featuredImageUrl,
               featuredImageAlt,
             }).onConflictDoUpdate({
-              target: posts.guid,
+              target: posts.importedSystemId,
               set: {
                 title: post.title,
                 html: finalHtml,
@@ -885,7 +1491,6 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
             const postId = insertedPost?.[0]?.id;
             if (!postId) throw new Error("Failed to upsert post");
-
             // Refresh post-tags: replace associations
             await tx.delete(postTags).where(eq(postTags.postId, postId));
             for (const tagId of tagIds) {
@@ -914,8 +1519,10 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               const existing = await tx.select({ id: comments.id, path: comments.path, depth: comments.depth })
                 .from(comments)
                 .where(eq(comments.postId, postId));
-              const existingPaths = new Set(existing.map(r => r.path));
-              const existingByPath = new Map(existing.map(r => [r.path, { id: r.id, depth: r.depth, path: r.path }]));
+              const existingPaths = new Set<string>(existing.map((r: any) => r.path as string));
+              const existingByPath = new Map<string, { id: string; depth: number; path: string }>(
+                existing.map((r: any) => [r.path as string, { id: r.id as string, depth: r.depth as number, path: r.path as string }])
+              );
 
               // Map original comment id -> inserted { id, path, depth }
               const insertedMap = new Map<string, { id: string; path: string; depth: number }>();
@@ -940,7 +1547,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
                     else {
                       // If parent existed already, its path ends with the parent's original ID
                       // We can find by scanning existing paths for those that end with `.${parentId}` or equal to parentId
-                      const parentPath = Array.from(existingPaths).find(p => p === c.parentId || p.endsWith(`.${c.parentId}`));
+                      const parentPath = Array.from(existingPaths).find((p: string) => p === c.parentId || p.endsWith(`.${c.parentId}`));
                       if (parentPath) {
                         const e = existingByPath.get(parentPath);
                         if (e) parentInfo = e;
@@ -982,7 +1589,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
                     parentId: parentInfo?.id ?? null,
                     path,
                     depth,
-                    bodyHtml: sanitizeHtml(c.content),
+                    bodyHtml: sanitizeWithIframes(c.content),
                     bodyMd: null,
                     status: "approved",
                     createdAt: c.date || null,
@@ -1020,14 +1627,14 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         result.errors.push({
-          item: post.guid,
+          item: post.importedSystemId,
           error: `Post import failed: ${errorMsg}`
         });
 
         if (jobId && !dryRun) {
           await db.insert(importJobErrors).values({
             jobId,
-            itemIdentifier: post.guid,
+            itemIdentifier: post.importedSystemId,
             errorType: "post_import",
             errorMessage: errorMsg,
             itemData: { title: post.title, slug: post.slug }
@@ -1167,10 +1774,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
-function transformIframeVideos(html: string): string {
+/**
+ * Transforms `<iframe>` tags pointing to video files into native `<video>` tags.
+ * It preserves YouTube iframes to allow direct embedding.
+ * @param html The HTML content to transform.
+ * @returns The transformed HTML.
+ */
+export function transformIframeVideos(html: string): string {
   if (!html) return html;
   return html.replace(/<iframe([^>]*)>\s*<\/iframe>/gi, (m, attrs) => {
-    const srcMatch = attrs.match(/\ssrc=["']([^"']+)["']/i);
+    const srcMatch = attrs.match(/\ssrc=["\']([^"\']+)["']/i);
     const src = srcMatch?.[1] || "";
     if (!src) return m;
     try {
@@ -1178,7 +1791,7 @@ function transformIframeVideos(html: string): string {
       const host = u.hostname.toLowerCase();
       const isYouTube = /(^|\.)youtube\.com$/.test(host) || /(^|\.)youtu\.be$/.test(host) || /(^|\.)youtube-nocookie\.com$/.test(host);
       if (isYouTube) {
-        // Keep YouTube iframe as-is so it plays from YouTube directly
+        // Keep YouTube iframe as-is so it plays from YouTube directly (allowed by frameSrc/providers)
         return m;
       }
       const ext = getExtensionFromUrl(src);
@@ -1187,10 +1800,46 @@ function transformIframeVideos(html: string): string {
         const escaped = src.replace(/"/g, "&quot;");
         return `<video controls preload="metadata" src="${escaped}"></video>`;
       }
-      // Not a direct video file; leave as-is (sanitizer may drop non-YouTube iframes)
-      return m;
+      // Not a direct video file and not an allowed provider: replace with placeholder
+      return `<img class="video-placeholder" src="/images/video-cannot-be-imported.svg" alt="Video cannot be imported" />`;
     } catch {
       return m;
     }
   });
 }
+
+/**
+ * Helper to choose the best image URL, preferring a full-size version over a thumbnail.
+ * WordPress often links a thumbnail to the full-size image. This function prefers the link's `href`.
+ * @param anchorHref The `href` attribute of a surrounding `<a>` tag.
+ * @param imgSrc The `src` attribute of the `<img>` tag.
+ * @returns The preferred image URL, or undefined if none are available.
+ */
+function choosePreferredImageUrl(anchorHref?: string, imgSrc?: string): string | undefined {
+  // Gracefully handle absent values
+  if (!anchorHref && !imgSrc) return undefined;
+  const sizeSuffixRe = /(.*)-\d+x\d+(\.[a-z0-9]+)$/i;
+  const a = anchorHref ?? "";
+  const i = imgSrc ?? "";
+  const aHas = sizeSuffixRe.test(a);
+  const iHas = sizeSuffixRe.test(i);
+  // Prefer anchor when it appears to be the full-size version
+  if (iHas && !aHas && a) return a;
+  if (!aHas && iHas && a) return a; // same condition kept for clarity
+  // Fall back to whichever is available
+  return a || i || undefined;
+}
+
+// --- iframe-safe sanitize wrapper (auto-injected) ---
+export function sanitizeWithIframes(rawHtml: string): string {
+  const { html: protectedHtml, placeholders } = validateAndProtectIframes(rawHtml, defaultProviders);
+  // First, drop all iframes during sanitize; we'll restore only validated ones next
+  const sanitized = sanitizeHtml(
+    // Temporarily replace tokens already, since our sanitize function allows iframes by default.
+    // We removed raw iframes earlier by tokenizing; now ensure sanitizer cannot reintroduce unsafe content.
+    protectedHtml.replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+  );
+  const restored = restoreProtectedIframes(sanitized, placeholders);
+  return restored;
+}
+// --- end iframe-safe sanitize wrapper ---

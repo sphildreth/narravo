@@ -50,6 +50,8 @@ Choose which WordPress post statuses to import:
 5. **URL Rewriting**: Content URLs updated to new media locations
 6. **Redirect Creation**: Old URLs mapped to new post locations
 
+> Image Policy: During URL rewriting, remote images are not allowed. Each encountered image is downloaded and served locally. If an image cannot be downloaded (blocked host, network error, unsupported), it is replaced with a local placeholder at `/images/image-cannot-be-downloaded.svg`. Protocol-relative (`//host/...`) URLs are treated as remote.
+
 ## Monitoring & Management
 
 ### Job Status
@@ -110,6 +112,11 @@ For media downloads, configure S3 or Cloudflare R2:
 - Comments imported only for published posts
 - WordPress shortcodes preserved as raw HTML
 - No WordPress plugin data or custom fields
+### Media & Security
+- Remote images are disallowed in imported post content. Import will either:
+	- Download and rewrite the image to a local URL, or
+	- Replace the element with a placeholder image located at `/images/image-cannot-be-downloaded.svg` if the download fails.
+- Featured images follow the same rule and will only be set when a local copy exists.
 
 ### Technical Limits
 - Maximum file size depends on server configuration
