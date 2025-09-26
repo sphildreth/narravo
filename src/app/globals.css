@@ -36,8 +36,105 @@
 .prose .img-align-right { @apply text-right; }
 
 /* Code block styling */
-.prose pre { @apply bg-card border border-border rounded-lg overflow-x-auto; }
-.prose code { @apply text-sm bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded; }
+.prose pre { 
+  @apply border border-border rounded-lg overflow-x-auto; 
+  background: var(--card);
+  color: var(--card-fg);
+  padding: 1rem;
+}
+.prose code { 
+  @apply text-sm px-1 py-0.5 rounded; 
+  background: color-mix(in oklab, var(--card) 90%, var(--fg) 10%);
+  color: var(--card-fg);
+}
+
+/* Code blocks inside pre elements (syntax highlighted) */
+.prose pre code {
+  background: transparent;
+  padding: 0;
+}
+
+/* Highlight.js theme overrides for light/dark theme compatibility */
+.prose .hljs {
+  background: transparent !important;
+  color: var(--card-fg);
+}
+
+/* Light theme syntax highlighting colors */
+:root .prose .hljs-keyword,
+:root .prose .hljs-selector-tag,
+:root .prose .hljs-literal,
+:root .prose .hljs-section,
+:root .prose .hljs-link {
+  color: #0969da; /* Blue */
+}
+
+:root .prose .hljs-string,
+:root .prose .hljs-title,
+:root .prose .hljs-name,
+:root .prose .hljs-type,
+:root .prose .hljs-attribute {
+  color: #0a3069; /* Dark blue */
+}
+
+:root .prose .hljs-number,
+:root .prose .hljs-symbol,
+:root .prose .hljs-bullet,
+:root .prose .hljs-addition {
+  color: #116329; /* Green */
+}
+
+:root .prose .hljs-comment,
+:root .prose .hljs-quote,
+:root .prose .hljs-deletion,
+:root .prose .hljs-meta {
+  color: #6e7781; /* Gray */
+}
+
+:root .prose .hljs-variable,
+:root .prose .hljs-function,
+:root .prose .hljs-class,
+:root .prose .hljs-title.function {
+  color: #8250df; /* Purple */
+}
+
+/* Dark theme syntax highlighting colors */
+:root[data-theme="dark"] .prose .hljs-keyword,
+:root[data-theme="dark"] .prose .hljs-selector-tag,
+:root[data-theme="dark"] .prose .hljs-literal,
+:root[data-theme="dark"] .prose .hljs-section,
+:root[data-theme="dark"] .prose .hljs-link {
+  color: #79c0ff; /* Light blue */
+}
+
+:root[data-theme="dark"] .prose .hljs-string,
+:root[data-theme="dark"] .prose .hljs-title,
+:root[data-theme="dark"] .prose .hljs-name,
+:root[data-theme="dark"] .prose .hljs-type,
+:root[data-theme="dark"] .prose .hljs-attribute {
+  color: #a5d6ff; /* Lighter blue */
+}
+
+:root[data-theme="dark"] .prose .hljs-number,
+:root[data-theme="dark"] .prose .hljs-symbol,
+:root[data-theme="dark"] .prose .hljs-bullet,
+:root[data-theme="dark"] .prose .hljs-addition {
+  color: #7ee787; /* Light green */
+}
+
+:root[data-theme="dark"] .prose .hljs-comment,
+:root[data-theme="dark"] .prose .hljs-quote,
+:root[data-theme="dark"] .prose .hljs-deletion,
+:root[data-theme="dark"] .prose .hljs-meta {
+  color: #8b949e; /* Light gray */
+}
+
+:root[data-theme="dark"] .prose .hljs-variable,
+:root[data-theme="dark"] .prose .hljs-function,
+:root[data-theme="dark"] .prose .hljs-class,
+:root[data-theme="dark"] .prose .hljs-title.function {
+  color: #d2a8ff; /* Light purple */
+}
 
 /* TipTap editor specific styles */
 .ProseMirror {

@@ -9,7 +9,12 @@ import Image from "@tiptap/extension-image";
 import TextAlign from "@tiptap/extension-text-align";
 import Link from "@tiptap/extension-link";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
-import Underline from "@tiptap/extension-underline";
+import { Table } from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableHeader from "@tiptap/extension-table-header";
+import TableCell from "@tiptap/extension-table-cell";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "tiptap-markdown";
 import { createLowlight } from "lowlight";
 
@@ -198,6 +203,8 @@ export const toMarkdown = (editor?: Editor): string => {
 export default function TiptapEditor({ initialMarkdown = "", onChange, placeholder = "Write your post...", className = "" }: TiptapEditorProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const [showMarkdownView, setShowMarkdownView] = useState(false);
+  const [markdownContent, setMarkdownContent] = useState(initialMarkdown);
 
   const uploadFile = useCallback(async (file: File): Promise<string | null> => {
     try {
@@ -342,41 +349,61 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     })();
   }, [uploadFile, insertVideoShortcode]);
 
+  // Build base extensions list (may contain duplicates from third-party packages)
+  const rawExtensions: any[] = [
+    process.env.NODE_ENV === 'test'
+      ? StarterKit.configure({ link: false as any, underline: false as any })
+      : StarterKit.configure({ codeBlock: false, link: false as any, underline: false as any }),
+    Markdown.configure({ html: true }),
+    TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+      validate: (href: string) => !/^(javascript:|data:)/i.test(href),
+    }),
+    ...(process.env.NODE_ENV === 'test' ? [] : [
+      CodeBlockLowlight.configure({ lowlight, defaultLanguage: 'plaintext' }),
+    ]),
+    AlignedImage,
+    Table.configure({ resizable: true, allowTableNodeSelection: true }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    TaskList,
+    TaskItem.configure({ nested: true }),
+  ];
+
+  // Deduplicate by extension name (keep the last declared version so user config wins)
+  const seen = new Set<string>();
+  const extensions: any[] = [];
+  for (let i = rawExtensions.length - 1; i >= 0; i--) {
+    const ext = rawExtensions[i];
+    const name: string | undefined = ext?.name;
+    if (!name || !seen.has(name)) {
+      if (name) seen.add(name);
+      extensions.unshift(ext);
+    }
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const names = extensions.map(e => e?.name).filter(Boolean);
+      const dupes = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
+      if (dupes.length) {
+        // Surface any duplicates that slipped through our filtering (diagnostic only)
+        // eslint-disable-next-line no-console
+        console.warn('After dedupe, duplicate extension names still present:', dupes);
+      }
+    } catch {/* ignore */}
+  }
+
   const editor: Editor | null = useEditor({
-    extensions: [
-      // Use plain StarterKit with codeBlock in tests; disable built-in codeBlock otherwise so we can add lowlight variant
-      process.env.NODE_ENV === 'test'
-        ? StarterKit
-        : StarterKit.configure({ codeBlock: false }),
-      Markdown.configure({
-        html: true, // Allow HTML for image alignment figures
-      }),
-      TextAlign.configure({
-        types: ['heading', 'paragraph'],
-      }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          rel: 'noopener noreferrer',
-          target: '_blank',
-        },
-        validate: (href: string) => {
-          // Reject javascript: and data: URLs for security
-          return !/^(javascript:|data:)/i.test(href);
-        },
-      }),
-      // Only include lowlight code block extension outside of test environment to avoid jsdom + lowlight issues
-      ...(process.env.NODE_ENV === 'test' ? [] : [CodeBlockLowlight.configure({
-        lowlight,
-        defaultLanguage: 'plaintext',
-      })]),
-      Underline,
-      AlignedImage,
-    ] as any,
+    extensions: extensions as any,
     content: initialMarkdown,
     onUpdate: ({ editor }) => {
       try {
         const md = toMarkdown(editor);
+        setMarkdownContent(md);
         onChange?.(md);
       } catch (e) {
         console.warn('Failed to get markdown on update:', e);
@@ -391,9 +418,24 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         // First handle file pastes
         handleFileEvent(view, event, editor!);
 
-        // Then handle HTML/text paste with sanitization
+        // Handle markdown or HTML paste
         const html = event.clipboardData?.getData('text/html');
-        if (html && typeof window !== 'undefined') {
+        const text = event.clipboardData?.getData('text/plain');
+        
+        // Check if pasted content looks like markdown (has markdown syntax)
+        const isMarkdown = text && (
+          text.includes('# ') || text.includes('## ') || text.includes('### ') ||
+          text.includes('**') || text.includes('*') || text.includes('`') ||
+          text.includes('[') || text.includes('](') || text.includes('- ') ||
+          text.includes('1. ') || text.includes('> ') || text.includes('---')
+        );
+        
+        if (isMarkdown && typeof window !== 'undefined') {
+          event.preventDefault();
+          // Parse markdown directly into editor
+          fromMarkdown(text, editor!);
+          return true;
+        } else if (html && typeof window !== 'undefined') {
           event.preventDefault();
           const sanitizedHtml = DOMPurify.sanitize(html, {
             ALLOWED_TAGS: [
@@ -526,8 +568,12 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     };
 
     const insertTable = () => {
-      // TODO: Add table support
-      console.log('Table support not yet implemented');
+      // Insert a 3x3 table with header row if not in a table; otherwise add a row
+      if (!editor.isActive('table')) {
+        (editor as any).chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+      } else {
+        (editor as any).chain().focus().addRowAfter().run();
+      }
     };
 
     const toggleLink = () => {
@@ -643,6 +689,12 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
             onClick: () => editor.chain().focus().toggleOrderedList().run(),
             title: "Numbered List"
           })}
+          {btn({
+            label: "Task List",
+            active: editor.isActive('taskList'),
+            onClick: () => (editor as any).chain().focus().toggleTaskList().run(),
+            title: "Task List"
+          })}
           {btn({ 
             label: "Code Block", 
             active: editor.isActive("codeBlock"), 
@@ -701,6 +753,18 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
           })}
         </div>
 
+        <div className="w-px bg-border self-stretch"></div>
+
+        {/* View Mode */}
+        <div className="flex gap-1">
+          {btn({ 
+            label: showMarkdownView ? "Visual" : "Markdown", 
+            active: showMarkdownView,
+            onClick: () => setShowMarkdownView(!showMarkdownView),
+            title: showMarkdownView ? "Switch to Visual Editor" : "Switch to Markdown Editor"
+          })}
+        </div>
+
         {/* Language Dropdown for Code Blocks */}
         {showLanguageDropdown && (
           <div className="flex gap-1 items-center">
@@ -728,11 +792,41 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     );
   }, [uploadFile, insertVideoShortcode]);
 
+  // Handle markdown content changes in markdown view
+  const handleMarkdownChange = (newMarkdown: string) => {
+    setMarkdownContent(newMarkdown);
+    onChange?.(newMarkdown);
+  };
+
+  // Sync editor content to markdown when switching views
+  React.useEffect(() => {
+    if (!editor) return;
+    
+    if (showMarkdownView) {
+      // Switching to markdown view - get current editor content
+      const currentMarkdown = toMarkdown(editor);
+      setMarkdownContent(currentMarkdown);
+    } else {
+      // Switching to visual view - set editor content from markdown
+      fromMarkdown(markdownContent, editor);
+    }
+  }, [showMarkdownView, editor, markdownContent]);
+
   return (
     <div className={className}>
       <Toolbar editor={editor} />
       <div className="border border-border rounded-b-lg bg-card">
-        <EditorContent editor={editor} />
+        {showMarkdownView ? (
+          <textarea
+            value={markdownContent}
+            onChange={(e) => handleMarkdownChange(e.target.value)}
+            placeholder={`${placeholder} (Markdown mode)`}
+            className="w-full min-h-[220px] p-4 bg-transparent border-none outline-none resize-none font-mono text-sm leading-relaxed"
+            spellCheck={false}
+          />
+        ) : (
+          <EditorContent editor={editor} />
+        )}
       </div>
     </div>
   );

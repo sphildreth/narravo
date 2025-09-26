@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -158,6 +158,13 @@ export default function PostForm({ post }: PostFormProps) {
     });
   };
 
+  // Stable editor change handler to avoid recreating function each render which
+  // caused TiptapEditor effect (that depends on onChange) to run indefinitely.
+  // Also guard against unnecessary state updates when markdown is unchanged.
+  const handleEditorChange = useCallback((md: string) => {
+    setFormData(prev => prev.bodyMd === md ? prev : { ...prev, bodyMd: md });
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Error Messages */}
@@ -264,7 +271,7 @@ export default function PostForm({ post }: PostFormProps) {
           <div className="rounded-lg overflow-hidden">
             <TiptapEditor
               initialMarkdown={formData.bodyMd}
-              onChange={(md) => setFormData(prev => ({ ...prev, bodyMd: md }))}
+              onChange={handleEditorChange}
               placeholder="Write your post..."
             />
           </div>
