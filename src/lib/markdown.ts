@@ -49,7 +49,15 @@ export function expandShortcodes(markdown: string): string {
     const width = attrs.width && /^\d+$/.test(attrs.width) ? ` width="${attrs.width}"` : "";
     const height = attrs.height && /^\d+$/.test(attrs.height) ? ` height="${attrs.height}"` : "";
 
-    const poster = attrs.poster && (() => { try { const u = new URL(attrs.poster); return (u.protocol === "http:" || u.protocol === "https:") ? ` poster="${attrs.poster}"` : ""; } catch { return ""; } })();
+    const posterAttr = (() => {
+      if (!attrs.poster) return "";
+      try {
+        const u = new URL(attrs.poster);
+        return (u.protocol === "http:" || u.protocol === "https:") ? ` poster="${attrs.poster}"` : "";
+      } catch {
+        return "";
+      }
+    })();
 
     const autoplay = attrs.autoplay ? " autoplay" : "";
     // If autoplay is set, muted and playsinline are typically required for browsers to auto-play inline
@@ -63,7 +71,15 @@ export function expandShortcodes(markdown: string): string {
 
     const fallbackLink = `<a href="${sources[0]!.src}">Download video</a>`;
 
-    return `<video controls preload="metadata"${width}${height}${poster}${autoplay}${muted}${playsinline}${loop}>${sourcesHtml}${fallbackLink}</video>`;
+    const srcAttr = sources[0] ? ` src="${sources[0]!.src}"` : "";
+    const sourcesData = sources.length
+      ? ` data-sources="${encodeURIComponent(JSON.stringify(sources))}"`
+      : "";
+    const primarySrcData = sources[0]
+      ? ` data-shortcode-src="${sources[0]!.src}"`
+      : "";
+
+    return `<video controls preload="metadata" data-shortcode-preview="true"${srcAttr}${width}${height}${posterAttr}${autoplay}${muted}${playsinline}${loop}${sourcesData}${primarySrcData}>${sourcesHtml}${fallbackLink}</video>`;
   });
 }
 

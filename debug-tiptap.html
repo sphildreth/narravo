@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TipTap Task List Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; border: 1px solid #ccc; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TipTap Task List Structure Debug</h1>
+        <p>This page will help us understand what HTML structure TipTap generates for task lists.</p>
+        
+        <h2>Test Markdown:</h2>
+        <div class="debug">
+            <pre id="markdown">- [x] Completed task
+- [ ] Incomplete task
+  - [x] Nested completed
+  - [ ] Nested incomplete</pre>
+        </div>
+        
+        <h2>Generated HTML:</h2>
+        <div class="debug">
+            <pre id="html">Loading...</pre>
+        </div>
+        
+        <h2>Visual Result:</h2>
+        <div id="result" style="border: 1px solid #ccc; padding: 15px; min-height: 100px;">
+            Loading...
+        </div>
+    </div>
+    
+    <script>
+        // Simulate what TipTap would generate
+        // Based on TipTap documentation, task lists generate this structure:
+        const taskListHTML = `<ul data-type="taskList">
+  <li data-type="taskItem" data-checked="true">
+    <label>
+      <input type="checkbox" checked>
+      <span>Completed task</span>
+    </label>
+  </li>
+  <li data-type="taskItem" data-checked="false">
+    <label>
+      <input type="checkbox">
+      <span>Incomplete task</span>
+    </label>
+    <ul data-type="taskList">
+      <li data-type="taskItem" data-checked="true">
+        <label>
+          <input type="checkbox" checked>
+          <span>Nested completed</span>
+        </label>
+      </li>
+      <li data-type="taskItem" data-checked="false">
+        <label>
+          <input type="checkbox">
+          <span>Nested incomplete</span>
+        </label>
+      </li>
+    </ul>
+  </li>
+</ul>`;
+        
+        document.getElementById('html').textContent = taskListHTML;
+        document.getElementById('result').innerHTML = taskListHTML;
+        
+        // Add some basic styling to see the structure
+        const style = document.createElement('style');
+        style.textContent = `
+            /* Basic task list styling */
+            #result ul[data-type="taskList"] {
+                list-style: none;
+                padding-left: 0;
+            }
+            #result li[data-type="taskItem"] {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                margin: 8px 0;
+            }
+            #result li[data-type="taskItem"] > label {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                cursor: pointer;
+                flex: 1;
+            }
+            #result li[data-type="taskItem"] > label > input[type="checkbox"] {
+                margin-top: 2px;
+                flex-shrink: 0;
+            }
+            #result ul[data-type="taskList"] ul[data-type="taskList"] {
+                padding-left: 24px;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

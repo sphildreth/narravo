@@ -19,9 +19,10 @@ const imgSrc = [
   "'self'",
   "data:",
   "blob:",
+  "https:",  // Allow all HTTPS images for admin flexibility
   s3Hostname,
   "avatars.githubusercontent.com",
-  "images.unsplash.com",
+  "images.unsplash.com", 
   "lh3.googleusercontent.com",
   "i.pravatar.cc",
   "stackoverflow.com",
@@ -85,6 +86,8 @@ const nextConfig = {
   },
   images: {
     remotePatterns: [
+      // Allow all HTTPS images for admin flexibility
+      { protocol: 'https', hostname: '**' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },

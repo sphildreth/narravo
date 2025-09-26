@@ -1,13 +1,3 @@
----
-title: "Narravo Kitchen Sink: Editor Feature Test (Tables + Tasks)"
-slug: "narravo-kitchen-sink"
-date: 2025-09-26
-draft: false
-author: Steven H.
-tags: [test, narravo, tiptap, tables, tasks]
-summary: "A comprehensive test post tuned for the Narravo Tiptap editor with TableKit and Task lists enabled."
----
-
 # Narravo Kitchen Sink: Editor Feature Test
 
 This post exercises the features currently supported by your editor: headings, inline styles, links, images (align/width/caption), **tables (TableKit)**, **task lists**, ordered/bulleted lists, code blocks (lowlight), blockquotes, horizontal rules, and your video shortcode.

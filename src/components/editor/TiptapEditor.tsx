@@ -21,6 +21,8 @@ import { createLowlight } from "lowlight";
 // Create lowlight instance (only really used outside tests)
 const lowlight = createLowlight();
 import DOMPurify from "dompurify";
+import { expandShortcodes } from "@/lib/markdown";
+import { VideoShortcode } from "./extensions/VideoShortcode";
 
 // Language loading for code blocks
 const SUPPORTED_LANGUAGES = [
@@ -169,31 +171,56 @@ export type TiptapEditorProps = {
 };
 
 // Helper functions for Markdown round-trip
-export const fromMarkdown = (markdown: string, editor?: Editor) => {
+export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   if (!editor) return;
   
-  // Only sanitize in browser environment
-  let content = markdown;
+  // Pre-load languages that appear in code blocks
   if (typeof window !== 'undefined') {
-    // Sanitize the markdown content before setting
-    content = DOMPurify.sanitize(markdown, {
-      ALLOWED_TAGS: [
-        'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'code', 'pre',
-        'ul', 'ol', 'li', 'blockquote', 'a', 'img', 'br', 'hr', 'table', 'thead',
-        'tbody', 'tr', 'td', 'th', 'figure', 'figcaption'
-      ],
-      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'rel', 'target', 'class', 'style'],
-      ALLOW_DATA_ATTR: false,
-    });
+    const codeBlockRegex = /```(\w+)/g;
+    let match;
+    const languagesToLoad = new Set<string>();
+    while ((match = codeBlockRegex.exec(markdown)) !== null) {
+      const lang = match[1]?.toLowerCase();
+      if (lang && SUPPORTED_LANGUAGES.includes(lang as any)) {
+        languagesToLoad.add(lang);
+      }
+    }
+    
+    // Load all languages found
+    if (languagesToLoad.size > 0) {
+      await Promise.all([...languagesToLoad].map(lang => loadLanguage(lang)));
+    }
   }
   
-  editor.commands.setContent(content);
+  // Expand shortcodes (like video) in the markdown before processing
+  const expandedMarkdown = expandShortcodes(markdown);
+  const previewReadyMarkdown = expandedMarkdown.replace(/<video(?![^>]*data-shortcode-preview)/g, '<video data-shortcode-preview="true"');
+  
+  // Set the expanded markdown content - let tiptap-markdown handle the conversion
+  editor.commands.setContent(previewReadyMarkdown);
+  reparseLowlight(editor);
+};
+
+const reparseLowlight = (editor: Editor) => {
+  const { view, state } = editor;
+  if (!view || !state) return;
+  const transaction = state.tr.setMeta('lowlight', { reparse: true });
+  view.dispatch(transaction);
 };
 
 export const toMarkdown = (editor?: Editor): string => {
   if (!editor) return '';
   try {
-    return (editor.storage as any)?.markdown?.getMarkdown?.() ?? '';
+    let markdown = (editor.storage as any)?.markdown?.getMarkdown?.() ?? '';
+
+    if (typeof markdown === 'string' && markdown.length) {
+      markdown = markdown
+        .replace(/<div class="video-shortcode-placeholder"[\s\S]*?<\/div>/g, '')
+        .replace(/<div[^>]*data-video-shortcode="true"[^>]*>[\s\S]*?<\/div>/g, '')
+        .replace(/<video[^>]*data-shortcode-preview="true"[^>]*>[\s\S]*?<\/video>/g, '');
+    }
+
+    return markdown;
   } catch (e) {
     console.warn('Failed to get markdown from editor:', e);
     return '';
@@ -203,8 +230,11 @@ export const toMarkdown = (editor?: Editor): string => {
 export default function TiptapEditor({ initialMarkdown = "", onChange, placeholder = "Write your post...", className = "" }: TiptapEditorProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const placeholderRef = useRef<HTMLDivElement | null>(null);
   const [showMarkdownView, setShowMarkdownView] = useState(false);
   const [markdownContent, setMarkdownContent] = useState(initialMarkdown);
+  const [isToolbarSticky, setIsToolbarSticky] = useState(false);
 
   const uploadFile = useCallback(async (file: File): Promise<string | null> => {
     try {
@@ -297,6 +327,18 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
   const insertVideoShortcode = useCallback((editor: Editor, url: string) => {
     const shortcode = `[video mp4="${url}"][/video]`;
     editor.chain().focus().insertContent(shortcode).run();
+    const sourcesPayload = encodeURIComponent(JSON.stringify([{ src: url, type: "video/mp4" }]));
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: 'videoShortcode',
+        attrs: {
+          src: url,
+          sources: sourcesPayload,
+        },
+      })
+      .run();
   }, []);
 
   const handleFileEvent = useCallback((view: Editor['view'], event: ClipboardEvent | DragEvent, editor: Editor) => {
@@ -364,7 +406,8 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     ...(process.env.NODE_ENV === 'test' ? [] : [
       CodeBlockLowlight.configure({ lowlight, defaultLanguage: 'plaintext' }),
     ]),
-    AlignedImage,
+  AlignedImage,
+  VideoShortcode,
     Table.configure({ resizable: true, allowTableNodeSelection: true }),
     TableRow,
     TableHeader,
@@ -433,7 +476,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         if (isMarkdown && typeof window !== 'undefined') {
           event.preventDefault();
           // Parse markdown directly into editor
-          fromMarkdown(text, editor!);
+          fromMarkdown(text, editor!).catch(console.warn);
           return true;
         } else if (html && typeof window !== 'undefined') {
           event.preventDefault();
@@ -462,7 +505,9 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
             }
           }
           
-          editor!.commands.insertContent(processedHtml);
+          const previewHtml = processedHtml.replace(/<video(?![^>]*data-shortcode-preview)/g, '<video data-shortcode-preview="true"');
+          editor!.commands.insertContent(previewHtml);
+          reparseLowlight(editor!);
           return true;
         }
         
@@ -484,11 +529,144 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     }
   }, [editor, onChange]);
 
-  const Toolbar = useMemo(() => function Toolbar({ editor }: { editor: Editor | null }) {
-    if (!editor) return null;
+  // Load languages for initial markdown content
+  React.useEffect(() => {
+    if (editor && initialMarkdown && typeof window !== 'undefined') {
+      const loadInitialLanguages = async () => {
+        const codeBlockRegex = /```(\w+)/g;
+        let match;
+        const languagesToLoad = new Set<string>();
+        
+        while ((match = codeBlockRegex.exec(initialMarkdown)) !== null) {
+          const lang = match[1]?.toLowerCase();
+          if (lang && SUPPORTED_LANGUAGES.includes(lang as any)) {
+            languagesToLoad.add(lang);
+          }
+        }
+        
+        // Load all languages in parallel
+        if (languagesToLoad.size > 0) {
+          await Promise.all([...languagesToLoad].map(lang => loadLanguage(lang)));
+          
+          // Refresh the editor content after languages are loaded to trigger highlighting
+          const currentDoc = editor.getJSON();
+          editor.commands.setContent(currentDoc as any);
+          reparseLowlight(editor);
+        }
+      };
+      
+      loadInitialLanguages().catch(console.warn);
+    }
+  }, [editor, initialMarkdown]);
 
-    const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
-    const [currentLanguage, setCurrentLanguage] = useState('plaintext');
+  // Debug: Log the actual HTML structure when content changes
+  React.useEffect(() => {
+    if (editor && typeof window !== 'undefined') {
+      const logContent = () => {
+        const html = editor.getHTML();
+        if (html.includes('task') || html.includes('checkbox')) {
+          console.log('TipTap Task List HTML:', html);
+        }
+      };
+      
+      editor.on('update', logContent);
+      return () => {
+        editor.off('update', logContent);
+      };
+    }
+  }, [editor]);
+
+  // Handle sticky toolbar behavior
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const placeholderEl = placeholderRef.current;
+    const toolbarEl = toolbarRef.current;
+
+    if (!placeholderEl || !toolbarEl) {
+      return;
+    }
+
+    const getScrollParent = (node: HTMLElement | null): HTMLElement | Window => {
+      if (!node) return window;
+
+      let parent = node.parentElement;
+      while (parent) {
+        const { overflow, overflowY, overflowX } = window.getComputedStyle(parent);
+        if (/(auto|scroll)/.test(`${overflow}${overflowY}${overflowX}`)) {
+          return parent;
+        }
+        parent = parent.parentElement;
+      }
+
+      return window;
+    };
+
+    const scrollTarget: HTMLElement | Window = getScrollParent(placeholderEl);
+
+    const handleScroll = () => {
+      if (!toolbarRef.current || !placeholderRef.current) return;
+
+      const topBoundary = scrollTarget === window
+        ? 0
+        : (scrollTarget as HTMLElement).getBoundingClientRect().top;
+
+      const shouldStick = placeholderRef.current.getBoundingClientRect().top <= topBoundary;
+
+      if (shouldStick) {
+        placeholderRef.current.style.height = `${toolbarRef.current.offsetHeight}px`;
+      } else {
+        placeholderRef.current.style.height = '0px';
+      }
+
+      setIsToolbarSticky(prev => {
+        if (prev !== shouldStick) {
+          return shouldStick;
+        }
+        return prev;
+      });
+    };
+
+    handleScroll();
+
+    scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+
+    return () => {
+      scrollTarget.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+      placeholderEl.style.height = '0px';
+    };
+  }, [editor]);
+
+// Toolbar component definition
+interface ToolbarProps {
+  editor: Editor | null;
+  isSticky: boolean;
+  toolbarRef: React.RefObject<HTMLDivElement | null>;
+  uploadFile: (file: File) => Promise<string | null>;
+  insertVideoShortcode: (editor: Editor, url: string) => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  videoInputRef: React.RefObject<HTMLInputElement | null>;
+  showMarkdownView: boolean;
+  setShowMarkdownView: (show: boolean) => void;
+}
+
+const EditorToolbar = React.memo(({ 
+  editor, 
+  isSticky, 
+  toolbarRef,
+  uploadFile,
+  insertVideoShortcode,
+  fileInputRef,
+  videoInputRef,
+  showMarkdownView,
+  setShowMarkdownView
+}: ToolbarProps) => {
+  if (!editor) return null;
+
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState('plaintext');
 
     // Check if cursor is in code block and update language
     useEffect(() => {
@@ -564,6 +742,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         await loadLanguage(lang);
       }
       (editor as any).chain().focus().updateAttributes('codeBlock', { language: lang }).run();
+      reparseLowlight(editor);
       setCurrentLanguage(lang);
     };
 
@@ -584,7 +763,14 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     };
 
     return (
-      <div className="flex flex-wrap gap-2 p-2 border border-border rounded-t-lg bg-muted/10">
+      <div 
+        ref={toolbarRef}
+        className={`flex flex-wrap gap-2 p-2 border border-border rounded-t-lg bg-muted/10 transition-all duration-200 ${
+          isSticky 
+            ? 'fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm shadow-lg rounded-none border-b border-border' 
+            : ''
+        }`}
+      >
         {/* Text Formatting */}
         <div className="flex gap-1">
           {btn({ 
@@ -790,7 +976,9 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={onPickVideo} />
       </div>
     );
-  }, [uploadFile, insertVideoShortcode]);
+});
+
+EditorToolbar.displayName = 'EditorToolbar';
 
   // Handle markdown content changes in markdown view
   const handleMarkdownChange = (newMarkdown: string) => {
@@ -814,7 +1002,19 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
   return (
     <div className={className}>
-      <Toolbar editor={editor} />
+      {/* Placeholder div to prevent layout jumps when toolbar becomes sticky */}
+      <div ref={placeholderRef} className="transition-all duration-200" />
+      <EditorToolbar 
+        editor={editor} 
+        isSticky={isToolbarSticky} 
+        toolbarRef={toolbarRef}
+        uploadFile={uploadFile}
+        insertVideoShortcode={insertVideoShortcode}
+        fileInputRef={fileInputRef}
+        videoInputRef={videoInputRef}
+        showMarkdownView={showMarkdownView}
+        setShowMarkdownView={setShowMarkdownView}
+      />
       <div className="border border-border rounded-b-lg bg-card">
         {showMarkdownView ? (
           <textarea
