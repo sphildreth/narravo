@@ -427,7 +427,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       ? StarterKit.configure({ link: false as any, underline: false as any })
       : StarterKit.configure({ codeBlock: false, link: false as any, underline: false as any }),
     Markdown.configure({ 
-      html: true,
+      html: false, // Try with html: false to prevent interference
       linkify: false,  // We handle links through the Link extension
       breaks: false,   // Use default line break handling
       transformCopiedText: false,
@@ -500,8 +500,6 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         const html = event.clipboardData?.getData('text/html');
         const text = event.clipboardData?.getData('text/plain');
         
-        console.log('Paste event:', { html, text });
-        
         // Check if pasted content looks like markdown (has markdown syntax)
         const isMarkdown = text && (
           text.includes('# ') || text.includes('## ') || text.includes('### ') ||
@@ -510,11 +508,8 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
           text.includes('1. ') || text.includes('> ') || text.includes('---')
         );
         
-        console.log('Detected as markdown:', isMarkdown);
-        
         if (isMarkdown && typeof window !== 'undefined') {
           event.preventDefault();
-          console.log('Processing as markdown with fromMarkdown()');
           // Parse markdown directly into editor
           fromMarkdown(text, editor!).catch(() => {/* Ignore markdown parse errors */});
           return true;
@@ -566,11 +561,11 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
   // Debug: Expose editor globally for testing
   React.useEffect(() => {
-    if (editor && typeof window !== 'undefined') {
-      (window as any).editor = editor;
-      console.log('TipTap editor exposed globally as window.editor');
+    // Initialize editor content if provided
+    if (editor && initialMarkdown && initialMarkdown !== editor.getHTML()) {
+      fromMarkdown(initialMarkdown, editor);
     }
-  }, [editor]);
+  }, [editor, initialMarkdown]);
 
   // Ensure onChange is called at least once after editor mounts
   React.useEffect(() => {
@@ -1056,7 +1051,7 @@ EditorToolbar.displayName = 'EditorToolbar';
       // Switching to visual view - set editor content from markdown
       fromMarkdown(markdownContent, editor);
     }
-  }, [showMarkdownView, editor, markdownContent]);
+  }, [showMarkdownView, editor]);
 
   return (
     <div className={className}>

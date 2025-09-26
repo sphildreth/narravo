@@ -24,8 +24,10 @@ Enhancements and bugs related to editing a post.
 - There is a button in the admin posts portal "Show Unpublished" which lists all unpublished posts
 
 # Editor Enhancements
-- The ability to manage the featured image
+- When adding a new post on the blur of "Title" generate the Slug automatically
+- When editing a post ensure the tab moves from "Excerpt" field to the Content field (don't tab into a wysiwyg editor bar item, tab into the main content area)
+- Add the ability to manage the featured image
     - Be able to remove featured image
     - Be able to upload new featured image
-
+- Add the ability to resize an image by dragging the image corners in the wysiwyg editor
 
