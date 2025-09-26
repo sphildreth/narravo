@@ -30,4 +30,5 @@ Enhancements and bugs related to editing a post.
     - Be able to remove featured image
     - Be able to upload new featured image
 - Add the ability to resize an image by dragging the image corners in the wysiwyg editor
+- Add the ability to edit and paste mermaidjs diagrams in the wysiwyg editor and to display mermaidjs diagrams in the post detail view
 
