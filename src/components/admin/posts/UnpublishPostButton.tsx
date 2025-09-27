@@ -13,23 +13,23 @@ export default function UnpublishPostButton({ postId, isPublished }: UnpublishPo
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [isUnpublished, setIsUnpublished] = useState(!isPublished);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleUnpublish = () => {
-    if (!confirm("Are you sure you want to unpublish this post? It will no longer be visible to the public.")) {
-      return;
-    }
-
     startTransition(async () => {
       setError(null);
       try {
         const result = await unpublishPost(postId);
         if (result.error) {
           setError(result.error);
+          setShowConfirm(false);
         } else if (result.success) {
           setIsUnpublished(true);
+          setShowConfirm(false);
         }
       } catch (err) {
         setError("Failed to unpublish post");
+        setShowConfirm(false);
       }
     });
   };
@@ -46,10 +46,37 @@ export default function UnpublishPostButton({ postId, isPublished }: UnpublishPo
     );
   }
 
+  if (showConfirm) {
+    return (
+      <div className="inline-flex items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+        <span className="text-sm text-orange-800">
+          Unpublish this post? It will no longer be visible to the public.
+        </span>
+        <button
+          onClick={handleUnpublish}
+          disabled={isPending}
+          className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isPending ? "Unpublishing..." : "Yes, Unpublish"}
+        </button>
+        <button
+          onClick={() => setShowConfirm(false)}
+          disabled={isPending}
+          className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       <button
-        onClick={handleUnpublish}
+        onClick={() => {
+          setError(null);
+          setShowConfirm(true);
+        }}
         disabled={isPending}
         className="inline-flex items-center px-3 py-1 text-sm text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded transition-colors disabled:opacity-50"
       >

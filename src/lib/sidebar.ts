@@ -31,9 +31,10 @@ export async function getArchiveMonths(limit: number = 24): Promise<ArchiveMonth
 
 export async function getRecentPosts(limit: number = 10): Promise<RecentPost[]> {
   const res: any = await db.execute(sql`
-    select id, slug, title, coalesce(published_at, created_at) as "publishedAt"
+    select id, slug, title, published_at as "publishedAt"
     from posts
-    order by coalesce(published_at, created_at) desc nulls last, id desc
+    where published_at is not null
+    order by published_at desc nulls last, id desc
     limit ${limit}
   `);
   const rows: any[] = res.rows ?? (Array.isArray(res) ? res : []);

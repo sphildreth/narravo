@@ -79,10 +79,11 @@ export async function listPosts(opts: { cursor?: { publishedAt: string; id: stri
     }
 }
 
-export async function getPostBySlug(slug: string) {
+export async function getPostBySlug(slug: string, isAdmin: boolean = false) {
     // Helper: try with views_total, then fallback if column missing
     async function run(includeViews: boolean) {
       const selectViews = includeViews ? sql`, p.views_total as "viewsTotal"` : sql``;
+      const publishedFilter = isAdmin ? sql`` : sql`and p.published_at is not null`;
       const res: any = await db.execute(sql`
     select p.id, p.slug, p.title, p.excerpt, 
            p.body_md as "bodyMd", p.body_html as "bodyHtml", 
@@ -94,6 +95,7 @@ export async function getPostBySlug(slug: string) {
     from posts p
     where p.slug = ${slug}
       and p.deleted_at is null
+      ${publishedFilter}
     limit 1
   `);
       const row = (res.rows ?? [])[0];
@@ -138,8 +140,8 @@ export async function getPostBySlug(slug: string) {
 /**
  * Get post with reaction data for a specific user
  */
-export async function getPostBySlugWithReactions(slug: string, userId?: string) {
-    const post = await getPostBySlug(slug);
+export async function getPostBySlugWithReactions(slug: string, userId?: string, isAdmin: boolean = false) {
+    const post = await getPostBySlug(slug, isAdmin);
     if (!post) return null;
 
     const reactionCounts = await getReactionCounts("post", post.id);
