@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Plugin } from 'prosemirror-state';
-import { PluginKey } from 'prosemirror-state';
+import { Plugin, PluginKey, Transaction, EditorState } from '@tiptap/pm/state'
 
 declare global {
   interface Window {
