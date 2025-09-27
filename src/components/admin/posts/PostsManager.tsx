@@ -154,7 +154,7 @@ export default function PostsManager({ initialData, filter, sort, page }: PostsM
             >
               <option value="">All Posts</option>
               <option value="published">Published</option>
-              <option value="draft">Draft</option>
+              <option value="draft">Unpublished</option>
             </select>
           </div>
 

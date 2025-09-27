@@ -34,6 +34,8 @@ const createPostBaseSchema = z.object({
   html: z.string().optional(),
   bodyMd: z.string().optional(),
   publishedAt: z.string().optional().nullable(),
+  featuredImageUrl: z.string().url().optional().or(z.literal("")),
+  featuredImageAlt: z.string().max(255).optional(),
 });
 
 const createPostSchema = createPostBaseSchema.refine((data) => !!(data.bodyMd?.trim() || data.html?.trim()), {
@@ -206,6 +208,8 @@ export async function createPost(formData: FormData) {
     html: (formData.get("html") as string) || undefined,
     bodyMd: (formData.get("bodyMd") as string) || undefined,
     publishedAt: formData.get("publishedAt") as string || null,
+    featuredImageUrl: (formData.get("featuredImageUrl") as string) || undefined,
+    featuredImageAlt: (formData.get("featuredImageAlt") as string) || undefined,
   };
   
   // Validate input
@@ -216,7 +220,7 @@ export async function createPost(formData: FormData) {
     };
   }
   
-  const { title, slug, excerpt, html, bodyMd, publishedAt } = parsed.data;
+  const { title, slug, excerpt, html, bodyMd, publishedAt, featuredImageUrl, featuredImageAlt } = parsed.data;
   
   try {
     // Generate slug if not provided or ensure uniqueness
@@ -245,6 +249,8 @@ export async function createPost(formData: FormData) {
         bodyHtml: fromMd ? renderedHtml : null,
         html: renderedHtml, // keep legacy column in sync
         publishedAt: publishedAt ? new Date(publishedAt) : null,
+        featuredImageUrl: featuredImageUrl || null,
+        featuredImageAlt: featuredImageAlt || null,
       })
       .returning();
     
@@ -275,6 +281,8 @@ export async function updatePost(formData: FormData) {
     bodyMd: (formData.get("bodyMd") as string) || undefined,
     publishedAt: formData.get("publishedAt") as string || null,
     updatedAt: formData.get("updatedAt") as string,
+    featuredImageUrl: (formData.get("featuredImageUrl") as string) || undefined,
+    featuredImageAlt: (formData.get("featuredImageAlt") as string) || undefined,
   };
   
   // Validate input
@@ -285,7 +293,7 @@ export async function updatePost(formData: FormData) {
     };
   }
   
-  const { id, title, slug, excerpt, html, bodyMd, publishedAt, updatedAt } = parsed.data;
+  const { id, title, slug, excerpt, html, bodyMd, publishedAt, updatedAt, featuredImageUrl, featuredImageAlt } = parsed.data;
   
   try {
     // Check for concurrent updates
@@ -330,6 +338,8 @@ export async function updatePost(formData: FormData) {
         html: renderedHtml,
         publishedAt: publishedAt ? new Date(publishedAt) : null,
         updatedAt: new Date(),
+        featuredImageUrl: featuredImageUrl || null,
+        featuredImageAlt: featuredImageAlt || null,
       })
       .where(eq(posts.id, id))
       .returning();
@@ -486,5 +496,93 @@ export async function checkSlugAvailability(slug: string, excludeId?: string) {
     return { available: existing.length === 0 };
   } catch (error) {
     return { available: false, error: "Failed to check slug availability" };
+  }
+}
+
+// Toggle post lock status
+export async function togglePostLock(postId: string) {
+  await requireAdmin();
+  
+  if (!postId) {
+    return { error: "Post ID is required" };
+  }
+  
+  try {
+    // Get current lock status
+    const [currentPost] = await db
+      .select({ isLocked: posts.isLocked, slug: posts.slug })
+      .from(posts)
+      .where(eq(posts.id, postId))
+      .limit(1);
+      
+    if (!currentPost) {
+      return { error: "Post not found" };
+    }
+    
+    // Toggle the lock status
+    const [updatedPost] = await db
+      .update(posts)
+      .set({ 
+        isLocked: !currentPost.isLocked,
+        updatedAt: new Date(),
+      })
+      .where(eq(posts.id, postId))
+      .returning({ isLocked: posts.isLocked, slug: posts.slug });
+    
+    // Revalidate caches
+    await revalidateAfterPostChange(postId, updatedPost.slug);
+    
+    return { 
+      success: true, 
+      isLocked: updatedPost.isLocked,
+      message: updatedPost.isLocked ? "Post locked" : "Post unlocked"
+    };
+  } catch (error) {
+    console.error("Error toggling post lock:", error);
+    return { error: "Failed to toggle post lock" };
+  }
+}
+
+// Unpublish a single post
+export async function unpublishPost(postId: string) {
+  await requireAdmin();
+  
+  if (!postId) {
+    return { error: "Post ID is required" };
+  }
+  
+  try {
+    // Check if post is currently published
+    const [currentPost] = await db
+      .select({ publishedAt: posts.publishedAt, slug: posts.slug })
+      .from(posts)
+      .where(eq(posts.id, postId))
+      .limit(1);
+      
+    if (!currentPost) {
+      return { error: "Post not found" };
+    }
+    
+    if (!currentPost.publishedAt) {
+      return { error: "Post is already unpublished" };
+    }
+    
+    // Unpublish the post
+    const [updatedPost] = await db
+      .update(posts)
+      .set({ 
+        publishedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(posts.id, postId))
+      .returning({ slug: posts.slug });
+    
+    // Revalidate caches
+    await revalidateAfterPostChange(postId, updatedPost.slug);
+    
+    return { success: true, message: "Post unpublished" };
+  } catch (error) {
+    console.error("Error unpublishing post:", error);
+    return { error: "Failed to unpublish post" };
   }
 }

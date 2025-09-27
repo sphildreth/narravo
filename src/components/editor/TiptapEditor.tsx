@@ -19,6 +19,7 @@ import { Markdown } from "tiptap-markdown";
 import { createLowlight } from "lowlight";
 import { MarkdownShortcodes } from './extensions/MarkdownShortcodes';
 import { VideoShortcode } from './extensions/VideoShortcode';
+import { MermaidNode } from './extensions/MermaidNode';
 import 'highlight.js/styles/atom-one-dark.css';
 
 // Create lowlight instance (only really used outside tests)
@@ -452,6 +453,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     ]),
   AlignedImage,
   VideoShortcode,
+  MermaidNode,
     Table.configure({ resizable: true, allowTableNodeSelection: true }),
     TableRow,
     TableHeader,
@@ -814,6 +816,17 @@ const EditorToolbar = React.memo(({
       }
     };
 
+    const insertMermaid = () => {
+      const defaultDiagram = `graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action 1]
+    B -->|No| D[Action 2]
+    C --> E[End]
+    D --> E`;
+      
+      (editor as any).chain().focus().insertMermaidDiagram(defaultDiagram).run();
+    };
+
     const toggleLink = () => {
       const url = window.prompt('Enter URL:');
       if (url) {
@@ -973,6 +986,11 @@ const EditorToolbar = React.memo(({
             label: "Video", 
             onClick: triggerVideo,
             title: "Insert Video"
+          })}
+          {btn({ 
+            label: "Mermaid", 
+            onClick: insertMermaid,
+            title: "Insert Mermaid Diagram"
           })}
           {btn({ 
             label: "HR", 
