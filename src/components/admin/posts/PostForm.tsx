@@ -48,6 +48,24 @@ export default function PostForm({ post }: PostFormProps) {
     featuredImageAlt: post?.featuredImageAlt || "",
   });
 
+  // Local (deferred) featured image file state
+  const [featuredImageFile, setFeaturedImageFile] = useState<File | null>(null);
+  const [featuredImagePreview, setFeaturedImagePreview] = useState<string | null>(null);
+
+  // Revoke object URL when file changes/removed
+  useEffect(() => {
+    if (!featuredImageFile) {
+      if (featuredImagePreview) {
+        URL.revokeObjectURL(featuredImagePreview);
+      }
+      setFeaturedImagePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(featuredImageFile);
+    setFeaturedImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [featuredImageFile]);
+
   // Validate slug format
   const isValidSlugFormat = (slug: string) => /^[a-z0-9-]+$/.test(slug);
 
@@ -131,7 +149,14 @@ export default function PostForm({ post }: PostFormProps) {
         submitData.append("slug", formData.slug);
         submitData.append("excerpt", formData.excerpt);
         submitData.append("bodyMd", formData.bodyMd);
-        submitData.append("featuredImageUrl", formData.featuredImageUrl);
+        // Featured image handling (deferred upload): if a file is chosen we append it;
+        // otherwise rely on URL value (could be empty string)
+        if (featuredImageFile) {
+          submitData.append("featuredImageFile", featuredImageFile);
+          submitData.append("featuredImageUrl", ""); // ensure server derives from file
+        } else {
+          submitData.append("featuredImageUrl", formData.featuredImageUrl);
+        }
         submitData.append("featuredImageAlt", formData.featuredImageAlt);
         
         // Handle publish action
@@ -286,23 +311,24 @@ export default function PostForm({ post }: PostFormProps) {
           </p>
         </div>
 
-        {/* Featured Image */}
+        {/* Featured Image (deferred upload) */}
         <div>
-          <label className="block text-sm font-medium mb-2">
-            Featured Image
-          </label>
+          <label className="block text-sm font-medium mb-2">Featured Image</label>
           <div className="space-y-3">
-            {/* Current featured image display */}
-            {formData.featuredImageUrl && (
+            {/* Preview: either existing URL (editing existing post) or local file preview */}
+            {(featuredImagePreview || formData.featuredImageUrl) && (
               <div className="relative inline-block">
-                <img 
-                  src={formData.featuredImageUrl} 
+                <img
+                  src={featuredImagePreview || formData.featuredImageUrl}
                   alt={formData.featuredImageAlt || "Featured image preview"}
                   className="max-w-sm h-32 object-cover rounded-md border border-border"
                 />
                 <button
                   type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, featuredImageUrl: "", featuredImageAlt: "" }))}
+                  onClick={() => {
+                    setFeaturedImageFile(null);
+                    setFormData(prev => ({ ...prev, featuredImageUrl: "", featuredImageAlt: "" }));
+                  }}
                   className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-700 transition-colors"
                   disabled={isPending}
                 >
@@ -310,21 +336,44 @@ export default function PostForm({ post }: PostFormProps) {
                 </button>
               </div>
             )}
-            
-            {/* Featured image URL input */}
-            <div>
-              <input
-                type="url"
-                value={formData.featuredImageUrl}
-                onChange={(e) => setFormData(prev => ({ ...prev, featuredImageUrl: e.target.value }))}
-                className="w-full px-3 py-2 border border-border rounded-md text-sm"
-                placeholder="Enter image URL (https://...)"
-                disabled={isPending}
-              />
-            </div>
-            
-            {/* Featured image alt text */}
-            {formData.featuredImageUrl && (
+
+            {/* File input appears if no remote URL present or user is selecting a new one */}
+            {!formData.featuredImageUrl && !featuredImagePreview && (
+              <div className="flex items-center gap-3 flex-wrap">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setFeaturedImageFile(file);
+                      // Reset URL field to ensure server doesn't treat previous URL
+                      setFormData(prev => ({ ...prev, featuredImageUrl: "" }));
+                    }
+                  }}
+                  disabled={isPending}
+                  className="text-sm"
+                />
+                <span className="text-xs text-muted-foreground">Max 5MB. JPG, PNG, WebP, GIF.</span>
+              </div>
+            )}
+
+            {/* URL input only shown when no file chosen and no preview */}
+            {!featuredImagePreview && !featuredImageFile && (
+              <div>
+                <input
+                  type="url"
+                  value={formData.featuredImageUrl}
+                  onChange={(e) => setFormData(prev => ({ ...prev, featuredImageUrl: e.target.value }))}
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm"
+                  placeholder="Or enter image URL (https://...)"
+                  disabled={isPending}
+                />
+              </div>
+            )}
+
+            {/* Alt text field displayed if either a file or URL is selected */}
+            {(featuredImagePreview || formData.featuredImageUrl) && (
               <div>
                 <input
                   type="text"

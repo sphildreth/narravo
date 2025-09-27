@@ -11,6 +11,9 @@ import slugify from "slugify";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { markdownToHtmlSync } from "@/lib/markdown";
 import { z } from "zod";
+import { randomUUID } from "crypto";
+import { promises as fs } from "fs";
+import path from "path";
 
 // Types for post management
 export interface PostsFilter {
@@ -27,6 +30,16 @@ export interface PostsSortOptions {
 }
 
 // Input validation schemas
+// Accept either a fully-qualified URL, a relative /uploads/ path (deferred upload becomes a path at commit),
+// or an empty string (meaning no featured image).
+const featuredImageField = z
+  .string()
+  .trim()
+  .refine(v => v === "" || /^https?:\/\//i.test(v) || v.startsWith("/uploads/"), {
+    message: "Must be an absolute URL or a /uploads/ path",
+  })
+  .optional();
+
 const createPostBaseSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),
   slug: z.string().min(1, "Slug is required").max(255).regex(/^[a-z0-9-]+$/, "Slug must contain only lowercase letters, numbers, and hyphens"),
@@ -34,7 +47,7 @@ const createPostBaseSchema = z.object({
   html: z.string().optional(),
   bodyMd: z.string().optional(),
   publishedAt: z.string().optional().nullable(),
-  featuredImageUrl: z.string().url().optional().or(z.literal("")),
+  featuredImageUrl: featuredImageField,
   featuredImageAlt: z.string().max(255).optional(),
 });
 
@@ -201,6 +214,9 @@ export async function getPostForEdit(id: string) {
 export async function createPost(formData: FormData) {
   await requireAdmin();
   
+  // If a file is present we defer storing until after validation of other fields.
+  const featuredImageFile = formData.get("featuredImageFile") as File | null;
+
   const data = {
     title: formData.get("title") as string,
     slug: formData.get("slug") as string,
@@ -208,6 +224,7 @@ export async function createPost(formData: FormData) {
     html: (formData.get("html") as string) || undefined,
     bodyMd: (formData.get("bodyMd") as string) || undefined,
     publishedAt: formData.get("publishedAt") as string || null,
+    // When a file is chosen the text field is hidden; we pass empty string then derive path.
     featuredImageUrl: (formData.get("featuredImageUrl") as string) || undefined,
     featuredImageAlt: (formData.get("featuredImageAlt") as string) || undefined,
   };
@@ -238,6 +255,34 @@ export async function createPost(formData: FormData) {
     const fromMd = bodyMd && bodyMd.trim().length > 0;
     const renderedHtml = fromMd ? markdownToHtmlSync(bodyMd!) : sanitizeHtml(html || "");
 
+    // Handle deferred image file (only for new posts so we can name with post id after insert?)
+    // Strategy: store file first with temp UUID name, then reference its path. If db insert fails we could leave an orphan,
+    // but this is extremely rare; optional future cleanup can reap unreferenced files. (Acceptable tradeoff for now.)
+    let finalFeaturedUrl: string | null = null;
+
+    if (featuredImageFile && featuredImageFile instanceof File && featuredImageFile.size > 0) {
+      // Basic validation
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"]; // extend as needed
+      if (!allowed.includes(featuredImageFile.type)) {
+        return { error: "Unsupported featured image type" };
+      }
+      if (featuredImageFile.size > 5 * 1024 * 1024) { // 5MB limit
+        return { error: "Featured image file too large (max 5MB)" };
+      }
+      const arrayBuffer = await featuredImageFile.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const ext = featuredImageFile.name.includes('.') ? '.' + featuredImageFile.name.split('.').pop()!.toLowerCase() : (
+        featuredImageFile.type === 'image/png' ? '.png' : featuredImageFile.type === 'image/webp' ? '.webp' : featuredImageFile.type === 'image/gif' ? '.gif' : '.jpg'
+      );
+      const fileName = `${randomUUID()}${ext}`;
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'featured');
+      await fs.mkdir(uploadDir, { recursive: true });
+      await fs.writeFile(path.join(uploadDir, fileName), buffer);
+      finalFeaturedUrl = `/uploads/featured/${fileName}`;
+    } else if (featuredImageUrl && featuredImageUrl.trim() !== "") {
+      finalFeaturedUrl = featuredImageUrl;
+    }
+
     // Create post
     const [newPost] = await db
       .insert(posts)
@@ -249,7 +294,7 @@ export async function createPost(formData: FormData) {
         bodyHtml: fromMd ? renderedHtml : null,
         html: renderedHtml, // keep legacy column in sync
         publishedAt: publishedAt ? new Date(publishedAt) : null,
-        featuredImageUrl: featuredImageUrl || null,
+        featuredImageUrl: finalFeaturedUrl,
         featuredImageAlt: featuredImageAlt || null,
       })
       .returning();
@@ -272,6 +317,8 @@ export async function createPost(formData: FormData) {
 export async function updatePost(formData: FormData) {
   await requireAdmin();
   
+  const featuredImageFile = formData.get("featuredImageFile") as File | null;
+
   const data = {
     id: formData.get("id") as string,
     title: formData.get("title") as string,
@@ -326,6 +373,29 @@ export async function updatePost(formData: FormData) {
     const fromMd = bodyMd && bodyMd.trim().length > 0;
     const renderedHtml = fromMd ? markdownToHtmlSync(bodyMd!) : sanitizeHtml(html || "");
   
+    let finalFeaturedUrl: string | null = null;
+    if (featuredImageFile && featuredImageFile instanceof File && featuredImageFile.size > 0) {
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"]; 
+      if (!allowed.includes(featuredImageFile.type)) {
+        return { error: "Unsupported featured image type" };
+      }
+      if (featuredImageFile.size > 5 * 1024 * 1024) {
+        return { error: "Featured image file too large (max 5MB)" };
+      }
+      const arrayBuffer = await featuredImageFile.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const ext = featuredImageFile.name.includes('.') ? '.' + featuredImageFile.name.split('.').pop()!.toLowerCase() : (
+        featuredImageFile.type === 'image/png' ? '.png' : featuredImageFile.type === 'image/webp' ? '.webp' : featuredImageFile.type === 'image/gif' ? '.gif' : '.jpg'
+      );
+      const fileName = `${randomUUID()}${ext}`;
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'featured');
+      await fs.mkdir(uploadDir, { recursive: true });
+      await fs.writeFile(path.join(uploadDir, fileName), buffer);
+      finalFeaturedUrl = `/uploads/featured/${fileName}`;
+    } else if (featuredImageUrl && featuredImageUrl.trim() !== "") {
+      finalFeaturedUrl = featuredImageUrl;
+    }
+
     // Update post
     const [updatedPost] = await db
       .update(posts)
@@ -338,7 +408,7 @@ export async function updatePost(formData: FormData) {
         html: renderedHtml,
         publishedAt: publishedAt ? new Date(publishedAt) : null,
         updatedAt: new Date(),
-        featuredImageUrl: featuredImageUrl || null,
+        featuredImageUrl: finalFeaturedUrl,
         featuredImageAlt: featuredImageAlt || null,
       })
       .where(eq(posts.id, id))
