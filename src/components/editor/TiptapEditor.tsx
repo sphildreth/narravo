@@ -209,21 +209,57 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   // Check if we have HTML (expanded shortcodes) vs plain markdown
   const hasHTML = expandedMarkdown !== markdown && expandedMarkdown.includes('<');
   
-  console.log('Has HTML content:', hasHTML);
+  console.log('🔄 [TiptapEditor] Content analysis:', {
+    hasHTML,
+    hasMermaidBlocks: /```mermaid/gi.test(previewReadyMarkdown),
+    mermaidBlockCount: (previewReadyMarkdown.match(/```mermaid/gi) || []).length,
+    markdownLength: markdown.length,
+    expandedLength: expandedMarkdown.length
+  });
   
-  if (hasHTML) {
-    // If shortcodes were expanded to HTML, use setContent to replace all content
-    console.log('Setting expanded HTML content');
-    editor.commands.setContent(previewReadyMarkdown);
-  } else {
-    // Pure markdown, let tiptap-markdown handle the conversion
-    console.log('Using setContent for markdown content');
-    editor.commands.setContent(previewReadyMarkdown);
+  try {
+    if (hasHTML) {
+      console.log('🔄 [TiptapEditor] Setting expanded HTML content');
+      editor.commands.setContent(previewReadyMarkdown);
+    } else {
+      const mdStorage = (editor.storage as any)?.markdown;
+      const parser = mdStorage?.parser;
+      if (parser) {
+        console.log('🔄 [TiptapEditor] Parsing markdown with tiptap-markdown parser');
+        console.log('🔄 [TiptapEditor] Content being parsed:', previewReadyMarkdown.substring(0, 300) + '...');
+        const doc = parser.parse(previewReadyMarkdown);
+        console.log('🔄 [TiptapEditor] Parsed document structure:', {
+          nodeType: doc.type?.name,
+          childCount: doc.childCount,
+          content: doc.content?.content?.map((child: any) => ({
+            type: child.type?.name,
+            attrs: child.attrs,
+            textContent: child.textContent?.substring(0, 100) + '...'
+          }))
+        });
+        editor.commands.setContent(doc as any);
+      } else {
+        console.log('🔄 [TiptapEditor] Markdown parser missing, inserting raw markdown as preformatted fallback');
+        const escaped = previewReadyMarkdown
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&gt;');
+        editor.commands.setContent(`<pre>${escaped}</pre>`);
+      }
+    }
+  } catch (err) {
+    console.error('fromMarkdown failed, fallback to pre block', err);
+    const escaped = previewReadyMarkdown
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    editor.commands.setContent(`<pre>${escaped}</pre>`);
   }
   
   // Force a reparse with a small delay to ensure content is set first
   setTimeout(() => {
+    console.log('🔄 [TiptapEditor] Running delayed operations after content set');
     reparseLowlight(editor);
+    // Note: convertMermaidCodeBlocks is removed - the auto-conversion plugin in MermaidNode.ts handles this
   }, 100);
 };
 
@@ -486,7 +522,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
   const editor: Editor | null = useEditor({
     extensions: extensions as any,
-    content: initialMarkdown,
+    content: '',
     onUpdate: ({ editor }) => {
       try {
         const md = toMarkdown(editor);
@@ -520,7 +556,12 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         if (isMarkdown && typeof window !== 'undefined') {
           event.preventDefault();
           // Parse markdown directly into editor
-          fromMarkdown(text, editor!).catch(() => {/* Ignore markdown parse errors */});
+          fromMarkdown(text, editor!)
+            .then(() => {
+              // Note: convertMermaidCodeBlocks removed - auto-conversion plugin handles this
+              reparseLowlight(editor!);
+            })
+            .catch(() => {/* Ignore markdown parse errors */});
           return true;
         } else if (html && typeof window !== 'undefined') {
           event.preventDefault();
@@ -556,6 +597,8 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
           
           const previewHtml = processedHtml.replace(/<video(?![^>]*data-shortcode-preview)/g, '<video data-shortcode-preview="true"');
           editor!.commands.insertContent(previewHtml);
+          reparseLowlight(editor!);
+          // Note: convertMermaidCodeBlocks removed - auto-conversion plugin handles this
           reparseLowlight(editor!);
           return true;
         }

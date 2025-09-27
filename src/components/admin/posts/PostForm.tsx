@@ -252,15 +252,42 @@ export default function PostForm({ post }: PostFormProps) {
             id="slug"
             type="text"
             value={formData.slug}
-            onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value.toLowerCase() }))}
+            onChange={(e) => {
+              // Sanitize input proactively: allow only lowercase a-z, 0-9, hyphen; collapse consecutive hyphens; trim leading/trailing hyphens
+              const raw = e.target.value.toLowerCase();
+              const filtered = raw
+                .replace(/[^a-z0-9-]+/g, '-')
+                .replace(/-{2,}/g, '-')
+                .replace(/^-+/, '')
+                .replace(/-+$/, '');
+              setFormData(prev => ({ ...prev, slug: filtered }));
+            }}
+            onBlur={() => {
+              // Final normalize (in case user pastes weird unicode)
+              setFormData(prev => {
+                const norm = prev.slug
+                  .toLowerCase()
+                  .normalize('NFKD')
+                  .replace(/[^a-z0-9-]+/g, '-')
+                  .replace(/-{2,}/g, '-')
+                  .replace(/^-+/, '')
+                  .replace(/-+$/, '');
+                return prev.slug === norm ? prev : { ...prev, slug: norm };
+              });
+            }}
             className={`w-full px-3 py-2 border rounded-md font-mono text-sm ${
               errors.slug ? "border-red-300" : 
               slugAvailable === false ? "border-red-300" :
               slugAvailable === true ? "border-green-300" : "border-border"
             }`}
             placeholder="post-url-slug"
-            pattern="[a-z0-9-]+"
+            // Removed pattern attribute to avoid browser RegExp compilation issues (observed /v flag error); custom validation already enforced.
+            aria-describedby="slug-help"
+            title="Lowercase letters, numbers, and hyphens only"
             disabled={isPending}
+            inputMode="text" 
+            autoComplete="off"
+            spellCheck={false}
           />
           <div className="mt-1 flex items-center justify-between">
             {errors.slug && (
@@ -272,11 +299,11 @@ export default function PostForm({ post }: PostFormProps) {
             {!errors.slug && slugAvailable === true && (
               <p className="text-sm text-green-600">Slug is available</p>
             )}
-            {formData.slug && (
-              <p className="text-xs text-muted-foreground">
-                URL: /{formData.slug}
-              </p>
-            )}
+            <p id="slug-help" className="text-xs text-muted-foreground">
+              {formData.slug ? (
+                <>URL: /{formData.slug}</>
+              ) : 'Allowed: lowercase letters, numbers, hyphens'}
+            </p>
           </div>
         </div>
 

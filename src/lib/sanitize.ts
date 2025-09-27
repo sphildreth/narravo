@@ -50,6 +50,8 @@ export function sanitizeHtml(html: string): string {
       // Task list checkbox attributes
       "checked", "disabled"
     ],
+    // Explicitly allow select data attributes used by trusted extensions
+    ADD_ATTR: ["data-mermaid"],
     // Additional security options
     ALLOW_DATA_ATTR: false, // No data-* attributes except those explicitly allowed
     ALLOW_UNKNOWN_PROTOCOLS: false, // Only allow known URL protocols
@@ -94,7 +96,7 @@ export function sanitizeHtml(html: string): string {
       // Only allow safe syntax highlighting classes
       const safeClasses = className
         .split(/\s+/)
-        .filter((cls: string) => /^(prism|language|lang|hljs|undefined|numbers|line)[\w-]*$/i.test(cls))
+    .filter((cls: string) => /^(prism|language|lang|hljs|undefined|numbers|line|mermaid)[\w-]*$/i.test(cls))
         .join(' ');
       
       if (safeClasses) {
