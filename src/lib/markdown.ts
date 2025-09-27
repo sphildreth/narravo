@@ -8,9 +8,9 @@ export function expandShortcodes(markdown: string): string {
   // Video shortcode: [video mp4="..." webm="..." ogv="..." width="400" height="300" poster="..."][/video]
   const videoRe = /\[video([^\]]*)\](?:\s*\[\/video\])?/gi;
 
-  const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
-
   return markdown.replace(videoRe, (_full, attrStr: string) => {
+    // Parse both valued attributes (key="value") and boolean attributes (key)
+    const attrRe = /(\w+)(?:=("[^"]*"|'[^']*'|[^\s"']+))?/g;
     const attrs: Record<string, string> = {};
     let m: RegExpExecArray | null;
     while ((m = attrRe.exec(attrStr))) {
@@ -18,10 +18,16 @@ export function expandShortcodes(markdown: string): string {
       if (!rawKey) continue;
       const key = rawKey.toLowerCase();
       let val = m[2] ?? "";
-      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-        val = val.slice(1, -1);
+      if (val) {
+        // Remove quotes if present
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        attrs[key] = val;
+      } else {
+        // Boolean attribute (no value)
+        attrs[key] = "";
       }
-      attrs[key] = val;
     }
 
     const sources: Array<{ src: string; type: string }> = [];
@@ -49,13 +55,21 @@ export function expandShortcodes(markdown: string): string {
     const width = attrs.width && /^\d+$/.test(attrs.width) ? ` width="${attrs.width}"` : "";
     const height = attrs.height && /^\d+$/.test(attrs.height) ? ` height="${attrs.height}"` : "";
 
-    const poster = attrs.poster && (() => { try { const u = new URL(attrs.poster); return (u.protocol === "http:" || u.protocol === "https:") ? ` poster="${attrs.poster}"` : ""; } catch { return ""; } })();
+    const posterAttr = (() => {
+      if (!attrs.poster) return "";
+      try {
+        const u = new URL(attrs.poster);
+        return (u.protocol === "http:" || u.protocol === "https:") ? ` poster="${attrs.poster}"` : "";
+      } catch {
+        return "";
+      }
+    })();
 
-    const autoplay = attrs.autoplay ? " autoplay" : "";
+    const autoplay = attrs.autoplay !== undefined ? " autoplay" : "";
     // If autoplay is set, muted and playsinline are typically required for browsers to auto-play inline
-    const muted = attrs.autoplay || attrs.muted ? " muted" : "";
-    const playsinline = attrs.autoplay || attrs.playsinline ? " playsinline" : "";
-    const loop = attrs.loop ? " loop" : "";
+    const muted = (attrs.autoplay !== undefined || attrs.muted !== undefined) ? " muted" : "";
+    const playsinline = (attrs.autoplay !== undefined || attrs.playsinline !== undefined) ? " playsinline" : "";
+    const loop = attrs.loop !== undefined ? " loop" : "";
 
     const sourcesHtml = sources
       .map(s => `<source src="${s.src}"${s.type ? ` type="${s.type}"` : ""} />`)
@@ -63,7 +77,15 @@ export function expandShortcodes(markdown: string): string {
 
     const fallbackLink = `<a href="${sources[0]!.src}">Download video</a>`;
 
-    return `<video controls preload="metadata"${width}${height}${poster}${autoplay}${muted}${playsinline}${loop}>${sourcesHtml}${fallbackLink}</video>`;
+    const srcAttr = sources[0] ? ` src="${sources[0]!.src}"` : "";
+    const sourcesData = sources.length
+      ? ` data-sources="${encodeURIComponent(JSON.stringify(sources))}"`
+      : "";
+    const primarySrcData = sources[0]
+      ? ` data-shortcode-src="${sources[0]!.src}"`
+      : "";
+
+    return `<div data-video-shortcode="true" class="video-shortcode-frame"><video controls preload="metadata" data-shortcode-preview="true"${srcAttr}${width}${height}${posterAttr}${autoplay}${muted}${playsinline}${loop}${sourcesData}${primarySrcData}>${sourcesHtml}${fallbackLink}</video></div>`;
   });
 }
 

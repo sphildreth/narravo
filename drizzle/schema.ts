@@ -41,6 +41,8 @@ export const posts = pgTable("posts", {
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+  // Post status fields
+  isLocked: boolean("is_locked").notNull().default(false),
   // Soft delete columns
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),

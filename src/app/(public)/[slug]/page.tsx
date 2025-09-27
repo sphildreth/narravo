@@ -13,6 +13,8 @@ import { ViewTracker } from "@/components/analytics/ViewTracker";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import DeletePostButton from "@/components/admin/DeletePostButton";
+import LockPostButton from "@/components/admin/posts/LockPostButton";
+import UnpublishPostButton from "@/components/admin/posts/UnpublishPostButton";
 import Link from "next/link";
 import Prose from "@/components/Prose";
 import { RenderTimeBadge } from "@/components/RenderTimeBadge";
@@ -26,10 +28,23 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const resolvedParams = await params;
-  const post = await getPostBySlug(resolvedParams.slug);
+  
+  // For metadata generation, we need to check admin status to avoid leaking unpublished content
+  const session = await getSession();
+  const isAdmin = Boolean(session?.user?.isAdmin);
+  
+  const post = await getPostBySlug(resolvedParams.slug, isAdmin);
   if (!post) {
     return {
       title: "Post Not Found",
+    };
+  }
+
+  // For unpublished posts viewed by non-admin users, don't generate detailed metadata
+  if (!post.publishedAt && !isAdmin) {
+    return {
+      title: "Content Unavailable",
+      description: "This content is no longer available.",
     };
   }
 
@@ -63,10 +78,47 @@ export default async function PostPage({ params }: Props) {
   // Measure post loading (main data fetch)
   const { result: post, duration: postDuration } = await measureAsync(
     'post-load',
-    async () => getPostBySlugWithReactions(resolvedParams.slug, userId)
+    async () => getPostBySlugWithReactions(resolvedParams.slug, userId, isAdmin)
   );
   
   if (!post) {
+    // Check if this is an unpublished post that exists but isn't visible to non-admin users
+    if (!isAdmin) {
+      const adminPost = await getPostBySlug(resolvedParams.slug, true);
+      if (adminPost && !adminPost.publishedAt) {
+        // Post exists but is unpublished and user is not admin
+        return (
+          <main className="max-w-screen mx-auto px-6 my-7">
+            <div className="max-w-2xl mx-auto text-center py-16">
+              <div className="mb-6">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                  <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.694-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <h1 className="text-2xl font-bold text-fg mb-2">Content Unavailable</h1>
+                <p className="text-muted-foreground">
+                  This post has been removed by the site administrator or is no longer available.
+                </p>
+              </div>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  If you believe this is an error, please contact the site administrator.
+                </p>
+                <div className="pt-4">
+                  <Link 
+                    href="/" 
+                    className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    Return to Home
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </main>
+        );
+      }
+    }
     notFound();
   }
   
@@ -133,6 +185,10 @@ export default async function PostPage({ params }: Props) {
                                 </svg>
                                 Edit
                             </Link>
+                            <LockPostButton postId={post.id} isLocked={!!(post as any).isLocked} />
+                            {post.publishedAt && (
+                              <UnpublishPostButton postId={post.id} isPublished={!!post.publishedAt} />
+                            )}
                             <DeletePostButton postId={post.id} postTitle={post.title} />
                         </div>
                     </div>
@@ -160,7 +216,7 @@ export default async function PostPage({ params }: Props) {
                   )}
                 </div>
                 <h1 className="text-3xl md:text-4xl font-extrabold leading-tight mt-1">
-                  {post.title}
+                  {(post as any).isLocked ? "🔒" : ""}{post.title}
                 </h1>
               </header>
 
@@ -252,7 +308,19 @@ export default async function PostPage({ params }: Props) {
             </nav>
           )}
           
-          <CommentsSection postId={post.id} />
+          {(post as any).isLocked ? (
+            <div className="border border-border rounded-xl bg-card shadow-soft p-6 text-center">
+              <div className="flex items-center justify-center mb-3">
+                <svg className="w-5 h-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span className="text-gray-600 font-medium">Comments are disabled</span>
+              </div>
+              <p className="text-gray-500 text-sm">This post is locked and no longer accepts comments.</p>
+            </div>
+          ) : (
+            <CommentsSection postId={post.id} />
+          )}
         </div>
       </main>
       <RenderTimeBadge serverMs={Math.round(totalRenderTime)} showBadge={showRenderBadge} />

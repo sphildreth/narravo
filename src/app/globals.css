@@ -24,20 +24,269 @@
 .prose ul ul, .prose ul ol, .prose ol ul, .prose ol ol { @apply my-2 ml-6; }
 /* Paragraphs and blocks inside list items */
 .prose li > p { @apply my-2; }
+.prose li[data-type="taskItem"] > div > p {
+  display: block;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.prose li[data-type="taskItem"] > label > p {
+  display: block;
+  margin-top: 0;
+  margin-bottom: 0;
+}
 .prose li > :is(pre, table, blockquote) { @apply my-3; }
 
+/* Task list specific styles for TipTap editor */
+/* ACTUAL TipTap task list structure: <ul data-type="taskList"><li data-checked="true|false"><label><input><span></span></label><div><p>text</p></div></li></ul> */
+.prose ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 1rem 0;
+}
+
+/* Target actual TipTap structure - li[data-checked] instead of li[data-type="taskItem"] */
+.prose ul[data-type="taskList"] li[data-checked] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+.prose ul[data-type="taskList"] li[data-checked] > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.prose ul[data-type="taskList"] li[data-checked] > label > input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  accent-color: var(--brand);
+  margin-top: 0.125rem; /* Slight offset to align with first line of text */
+}
+
+/* The content is in a div > p structure in actual TipTap */
+.prose ul[data-type="taskList"] li[data-checked] > div {
+  flex: 1;
+}
+
+.prose ul[data-type="taskList"] li[data-checked] > div > p {
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
+  line-height: 1.6;
+}
+
+/* Legacy support for older structure (keep for backwards compatibility) */
+.prose li[data-type="taskItem"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+.prose li[data-type="taskItem"] > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+  flex: 1;
+  width: 100%;
+}
+
+.prose li[data-type="taskItem"] > label > input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  accent-color: var(--brand);
+  margin-top: 0.125rem; /* Slight offset to align with first line of text */
+}
+
+.prose li[data-type="taskItem"] > label > span {
+  flex: 1;
+  color: inherit;
+  font-size: inherit;
+}
+
+/* Handle nested task lists */
+.prose ul[data-type="taskList"] ul[data-type="taskList"] {
+  padding-left: 1.5rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Ensure proper margin for all task list structures */
+.prose ul[data-type="taskList"] li[data-checked] * {
+  line-height: inherit;
+}
+
+/* Handle checked state styling */
+.prose ul[data-type="taskList"] li[data-checked="true"] > div > p {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Video shortcode preview styling */
+.video-shortcode-frame {
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background-color: color-mix(in oklab, var(--muted) 12%, transparent);
+}
+
+.video-shortcode-frame video {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  max-height: 360px;
+  background: #000;
+  border-radius: 0.75rem;
+}
+
+.video-shortcode-fallback {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.video-shortcode-fallback a {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
 /* Image alignment styles for TipTap editor */
-.prose figure.align-left { @apply text-left; }
-.prose figure.align-center { @apply text-center; }
-.prose figure.align-right { @apply text-right; }
-.prose figure figcaption { @apply text-sm text-muted mt-2 italic; }
-.prose .img-align-left { @apply text-left; }
-.prose .img-align-center { @apply mx-auto block; }
-.prose .img-align-right { @apply text-right; }
+.prose figure.align-left { text-align: left; }
+.prose figure.align-center { text-align: center; }
+.prose figure.align-right { text-align: right; }
+.prose figure figcaption {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+.prose .img-align-left { text-align: left; }
+.prose .img-align-center {
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+}
+.prose .img-align-right { text-align: right; }
 
 /* Code block styling */
-.prose pre { @apply bg-card border border-border rounded-lg overflow-x-auto; }
-.prose code { @apply text-sm bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded; }
+.prose pre { 
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow-x: auto;
+  background: var(--card);
+  color: var(--card-fg);
+  padding: 1rem;
+}
+.prose code { 
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  background: color-mix(in oklab, var(--card) 90%, var(--fg) 10%);
+  color: var(--card-fg);
+}
+
+/* Code blocks inside pre elements (syntax highlighted) */
+.prose pre code {
+  background: transparent;
+  padding: 0;
+}
+
+/* Highlight.js theme overrides for light/dark theme compatibility */
+.prose .hljs {
+  background: transparent !important;
+  color: var(--card-fg);
+}
+
+/* Light theme syntax highlighting colors */
+:root .prose .hljs-keyword,
+:root .prose .hljs-selector-tag,
+:root .prose .hljs-literal,
+:root .prose .hljs-section,
+:root .prose .hljs-link {
+  color: #0969da; /* Blue */
+}
+
+:root .prose .hljs-string,
+:root .prose .hljs-title,
+:root .prose .hljs-name,
+:root .prose .hljs-type,
+:root .prose .hljs-attribute {
+  color: #0a3069; /* Dark blue */
+}
+
+:root .prose .hljs-number,
+:root .prose .hljs-symbol,
+:root .prose .hljs-bullet,
+:root .prose .hljs-addition {
+  color: #116329; /* Green */
+}
+
+:root .prose .hljs-comment,
+:root .prose .hljs-quote,
+:root .prose .hljs-deletion,
+:root .prose .hljs-meta {
+  color: #6e7781; /* Gray */
+}
+
+:root .prose .hljs-variable,
+:root .prose .hljs-function,
+:root .prose .hljs-class,
+:root .prose .hljs-title.function {
+  color: #8250df; /* Purple */
+}
+
+/* Dark theme syntax highlighting colors */
+:root[data-theme="dark"] .prose .hljs-keyword,
+:root[data-theme="dark"] .prose .hljs-selector-tag,
+:root[data-theme="dark"] .prose .hljs-literal,
+:root[data-theme="dark"] .prose .hljs-section,
+:root[data-theme="dark"] .prose .hljs-link {
+  color: #79c0ff; /* Light blue */
+}
+
+:root[data-theme="dark"] .prose .hljs-string,
+:root[data-theme="dark"] .prose .hljs-title,
+:root[data-theme="dark"] .prose .hljs-name,
+:root[data-theme="dark"] .prose .hljs-type,
+:root[data-theme="dark"] .prose .hljs-attribute {
+  color: #a5d6ff; /* Lighter blue */
+}
+
+:root[data-theme="dark"] .prose .hljs-number,
+:root[data-theme="dark"] .prose .hljs-symbol,
+:root[data-theme="dark"] .prose .hljs-bullet,
+:root[data-theme="dark"] .prose .hljs-addition {
+  color: #7ee787; /* Light green */
+}
+
+:root[data-theme="dark"] .prose .hljs-comment,
+:root[data-theme="dark"] .prose .hljs-quote,
+:root[data-theme="dark"] .prose .hljs-deletion,
+:root[data-theme="dark"] .prose .hljs-meta {
+  color: #8b949e; /* Light gray */
+}
+
+:root[data-theme="dark"] .prose .hljs-variable,
+:root[data-theme="dark"] .prose .hljs-function,
+:root[data-theme="dark"] .prose .hljs-class,
+:root[data-theme="dark"] .prose .hljs-title.function {
+  color: #d2a8ff; /* Light purple */
+}
 
 /* TipTap editor specific styles */
 .ProseMirror {

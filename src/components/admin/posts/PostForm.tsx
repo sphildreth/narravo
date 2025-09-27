@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -21,6 +21,8 @@ interface Post {
   bodyMd?: string | null;
   publishedAt: Date | null;
   updatedAt: Date | null;
+  featuredImageUrl?: string | null;
+  featuredImageAlt?: string | null;
 }
 
 interface PostFormProps {
@@ -42,7 +44,27 @@ export default function PostForm({ post }: PostFormProps) {
     // Prefer Markdown when available; otherwise fall back to existing HTML so editor is populated for legacy posts
     bodyMd: ((post as any)?.bodyMd ?? (post as any)?.bodyHtml ?? (post as any)?.html) || "",
     publishedAt: post?.publishedAt ? new Date(post.publishedAt).toISOString().slice(0, 16) : "",
+    featuredImageUrl: post?.featuredImageUrl || "",
+    featuredImageAlt: post?.featuredImageAlt || "",
   });
+
+  // Local (deferred) featured image file state
+  const [featuredImageFile, setFeaturedImageFile] = useState<File | null>(null);
+  const [featuredImagePreview, setFeaturedImagePreview] = useState<string | null>(null);
+
+  // Revoke object URL when file changes/removed
+  useEffect(() => {
+    if (!featuredImageFile) {
+      if (featuredImagePreview) {
+        URL.revokeObjectURL(featuredImagePreview);
+      }
+      setFeaturedImagePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(featuredImageFile);
+    setFeaturedImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [featuredImageFile]);
 
   // Validate slug format
   const isValidSlugFormat = (slug: string) => /^[a-z0-9-]+$/.test(slug);
@@ -127,6 +149,15 @@ export default function PostForm({ post }: PostFormProps) {
         submitData.append("slug", formData.slug);
         submitData.append("excerpt", formData.excerpt);
         submitData.append("bodyMd", formData.bodyMd);
+        // Featured image handling (deferred upload): if a file is chosen we append it;
+        // otherwise rely on URL value (could be empty string)
+        if (featuredImageFile) {
+          submitData.append("featuredImageFile", featuredImageFile);
+          submitData.append("featuredImageUrl", ""); // ensure server derives from file
+        } else {
+          submitData.append("featuredImageUrl", formData.featuredImageUrl);
+        }
+        submitData.append("featuredImageAlt", formData.featuredImageAlt);
         
         // Handle publish action
         if (action === "publish") {
@@ -158,6 +189,13 @@ export default function PostForm({ post }: PostFormProps) {
     });
   };
 
+  // Stable editor change handler to avoid recreating function each render which
+  // caused TiptapEditor effect (that depends on onChange) to run indefinitely.
+  // Also guard against unnecessary state updates when markdown is unchanged.
+  const handleEditorChange = useCallback((md: string) => {
+    setFormData(prev => prev.bodyMd === md ? prev : { ...prev, bodyMd: md });
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Error Messages */}
@@ -178,6 +216,12 @@ export default function PostForm({ post }: PostFormProps) {
             type="text"
             value={formData.title}
             onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+            onBlur={async () => {
+              // Auto-generate slug only for new posts (no existing post ID)
+              if (!post && formData.title.trim() && !formData.slug.trim()) {
+                await handleGenerateSlug();
+              }
+            }}
             className={`w-full px-3 py-2 border rounded-md ${
               errors.title ? "border-red-300" : "border-border"
             }`}
@@ -208,15 +252,42 @@ export default function PostForm({ post }: PostFormProps) {
             id="slug"
             type="text"
             value={formData.slug}
-            onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value.toLowerCase() }))}
+            onChange={(e) => {
+              // Sanitize input proactively: allow only lowercase a-z, 0-9, hyphen; collapse consecutive hyphens; trim leading/trailing hyphens
+              const raw = e.target.value.toLowerCase();
+              const filtered = raw
+                .replace(/[^a-z0-9-]+/g, '-')
+                .replace(/-{2,}/g, '-')
+                .replace(/^-+/, '')
+                .replace(/-+$/, '');
+              setFormData(prev => ({ ...prev, slug: filtered }));
+            }}
+            onBlur={() => {
+              // Final normalize (in case user pastes weird unicode)
+              setFormData(prev => {
+                const norm = prev.slug
+                  .toLowerCase()
+                  .normalize('NFKD')
+                  .replace(/[^a-z0-9-]+/g, '-')
+                  .replace(/-{2,}/g, '-')
+                  .replace(/^-+/, '')
+                  .replace(/-+$/, '');
+                return prev.slug === norm ? prev : { ...prev, slug: norm };
+              });
+            }}
             className={`w-full px-3 py-2 border rounded-md font-mono text-sm ${
               errors.slug ? "border-red-300" : 
               slugAvailable === false ? "border-red-300" :
               slugAvailable === true ? "border-green-300" : "border-border"
             }`}
             placeholder="post-url-slug"
-            pattern="[a-z0-9-]+"
+            // Removed pattern attribute to avoid browser RegExp compilation issues (observed /v flag error); custom validation already enforced.
+            aria-describedby="slug-help"
+            title="Lowercase letters, numbers, and hyphens only"
             disabled={isPending}
+            inputMode="text" 
+            autoComplete="off"
+            spellCheck={false}
           />
           <div className="mt-1 flex items-center justify-between">
             {errors.slug && (
@@ -228,11 +299,11 @@ export default function PostForm({ post }: PostFormProps) {
             {!errors.slug && slugAvailable === true && (
               <p className="text-sm text-green-600">Slug is available</p>
             )}
-            {formData.slug && (
-              <p className="text-xs text-muted-foreground">
-                URL: /{formData.slug}
-              </p>
-            )}
+            <p id="slug-help" className="text-xs text-muted-foreground">
+              {formData.slug ? (
+                <>URL: /{formData.slug}</>
+              ) : 'Allowed: lowercase letters, numbers, hyphens'}
+            </p>
           </div>
         </div>
 
@@ -245,6 +316,17 @@ export default function PostForm({ post }: PostFormProps) {
             id="excerpt"
             value={formData.excerpt}
             onChange={(e) => setFormData(prev => ({ ...prev, excerpt: e.target.value }))}
+            onKeyDown={(e) => {
+              // When Tab is pressed, focus the editor content area
+              if (e.key === 'Tab' && !e.shiftKey) {
+                e.preventDefault();
+                // Focus the TiptapEditor content area using ProseMirror's class
+                const editorContent = document.querySelector('.ProseMirror') as HTMLElement;
+                if (editorContent) {
+                  editorContent.focus();
+                }
+              }
+            }}
             className="w-full px-3 py-2 border border-border rounded-md"
             rows={3}
             maxLength={300}
@@ -256,6 +338,84 @@ export default function PostForm({ post }: PostFormProps) {
           </p>
         </div>
 
+        {/* Featured Image (deferred upload) */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Featured Image</label>
+          <div className="space-y-3">
+            {/* Preview: either existing URL (editing existing post) or local file preview */}
+            {(featuredImagePreview || formData.featuredImageUrl) && (
+              <div className="relative inline-block">
+                <img
+                  src={featuredImagePreview || formData.featuredImageUrl}
+                  alt={formData.featuredImageAlt || "Featured image preview"}
+                  className="max-w-sm h-32 object-cover rounded-md border border-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFeaturedImageFile(null);
+                    setFormData(prev => ({ ...prev, featuredImageUrl: "", featuredImageAlt: "" }));
+                  }}
+                  className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-700 transition-colors"
+                  disabled={isPending}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            {/* File input appears if no remote URL present or user is selecting a new one */}
+            {!formData.featuredImageUrl && !featuredImagePreview && (
+              <div className="flex items-center gap-3 flex-wrap">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setFeaturedImageFile(file);
+                      // Reset URL field to ensure server doesn't treat previous URL
+                      setFormData(prev => ({ ...prev, featuredImageUrl: "" }));
+                    }
+                  }}
+                  disabled={isPending}
+                  className="text-sm"
+                />
+                <span className="text-xs text-muted-foreground">Max 5MB. JPG, PNG, WebP, GIF.</span>
+              </div>
+            )}
+
+            {/* URL input only shown when no file chosen and no preview */}
+            {!featuredImagePreview && !featuredImageFile && (
+              <div>
+                <input
+                  type="url"
+                  value={formData.featuredImageUrl}
+                  onChange={(e) => setFormData(prev => ({ ...prev, featuredImageUrl: e.target.value }))}
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm"
+                  placeholder="Or enter image URL (https://...)"
+                  disabled={isPending}
+                />
+              </div>
+            )}
+
+            {/* Alt text field displayed if either a file or URL is selected */}
+            {(featuredImagePreview || formData.featuredImageUrl) && (
+              <div>
+                <input
+                  type="text"
+                  value={formData.featuredImageAlt}
+                  onChange={(e) => setFormData(prev => ({ ...prev, featuredImageAlt: e.target.value }))}
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm"
+                  placeholder="Alternative text for accessibility"
+                  maxLength={255}
+                  disabled={isPending}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Content */}
         <div>
           <label className="block text-sm font-medium mb-2">
@@ -264,7 +424,7 @@ export default function PostForm({ post }: PostFormProps) {
           <div className="rounded-lg overflow-hidden">
             <TiptapEditor
               initialMarkdown={formData.bodyMd}
-              onChange={(md) => setFormData(prev => ({ ...prev, bodyMd: md }))}
+              onChange={handleEditorChange}
               placeholder="Write your post..."
             />
           </div>

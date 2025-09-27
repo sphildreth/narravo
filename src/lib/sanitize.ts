@@ -31,7 +31,9 @@ export function sanitizeHtml(html: string): string {
       // Allow safe iframes (we'll restrict by host post-sanitize)
       "iframe",
       // Allow tables (needed for WordPress imports)
-      "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col"
+      "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col",
+      // Allow input tags for task list checkboxes
+      "input"
     ],
     // Allowed attributes
     ALLOWED_ATTR: [
@@ -44,15 +46,19 @@ export function sanitizeHtml(html: string): string {
       // Table-related safe attributes
       "colspan", "rowspan", "scope",
       // Code highlighting attributes - allow class for pre/code tags only
-      "class", "data-lang"
+      "class", "data-lang",
+      // Task list checkbox attributes
+      "checked", "disabled"
     ],
+    // Explicitly allow select data attributes used by trusted extensions
+    ADD_ATTR: ["data-mermaid"],
     // Additional security options
     ALLOW_DATA_ATTR: false, // No data-* attributes except those explicitly allowed
     ALLOW_UNKNOWN_PROTOCOLS: false, // Only allow known URL protocols
     SANITIZE_DOM: true, // Sanitize DOM nodes
     KEEP_CONTENT: true, // Keep text content even if tags are removed
     // Ensure external links are safe
-    FORBID_TAGS: ["script", "object", "embed", "form", "input"],
+    FORBID_TAGS: ["script", "object", "embed", "form"],
   });
 
   // Post-process: allow only YouTube iframes, strip others entirely
@@ -69,6 +75,20 @@ export function sanitizeHtml(html: string): string {
     }
   });
 
+  // Post-process: only allow checkbox inputs for task lists, remove others
+  sanitized = sanitized.replace(/<input([^>]*)>/gi, (match, attrs) => {
+    // Check if this is a checkbox input
+    if (/\btype\s*=\s*["']?checkbox["']?/i.test(attrs)) {
+      // This is a checkbox, keep it but ensure only safe attributes
+      const safeAttrs = attrs
+        .replace(/\b(?:on\w+|style|formaction|form|name|value)\s*=\s*["'][^"']*["']/gi, '')
+        .replace(/\btype\s*=\s*["']?[^"'\s]*["']?/gi, 'type="checkbox"');
+      return `<input${safeAttrs}>`;
+    }
+    // Remove any other input types
+    return '';
+  });
+
   // Post-process to filter dangerous class names on code elements
   sanitized = sanitized.replace(
     /<(pre|code)([^>]*?)\sclass=["']([^"']*?)["']/gi,
@@ -76,7 +96,7 @@ export function sanitizeHtml(html: string): string {
       // Only allow safe syntax highlighting classes
       const safeClasses = className
         .split(/\s+/)
-        .filter((cls: string) => /^(prism|language|lang|hljs|undefined|numbers|line)[\w-]*$/i.test(cls))
+    .filter((cls: string) => /^(prism|language|lang|hljs|undefined|numbers|line|mermaid)[\w-]*$/i.test(cls))
         .join(' ');
       
       if (safeClasses) {
