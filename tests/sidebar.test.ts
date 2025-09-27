@@ -13,12 +13,13 @@ describe("Sidebar Functions - Unpublished Post Filtering", () => {
     
     // Create test posts - one published, one unpublished
     const publishedResult = await db.execute(sql`
-      INSERT INTO posts (title, slug, body_html, body_md, excerpt, published_at, created_at, updated_at)
+      INSERT INTO posts (title, slug, body_html, body_md, html, excerpt, published_at, created_at, updated_at)
       VALUES (
         'Test Post for Sidebar Published',
         'test-post-sidebar-published',
         '<p>Published post content</p>',
         'Published post content',
+        '<p>Published post content</p>',
         'Published excerpt',
         NOW() - INTERVAL '1 day',
         NOW() - INTERVAL '2 days',
@@ -28,12 +29,13 @@ describe("Sidebar Functions - Unpublished Post Filtering", () => {
     `);
     
     const unpublishedResult = await db.execute(sql`
-      INSERT INTO posts (title, slug, body_html, body_md, excerpt, published_at, created_at, updated_at)
+      INSERT INTO posts (title, slug, body_html, body_md, html, excerpt, published_at, created_at, updated_at)
       VALUES (
         'Test Post for Sidebar Unpublished',
         'test-post-sidebar-unpublished',
         '<p>Unpublished post content</p>',
         'Unpublished post content',
+        '<p>Unpublished post content</p>',
         'Unpublished excerpt',
         NULL,
         NOW() - INTERVAL '1 day',

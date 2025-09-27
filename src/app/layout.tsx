@@ -43,8 +43,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             dateFormat = cfgDate.trim();
         }
     } catch {}
+    const initialDataTheme = theme;
     return (
-        <html lang="en" data-theme={theme} suppressHydrationWarning>
+        <html lang="en" data-theme={initialDataTheme} suppressHydrationWarning>
+        <head>
+            <meta name="color-scheme" content="light dark" />
+        </head>
         <body>
             <Navbar />
             <DateFormatProvider value={dateFormat}>

@@ -13,12 +13,13 @@ describe("Post Access Control - Unpublished Post Protection", () => {
     
     // Create a test unpublished post
     const result = await db.execute(sql`
-      INSERT INTO posts (title, slug, body_html, body_md, excerpt, published_at, created_at, updated_at)
+      INSERT INTO posts (title, slug, body_html, body_md, html, excerpt, published_at, created_at, updated_at)
       VALUES (
         'Test Unpublished Post Access Control',
         'test-unpublished-access-control',
         '<p>This is an unpublished post</p>',
         'This is an unpublished post',
+        '<p>This is an unpublished post</p>',
         'Test excerpt',
         NULL,
         NOW(),
@@ -67,12 +68,13 @@ describe("Post Access Control - Unpublished Post Protection", () => {
   it("should still return published posts to non-admin users", async () => {
     // Create a published post for comparison
     await db.execute(sql`
-      INSERT INTO posts (title, slug, body_html, body_md, excerpt, published_at, created_at, updated_at)
+      INSERT INTO posts (title, slug, body_html, body_md, html, excerpt, published_at, created_at, updated_at)
       VALUES (
         'Test Published Post Access Control',
         'test-published-access-control',
         '<p>This is a published post</p>',
         'This is a published post',
+        '<p>This is a published post</p>',
         'Published excerpt',
         NOW(),
         NOW(),
