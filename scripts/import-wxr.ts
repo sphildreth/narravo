@@ -8,6 +8,8 @@ import { getS3Config, S3Service } from "@/lib/s3";
 import { localStorageService, LocalStorageService } from "@/lib/local-storage";
 import slugify from "slugify";
 import { readFile, writeFile } from "node:fs/promises";
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import crypto from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import { expandShortcodes } from "@/lib/markdown";
@@ -108,6 +110,8 @@ export interface ImportOptions {
   allowedHosts?: string[];
   jobId?: string;
   rebuildExcerpts?: boolean; // new flag
+  uploads?: string; // path to local uploads folder
+  root?: string; // root url to replace
 }
 
 /**
@@ -283,15 +287,117 @@ function getExtensionFromUrl(url: string): string {
  * @param opts Options for the download process (e.g., dryRun, verbose).
  * @returns The new public URL of the uploaded media, or null if the download failed or was skipped.
  */
+
+/**
+ * Handles copying media from a local uploads folder to the public directory.
+ * @param url The original media URL from the WXR file.
+ * @param uploadsPath The path to the local directory where uploads are stored.
+ * @param rootUrlPattern A regex pattern to match the root of the site being imported.
+ * @param localService The local storage service for placing the final file.
+ * @param opts Import options.
+ * @returns An object indicating if the URL was handled locally and the new URL if applicable.
+ */
+async function handleLocalMedia(
+  url: string,
+  uploadsPath: string,
+  rootUrlPattern: string,
+  localService: LocalStorageService | null,
+  opts: { dryRun?: boolean; verbose?: boolean }
+): Promise<{ isLocal: boolean; url: string | null }> {
+  const { dryRun = false, verbose = false } = opts;
+  const rootRegex = new RegExp(rootUrlPattern, "i");
+
+  if (!rootRegex.test(url)) {
+    return { isLocal: false, url: null };
+  }
+
+  if (verbose) {
+    console.log(`\n📂 Matched local media URL: ${url}`);
+  }
+
+  // Extract the relative path from the URL by removing the root and the wp-content/uploads part.
+  // e.g., https://www.shildreth.com/wp-content/uploads/2015/05/image.jpg -> 2015/05/image.jpg
+  let relativePath;
+  try {
+    const urlPath = new URL(url).pathname;
+    const wpContentUploadsRegex = /\/wp-content\/uploads\//i;
+    const match = urlPath.match(wpContentUploadsRegex);
+
+    if (!match || typeof match.index === 'undefined') {
+      if (verbose) console.warn(`  ⚠️ URL matched root but does not contain /wp-content/uploads/. Skipping: ${urlPath}`);
+      return { isLocal: true, url: null }; // Handled, but skipped
+    }
+
+    relativePath = urlPath.substring(match.index + match[0].length);
+
+  } catch (e) {
+    if (verbose) console.warn(`  ⚠️ Could not parse URL, skipping: ${url}`);
+    return { isLocal: true, url: null };
+  }
+
+  const sourcePath = path.join(uploadsPath, relativePath);
+  const destinationKey = path.join("imported-media", relativePath).replace(/\\/g, "/");
+
+  if (verbose) {
+    console.log(`  -> Relative path: ${relativePath}`);
+    console.log(`  -> Source file: ${sourcePath}`);
+    console.log(`  -> Destination key: ${destinationKey}`);
+  }
+
+  if (!fs.existsSync(sourcePath)) {
+    if (verbose) console.warn(`  ❌ Source file not found, skipping.`);
+    return { isLocal: true, url: null }; // Handled, but file missing
+  }
+
+  if (dryRun) {
+    if (verbose) console.log(`  ⏩ Dry-run: Would copy to ${destinationKey}`);
+    // In dry-run, we can return a predictable path for URL rewriting tests
+    return { isLocal: true, url: `/${destinationKey}` };
+  }
+
+  if (!localService) {
+    if (verbose) console.error("  ❌ Local storage service not available, cannot copy file.");
+    return { isLocal: true, url: null };
+  }
+
+  try {
+    const buffer = fs.readFileSync(sourcePath);
+    const contentType = guessContentType(sourcePath);
+    await localService.putObject(destinationKey, buffer, contentType);
+    const publicUrl = localService.getPublicUrl(destinationKey);
+
+    if (verbose) {
+      console.log(`  ✅ Copied successfully: ${publicUrl}`);
+    }
+    return { isLocal: true, url: publicUrl };
+  } catch (error) {
+    if (verbose) {
+      console.error(`  ❌ Failed to copy local media ${sourcePath}:`, error);
+    }
+    return { isLocal: true, url: null };
+  }
+}
+
 async function downloadMedia(
   url: string,
   s3Service: S3Service | null,
   localService: LocalStorageService | null,
   allowedHosts: string[],
-  opts?: { dryRun?: boolean; verbose?: boolean }
+  opts?: { 
+    dryRun?: boolean; 
+    verbose?: boolean;
+    uploadsPath?: string;
+    rootUrlPattern?: string;
+  }
 ): Promise<string | null> {
-  const dryRun = opts?.dryRun ?? false;
-  const verbose = opts?.verbose ?? false;
+  const { dryRun = false, verbose = false, uploadsPath, rootUrlPattern } = opts ?? {};
+
+  if (uploadsPath && rootUrlPattern) {
+    const localResult = await handleLocalMedia(url, uploadsPath, rootUrlPattern, localService, { dryRun, verbose });
+    if (localResult.isLocal) {
+      return localResult.url;
+    }
+  }
 
   if (!s3Service && !localService) {
     return null; // No storage configured, skip download
@@ -420,7 +526,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
       
       // Try alternate protocol with dimension removal
       const alternateOriginalUrl = removeWordPressDimensions(alternateProtocolUrl);
-      if (alternateOriginalUrl !== alternateProtocolUrl && mediaUrlMap.has(alternateOriginalUrl)) {
+      if (alternateOriginalUrl !== alternateOriginalUrl && mediaUrlMap.has(alternateOriginalUrl)) {
         return mediaUrlMap.get(alternateOriginalUrl)!;
       }
     }
@@ -429,13 +535,13 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
   };
   
   // Handle WordPress shortcodes FIRST (before they get expanded)
-  const videoShortcodeRe = /\[video([^\]]*)\](?:\s*\[\/video\])?/gi;
+  const videoShortcodeRe = /\\\[video([^\\]*)\\\](?:\\s*\\\\[\/video\\\\])?/gi;
   rewritten = rewritten.replace(videoShortcodeRe, (match, attrStr) => {
     let newMatch = match;
     let shortcodeChanged = false;
     
     // Extract attributes from shortcode
-    const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
+    const attrRe = /(\\w+)=( "[^"]*" | '[^']*' |[^\s"']+)/g;
     let attrMatch: RegExpExecArray | null;
     
     while ((attrMatch = attrRe.exec(attrStr))) {
@@ -446,7 +552,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
       
       // Remove quotes if present
       const originalValue = value;
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'" ) && value.endsWith("'" ))) {
         value = value.slice(1, -1);
       }
       
@@ -456,7 +562,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
         const newUrl = replaceUrl(value);
         if (newUrl) {
           // Replace the URL in the shortcode, preserving the original quote style
-          const quote = originalValue.startsWith('"') ? '"' : originalValue.startsWith("'") ? "'" : '';
+          const quote = originalValue.startsWith('"') ? '"' : originalValue.startsWith("'" ) ? "'" : '';
           const newAttr = `${key}=${quote}${newUrl}${quote}`;
           const oldAttr = `${key}=${originalValue}`;
           newMatch = newMatch.replace(oldAttr, newAttr);
@@ -475,11 +581,11 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
   });
   
   // Handle audio shortcodes
-  const audioShortcodeRe = /\[audio([^\]]*)\](?:\s*\[\/audio\])?/gi;
+  const audioShortcodeRe = /\\\[audio([^\\]*)\\\](?:\\s*\\\\[\/audio\\\\])?/gi;
   rewritten = rewritten.replace(audioShortcodeRe, (match, attrStr) => {
     let newMatch = match;
     
-    const attrRe = /(\w+)=("[^"]*"|'[^']*'|[^\s"']+)/g;
+    const attrRe = /(\\w+)=( "[^"]*" | '[^']*' |[^\s"']+)/g;
     let attrMatch: RegExpExecArray | null;
     
     while ((attrMatch = attrRe.exec(attrStr))) {
@@ -489,7 +595,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
       if (!key || !value) continue;
       
       const originalValue = value;
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'" ) && value.endsWith("'" ))) {
         value = value.slice(1, -1);
       }
       
@@ -497,7 +603,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
       if (mediaAttributes.includes(key.toLowerCase()) && isHttpUrl(value)) {
         const newUrl = replaceUrl(value);
         if (newUrl) {
-          const quote = originalValue.startsWith('"') ? '"' : originalValue.startsWith("'") ? "'" : '';
+          const quote = originalValue.startsWith('"') ? '"' : originalValue.startsWith("'" ) ? "'" : '';
           const newAttr = `${key}=${quote}${newUrl}${quote}`;
           const oldAttr = `${key}=${originalValue}`;
           newMatch = newMatch.replace(oldAttr, newAttr);
@@ -557,8 +663,8 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
     const originalUrl = removeWordPressDimensions(src);
     if (originalUrl !== src && mediaUrlMap.has(originalUrl)) {
       // Check if this img tag needs width/height attributes added from the URL dimensions
-      const widthMatch = match.match(/\swidth=["']([^"']+)["']/i);
-      const heightMatch = match.match(/\sheight=["']([^"']+)["']/i);
+      const widthMatch = match.match(/\s+width=["']([^"']+)["']/i);
+      const heightMatch = match.match(/\s+height=["']([^"']+)["']/i);
       
       // If the img tag doesn't have width/height attributes, try to extract from WordPress dimensions
       if (!widthMatch || !heightMatch) {
@@ -619,7 +725,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
   });
   
   // Handle CSS url() in style attributes
-  const cssUrlRe = /url\((["']?)(https?:[^"')]+)\1\)/gi;
+  const cssUrlRe = /url\((["']?)(https?:[^\")]+)\1\)/gi;
   rewritten = rewritten.replace(cssUrlRe, (match, quote, url) => {
     if (url && isHttpUrl(url)) {
       const newUrl = replaceUrl(url);
@@ -808,7 +914,9 @@ function normalizeWpLists(html: string): string {
 
   // Unwrap <p> that directly wraps <ul> or <ol>
   // Handle optional attributes on <p> and optional HTML comments between <p> and the list
-  // Example WP markup: <p class="has-text-color">\n<!-- wp:list --><ul>... </ul><!-- /wp:list -->\n</p>
+  // Example WP markup: <p class="has-text-color">
+  // <!-- wp:list --><ul>... </ul><!-- /wp:list -->
+  // </p>
   out = out.replace(/<p\b[^>]*>\s*(?:<!--[\s\S]*?-->\s*)*(<(?:ul|ol)\b[^>]*>)/gi, "$1");
   out = out.replace(/(<\/(?:ul|ol)>\s*(?:<!--[\s\S]*?-->\s*)*)<\/p>/gi, "$1");
 
@@ -849,7 +957,7 @@ function transformSyntaxHighlighting(html: string): string {
  */
 function escapeRegExp(input: string): string {
   // Escape special regex characters: . * + ? ^ $ { } ( ) | [ ] \
-  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return input.replace(/[.*+?^${}()|[\\]/g, '\\$&');
 }
 
 /**
@@ -942,7 +1050,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
 
   // src, data-src, poster on media tags
   const attrPatterns = [
-    /\s(?:src|data-src|poster)=["\']([^"\']+)["']/gi,
+    /\s(?:src|data-src|poster)=["']([^"']+)["']/gi,
   ];
 
   for (const re of attrPatterns) {
@@ -963,7 +1071,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
   }
 
   // srcset handling: URLs separated by commas, with descriptors
-  const srcsetRe = /\ssrcset=["\']([^"\']+)["']/gi;
+  const srcsetRe = /\ssrcset=["']([^"']+)["']/gi;
   let sm: RegExpExecArray | null;
   while ((sm = srcsetRe.exec(html)) !== null) {
     const raw = sm?.[1] ?? "";
@@ -986,7 +1094,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
   }
 
   // <source src="...">
-  const sourceRe = /<source\b[^>]*\ssrc=["\']([^"\']+)["'][^>]*>/gi;
+  const sourceRe = /<source\b[^>]*\ssrc=["']([^"']+)["'][^>]*>/gi;
   let s: RegExpExecArray | null;
   while ((s = sourceRe.exec(html)) !== null) {
     const u = s?.[1] ?? "";
@@ -999,7 +1107,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
   }
 
   // CSS url(...) in style attributes
-  const cssUrlRe = /url\( ("|')?(https?:[^"\')]+)\1?\)/gi;
+  const cssUrlRe = /url\( ("|')?(https?:[^\")]+)\1?\)/gi;
   let c: RegExpExecArray | null;
   while ((c = cssUrlRe.exec(html)) !== null) {
     const u = c?.[2] ?? "";
@@ -1014,7 +1122,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
   }
 
   // Anchor hrefs: only consider as media if the href looks like a media/document file
-  const hrefRe = /\shref=["\']([^"\']+)["']/gi;
+  const hrefRe = /\shref=["']([^"']+)["']/gi;
   let hm: RegExpExecArray | null;
   while ((hm = hrefRe.exec(html)) !== null) {
     const u = hm?.[1] ?? "";
@@ -1080,6 +1188,8 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     allowedHosts = [],
     jobId,
     rebuildExcerpts = false,
+    uploads: uploadsPath,
+    root: rootUrlPattern,
   } = options;
   
   // Normalize allowedHosts to accept user-provided values like https://example.com/ or with paths
@@ -1203,10 +1313,12 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       if (verbose) console.log("✅ Purge completed");
     }
 
+    let stageStart = Date.now();
     // Parse XML
     if (verbose) console.log("📖 Parsing WXR file...");
     const xml = await readFile(filePath, "utf-8");
     const doc = await parseStringPromise(xml, { explicitArray: false, ignoreAttrs: false });
+    if (verbose) console.log(`   -> XML parsing completed in ${Date.now() - stageStart}ms`);
     
     const items = doc.rss?.channel?.item ?? [];
     const itemArray = Array.isArray(items) ? items : [items];
@@ -1241,6 +1353,9 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         if (parsed.type === "post") {
           const status = item["wp:status"];
           if (!allowedStatuses.includes(status || "")) {
+            if (verbose) {
+              console.log(`⏩ Skipping post "${parsed.title}" with status "${status}"`);
+            }
             result.summary.skipped++;
             continue;
           }
@@ -1288,6 +1403,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     const processedPostContent = new Map<string, string>(); // guid -> expanded HTML
 
     if (!skipMedia && (s3Service || localService)) {
+      stageStart = Date.now();
       const allMedia = new Set<string>();
       if (verbose) console.log("🔍 Expanding shortcodes and scanning for media in all posts...");
 
@@ -1320,7 +1436,12 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       await runWithConcurrency(medias, concurrency, async (url) => {
         try {
           if (!result.mediaUrls.has(url)) {
-            const newUrl = await downloadMedia(url, s3Service, localService, normalizedAllowedHosts, { dryRun, verbose });
+            const downloadOpts: { dryRun?: boolean; verbose?: boolean; uploadsPath?: string; rootUrlPattern?: string } = { dryRun, verbose };
+            if (uploadsPath && rootUrlPattern) {
+              downloadOpts.uploadsPath = uploadsPath;
+              downloadOpts.rootUrlPattern = rootUrlPattern;
+            }
+            const newUrl = await downloadMedia(url, s3Service, localService, normalizedAllowedHosts, downloadOpts);
             if (newUrl) result.mediaUrls.set(url, newUrl);
           }
         } catch (e) {
@@ -1336,6 +1457,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         if (successCount > 0) {
           console.log(`   Successfully downloaded URLs: ${Array.from(result.mediaUrls.keys()).slice(0, 5).join(', ')}${result.mediaUrls.size > 5 ? ` ... and ${result.mediaUrls.size - 5} more` : ''}`);
         }
+        console.log(`   -> Media processing completed in ${Date.now() - stageStart}ms`);
       }
     } else {
       // If skipping media, we still need to expand shortcodes for consistent processing in the main loop.
@@ -1347,6 +1469,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     if (verbose && postItems.length > 0) {
       console.log(`📄 Processing ${postItems.length} posts...`);
+      stageStart = Date.now();
     }
 
     // In-memory caches to reduce DB chatter
@@ -1520,9 +1643,8 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
                 .from(comments)
                 .where(eq(comments.postId, postId));
               const existingPaths = new Set<string>(existing.map((r: any) => r.path as string));
-              const existingByPath = new Map<string, { id: string; depth: number; path: string }>(
-                existing.map((r: any) => [r.path as string, { id: r.id as string, depth: r.depth as number, path: r.path as string }])
-              );
+              const existingByPath = new Map<string, { id: string; depth: number; path: string }>
+                (existing.map((r: any) => [r.path as string, { id: r.id as string, depth: r.depth as number, path: r.path as string }]));
 
               // Map original comment id -> inserted { id, path, depth }
               const insertedMap = new Map<string, { id: string; path: string; depth: number }>();
@@ -1696,8 +1818,11 @@ async function run() {
   const skipMedia = args.includes("--skip-media");
   const verbose = args.includes("--verbose");
   const rebuildExcerpts = args.includes("--rebuild-excerpts");
+  const purgeBeforeImport = args.includes("--purge");
   const allowedHostsArg = args.find(a => a.startsWith("allowedHosts="))?.split("=")[1] ?? "";
   const concurrencyArg = args.find(a => a.startsWith("concurrency="))?.split("=")[1] ?? "";
+  const uploadsArg = args.find(a => a.startsWith("uploads="))?.split("=")[1];
+  const rootArg = args.find(a => a.startsWith("root="))?.split("=")[1];
   const allowedHosts = allowedHostsArg
     .split(",")
     .map((s: string) => s.trim())
@@ -1707,19 +1832,40 @@ async function run() {
     : undefined;
 
   if (!pathArg) {
-    console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [--rebuild-excerpts] [allowedHosts=example.com,cdn.example.com] [concurrency=8]");
+    console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [--rebuild-excerpts] [--purge] [allowedHosts=example.com,cdn.example.com] [concurrency=8] [uploads=/path/to/uploads] [root=^https?://example.com$]");
     process.exit(1);
+  }
+
+  if (rootArg) {
+    try {
+      new RegExp(rootArg);
+    } catch (e) {
+      console.error(`❌ Invalid --root regular expression provided: ${rootArg}`);
+      if (e instanceof Error) {
+        console.error(e.message);
+      }
+      process.exit(1);
+    }
   }
 
   console.log(`Starting WXR import from: ${pathArg}`);
   if (dryRun) console.log("🏃 DRY RUN MODE - No changes will be made");
   if (skipMedia) console.log("📷 SKIP MEDIA MODE - Media will not be downloaded");
+  if (uploadsArg && rootArg) {
+    console.log(`📂 Using local uploads from: ${uploadsArg}`);
+    console.log(`🔗 Matching root URL pattern: ${rootArg}`);
+  }
   if (allowedHosts.length > 0) console.log(`🔒 Allowed media hosts: ${allowedHosts.join(", ")}`);
   if (concurrency) console.log(`🧵 Concurrency: ${concurrency}`);
   if (rebuildExcerpts) console.log("📝 Rebuilding excerpts for all posts");
+  if (purgeBeforeImport) console.log("🗑️ Purging all existing data before import");
 
   const startTime = Date.now();
-  const opts: ImportOptions = { dryRun, skipMedia, verbose, allowedHosts, rebuildExcerpts };
+  const opts: ImportOptions = { dryRun, skipMedia, verbose, allowedHosts, rebuildExcerpts, purgeBeforeImport };
+  if (uploadsArg && rootArg) {
+    opts.uploads = uploadsArg;
+    opts.root = rootArg;
+  }
   if (typeof concurrency === "number") {
     opts.concurrency = concurrency;
   }
@@ -1783,7 +1929,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 export function transformIframeVideos(html: string): string {
   if (!html) return html;
   return html.replace(/<iframe([^>]*)>\s*<\/iframe>/gi, (m, attrs) => {
-    const srcMatch = attrs.match(/\ssrc=["\']([^"\']+)["']/i);
+    const srcMatch = attrs.match(/\ssrc=["']([^"']+)["']/i);
     const src = srcMatch?.[1] || "";
     if (!src) return m;
     try {
