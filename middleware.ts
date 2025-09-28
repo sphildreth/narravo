@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getRedirectsEdge } from "@/lib/redirectsEdge";
 
-// This is a simple in-memory cache. For a real app, you might use
-// something more robust like Redis or Next.js's Data Cache with revalidation.
+// Simple in-memory cache for redirects
 let redirectsCache: { fromPath: string; toPath: string }[] | null = null;
 let cacheTimestamp = 0;
 const CACHE_DURATION_MS = 60 * 1000; // 1 minute
@@ -14,46 +13,62 @@ async function getCachedRedirects(request: NextRequest) {
   if (!redirectsCache || now - cacheTimestamp > CACHE_DURATION_MS) {
     redirectsCache = await getRedirectsEdge(request);
     cacheTimestamp = now;
-    console.log(`[middleware] Refreshed redirects cache: ${redirectsCache.length} entries`);
+    console.log(`🔍 [MIDDLEWARE] Refreshed redirects cache: ${redirectsCache.length} entries`);
   }
   return redirectsCache;
 }
 
 export async function middleware(request: NextRequest) {
   const startTime = performance.now();
-  
-  const redirects = await getCachedRedirects(request);
   const pathname = request.nextUrl.pathname;
 
-  if (redirects) {
+  // Debug logging
+  console.log(`🔍 [MIDDLEWARE] Processing: ${pathname} at ${new Date().toISOString()}`);
+  
+  const redirects = await getCachedRedirects(request);
+  console.log(`🔍 [MIDDLEWARE] Found ${redirects?.length || 0} redirects in cache`);
+
+  if (redirects && redirects.length > 0) {
     for (const redirect of redirects) {
+      // Handle exact match first
       if (pathname === redirect.fromPath) {
         const url = request.nextUrl.clone();
         url.pathname = redirect.toPath;
-        console.log(`[middleware] Redirecting ${pathname} -> ${url.pathname}`);
+        console.log(`🎯 [MIDDLEWARE] EXACT MATCH - Redirecting ${pathname} -> ${url.pathname}`);
         return NextResponse.redirect(url, 301);
+      }
+      
+      // Handle trailing slash variations - more robust approach
+      // Case 1: Request has no slash, database has slash
+      if (!pathname.endsWith('/') && redirect.fromPath === pathname + '/') {
+        const url = request.nextUrl.clone();
+        url.pathname = redirect.toPath;
+        console.log(`🎯 [MIDDLEWARE] TRAILING SLASH MATCH (add/) - Redirecting ${pathname} -> ${url.pathname}`);
+        return NextResponse.redirect(url, 301);
+      }
+      
+      // Case 2: Request has slash, database has no slash  
+      if (pathname.endsWith('/') && redirect.fromPath === pathname.slice(0, -1)) {
+        const url = request.nextUrl.clone();
+        url.pathname = redirect.toPath;
+        console.log(`🎯 [MIDDLEWARE] TRAILING SLASH MATCH (remove/) - Redirecting ${pathname} -> ${url.pathname}`);
+        return NextResponse.redirect(url, 301);
+      }
+    }
+    
+    // Check specifically for our test case
+    if (pathname.includes('ghost-iron-maiden')) {
+      console.log(`🔍 [MIDDLEWARE] Ghost path detected: ${pathname}`);
+      const matchingRedirect = redirects.find(r => 
+        r.fromPath.includes('ghost-iron-maiden') || r.toPath.includes('ghost-iron-maiden')
+      );
+      if (matchingRedirect) {
+        console.log(`🔍 [MIDDLEWARE] Found matching ghost redirect: ${matchingRedirect.fromPath} -> ${matchingRedirect.toPath}`);
       }
     }
   }
 
-  // Inject route context for server components (e.g., Navbar)
-  const requestHeaders = new Headers(request.headers);
-  const isAdmin = pathname.startsWith("/admin");
-  requestHeaders.set("x-app-context", isAdmin ? "admin" : "site");
-  requestHeaders.set("x-middleware-start", startTime.toString());
-
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
-  
-  // Add Server-Timing header for performance monitoring on pages
-  const middlewareTime = performance.now() - startTime;
-  const isPostPage = pathname.match(/^\/[^\/]+$/) && !pathname.startsWith('/api');
-  const isAdminPage = pathname.startsWith('/admin');
-  
-  if (isPostPage || isAdminPage) {
-    response.headers.set('Server-Timing', `middleware;dur=${middlewareTime.toFixed(2)}`);
-  }
-  
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
@@ -64,9 +79,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - feed.xml (RSS feed)
-     * - sitemap.xml (Sitemap)
+     * - uploads (uploaded static files)
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|feed.xml|sitemap.xml).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|uploads).*)",
   ],
 };

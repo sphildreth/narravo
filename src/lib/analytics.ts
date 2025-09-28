@@ -221,21 +221,14 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
           }
         }
 
-        await tx
-          .insert(postDailyViews)
-          .values({
-            day: currentDate,
-            postId,
-            views: 1,
-            uniques: isUniqueForDay ? 1 : 0,
-          })
-          .onConflictDoUpdate({
-            target: [postDailyViews.day, postDailyViews.postId],
-            set: {
-              views: sql`${postDailyViews.views} + 1`,
-              uniques: isUniqueForDay ? sql`${postDailyViews.uniques} + 1` : postDailyViews.uniques,
-            },
-          });
+        await tx.execute(sql`
+          INSERT INTO post_daily_views (day, post_id, views, uniques)
+          VALUES (${currentDate}, ${postId}, 1, ${isUniqueForDay ? 1 : 0})
+          ON CONFLICT (day, post_id)
+          DO UPDATE SET
+            views = post_daily_views.views + 1,
+            uniques = post_daily_views.uniques + ${isUniqueForDay ? 1 : 0}
+        `);
       } catch (err) {
         if (!isMissingDailyViewsRelation(err)) throw err;
         // If the table is missing, we simply skip daily aggregation.
