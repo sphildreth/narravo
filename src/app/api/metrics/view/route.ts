@@ -11,12 +11,16 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    console.log("📊 View tracking API called");
     // Parse body
     const json = await req.json().catch(() => null);
+    console.log("📊 JSON parsed:", json);
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) {
+      console.log("📊 Validation failed:", parsed.error);
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
+    console.log("📊 Validation successful:", parsed.data);
 
     // Respect DNT if configured
     const config = new ConfigServiceImpl();
@@ -50,12 +54,15 @@ export async function POST(req: Request) {
     } as const;
 
     // Record the view (best-effort)
-    await recordView(payload as any);
+    console.log("📊 About to record view with payload:", payload);
+    const result = await recordView(payload as any);
+    console.log("📊 Record view result:", result);
 
     // Always return 204 to avoid leaking details to clients
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     // Never throw; just return 204 to avoid impacting UX
+    console.error("📊 Error in view tracking API:", error);
     return new NextResponse(null, { status: 204 });
   }
 }
