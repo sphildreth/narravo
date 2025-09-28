@@ -183,6 +183,7 @@ A quick reference for common development tasks:
 | `pnpm perf:benchmark`        | Run the combined performance benchmark suite           |
 | `pnpm perf:lighthouse`       | Execute Lighthouse CI checks                          |
 | `pnpm perf:loadtest`         | Run Autocannon smoke load testing                      |
+| `pnpm perf:analyze`          | Build with bundle analyzer enabled                     |
 | `pnpm perf:weekly`           | Produce a weekly performance rollup report             |
 
 ---
@@ -213,6 +214,8 @@ Narravo includes a powerful and resilient WordPress import tool to migrate your 
 *   **Comprehensive Content:** Imports posts, comments (with threading), categories, and tags.
 *   **Flexible Statuses:** Choose which post statuses to import (e.g., `publish`, `draft`).
 *   **Media & SEO:** Downloads media to S3/R2, rewrites content URLs, and creates 301 redirects from old WordPress post URLs.
+*   **Offline Import Support:** Import media from local uploads directory when original site is offline or unreachable.
+*   **Enhanced Purge:** Complete data reset option that removes all posts, comments, categories, tags, redirects, and uploaded files.
 *   **Resilient Process:** Features include dry-runs, real-time progress, job cancellation, and detailed error logging.
 *   **Admin UI & CLI:** Manage imports through the Admin Dashboard or automate them with a CLI script.
 
@@ -227,16 +230,18 @@ The `wxr:import` script supports several command-line flags to customize the imp
 *   `--dry-run`: Simulates the import without making any changes to the database.
 *   `--skip-media`: Skips downloading and processing of any media files.
 *   `--rebuild-excerpts`: Forces regeneration of excerpts for all posts, even if they already have one.
-*   `--purge`: **Deletes all existing posts, comments, tags, and categories** before starting the import. Use with caution.
+*   `--purge`: **Deletes all existing posts, comments, tags, categories, redirects, and uploaded files** before starting the import. Use with caution.
 *   `uploads=<path>`: Specifies the path to a local folder containing your WordPress `uploads` directory. Use this for offline imports where the original site is not reachable.
 *   `root=<pattern>`: A regular expression to match the root URL of your old site (e.g., `^https?://my-old-site.com`). Required when using `uploads`.
+*   `allowedHosts=<hosts>`: Comma-separated list of allowed domains for media downloads (e.g., `example.com,cdn.example.com`).
+*   `concurrency=<number>`: Number of simultaneous media downloads (1-10, default: 4).
 
 #### Example Offline Import
 
-This command runs an import using a local backup of media files, purging the database first.
+This command runs an import using a local backup of media files, purging all existing data and files first.
 
 ```bash
-pnpm wxr:import -- path=./export.xml --purge uploads=/path/to/wp-backup/uploads root='^https?://my-old-site.com' --verbose
+pnpm wxr:import -- path=./export.xml --purge uploads=/path/to/wp-backup/uploads root='^https?://my-old-site\.com$' --verbose
 ```
 
 ---

@@ -307,7 +307,21 @@ async function handleLocalMedia(
   const { dryRun = false, verbose = false } = opts;
   const rootRegex = new RegExp(rootUrlPattern, "i");
 
-  if (!rootRegex.test(url)) {
+  // Extract domain from the URL to test against the pattern
+  let domainToTest: string;
+  try {
+    const urlObj = new URL(url);
+    domainToTest = urlObj.hostname;
+    // Add protocol + hostname for pattern matching
+    if (rootUrlPattern.includes('://')) {
+      domainToTest = `${urlObj.protocol}//${urlObj.hostname}`;
+    }
+  } catch {
+    // If URL parsing fails, test the whole URL as fallback
+    domainToTest = url;
+  }
+
+  if (!rootRegex.test(domainToTest)) {
     return { isLocal: false, url: null };
   }
 
@@ -1278,7 +1292,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         .where(eq(importJobs.id, jobId));
     }
 
-    // Purge data if requested
+    // Purge data if requested (complete reset: database + all uploaded files)
     if (purgeBeforeImport && !dryRun) {
       if (verbose) console.log("🗑️ Purging existing data...");
       
@@ -1290,24 +1304,39 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       await db.delete(tags);
       await db.delete(redirects);
 
-      // Also purge previously imported media from storage
+      // Also purge ALL post-related files from storage (not just imported media)
       try {
-        const prefix = "imported-media/";
         // Initialize a storage service if not already prepared (e.g., when skipMedia was true)
         if (!s3Service && !localService) {
           const s3cfg = getS3Config();
           if (s3cfg) s3Service = new S3Service(s3cfg);
           else localService = localStorageService;
         }
-        if (s3Service) {
-          await s3Service.deletePrefix(prefix);
-          if (verbose) console.log("🧹 S3/R2 storage purged:", prefix);
-        } else if (localService) {
-          await localService.deletePrefix(prefix);
-          if (verbose) console.log("🧹 Local storage purged:", prefix);
+
+        // List of all prefixes that might contain post-related files
+        const prefixesToPurge = [
+          "imported-media/",  // WXR imported media
+          "images/",          // User-uploaded images
+          "videos/",          // User-uploaded videos
+          "uploads/",         // Default upload prefix
+          "featured/",        // Featured images
+        ];
+
+        for (const prefix of prefixesToPurge) {
+          try {
+            if (s3Service) {
+              await s3Service.deletePrefix(prefix);
+              if (verbose) console.log(`🧹 S3/R2 storage purged: ${prefix}`);
+            } else if (localService) {
+              await localService.deletePrefix(prefix);
+              if (verbose) console.log(`🧹 Local storage purged: ${prefix}`);
+            }
+          } catch (e) {
+            if (verbose) console.warn(`Warning: failed to purge prefix "${prefix}":`, e);
+          }
         }
       } catch (e) {
-        if (verbose) console.warn("Warning: failed to purge imported media prefix:", e);
+        if (verbose) console.warn("Warning: failed to initialize storage for purge:", e);
       }
 
       if (verbose) console.log("✅ Purge completed");
@@ -1833,6 +1862,7 @@ async function run() {
 
   if (!pathArg) {
     console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [--rebuild-excerpts] [--purge] [allowedHosts=example.com,cdn.example.com] [concurrency=8] [uploads=/path/to/uploads] [root=^https?://example.com$]");
+    console.error("  --purge: Delete all existing posts, comments, categories, tags, redirects, and uploaded files before import");
     process.exit(1);
   }
 
@@ -1858,7 +1888,7 @@ async function run() {
   if (allowedHosts.length > 0) console.log(`🔒 Allowed media hosts: ${allowedHosts.join(", ")}`);
   if (concurrency) console.log(`🧵 Concurrency: ${concurrency}`);
   if (rebuildExcerpts) console.log("📝 Rebuilding excerpts for all posts");
-  if (purgeBeforeImport) console.log("🗑️ Purging all existing data before import");
+  if (purgeBeforeImport) console.log("🗑️ Purging all existing data and files before import");
 
   const startTime = Date.now();
   const opts: ImportOptions = { dryRun, skipMedia, verbose, allowedHosts, rebuildExcerpts, purgeBeforeImport };
