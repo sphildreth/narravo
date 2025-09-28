@@ -20,7 +20,7 @@ Choose which WordPress post statuses to import:
 ### Import Options
 - **Dry run**: Preview the import without making any changes
 - **Skip media downloads**: Import content without downloading media files
-- **Purge all data before import**: ⚠️ **DESTRUCTIVE** - Removes all existing posts, comments, categories, tags, and redirects
+- **Purge all data before import**: ⚠️ **DESTRUCTIVE** - Removes all existing posts, comments, categories, tags, redirects, and uploaded files
 
 ### Advanced Options
 - **Concurrency**: Number of simultaneous media downloads (1-10, default: 4)
@@ -129,17 +129,35 @@ For large imports or automation, use the CLI script:
 
 ```bash
 # Basic import
-npm run wxr:import path=./export.xml
+pnpm wxr:import -- path=./export.xml
 
 # Dry run preview
-npm run wxr:import path=./export.xml --dry-run
+pnpm wxr:import -- path=./export.xml --dry-run
 
 # Skip media downloads
-npm run wxr:import path=./export.xml --skip-media
+pnpm wxr:import -- path=./export.xml --skip-media
 
-# Verbose output
-npm run wxr:import path=./export.xml --verbose
+# Verbose output with concurrency control
+pnpm wxr:import -- path=./export.xml --verbose concurrency=8
+
+# Offline import with local media files and complete purge
+pnpm wxr:import -- path=./export.xml --purge uploads=/path/to/wp-uploads root='^https?://oldsite\.com$' --verbose
+
+# Import with allowed hosts filter
+pnpm wxr:import -- path=./export.xml allowedHosts=example.com,cdn.example.com --verbose
 ```
+
+### CLI Options
+- `path=<file>`: (Required) Path to WXR export file
+- `--verbose`: Enable detailed logging
+- `--dry-run`: Preview without making changes
+- `--skip-media`: Skip media downloads
+- `--rebuild-excerpts`: Regenerate all excerpts
+- `--purge`: ⚠️ **Delete all posts, comments, categories, tags, redirects, and uploaded files**
+- `uploads=<path>`: Local uploads directory for offline import
+- `root=<pattern>`: Regex pattern for old site URL (required with uploads)
+- `allowedHosts=<hosts>`: Comma-separated allowed domains
+- `concurrency=<number>`: Simultaneous downloads (1-10, default: 4)
 
 ## Troubleshooting
 
