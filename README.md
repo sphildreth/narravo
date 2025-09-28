@@ -218,21 +218,25 @@ Narravo includes a powerful and resilient WordPress import tool to migrate your 
 
 For a complete guide, see the [**WordPress Import Documentation**](./docs/wordpress-import.md).
 
-### Excerpts: configuration and rebuild
+### CLI Options
 
-During import, Narravo auto-generates short HTML-safe post excerpts. You can control excerpt generation and optionally rebuild them.
+The `wxr:import` script supports several command-line flags to customize the import process:
 
-- Environment variables (optional):
-  - `EXCERPT_MAX_CHARS` (default: `220`)
-  - `EXCERPT_ELLIPSIS` (default: `…`)
-  - `EXCERPT_INCLUDE_BLOCK_CODE` (default: `false` — when `true`, preserves `<pre>` block code)
-- Admin UI: toggle “Rebuild excerpts” in Admin → System → Import to force recomputing excerpts for this job.
-- CLI: pass `--rebuild-excerpts` to the importer.
+*   `path=<file>`: (Required) The path to your WXR export file.
+*   `--verbose`: Enables detailed logging for troubleshooting.
+*   `--dry-run`: Simulates the import without making any changes to the database.
+*   `--skip-media`: Skips downloading and processing of any media files.
+*   `--rebuild-excerpts`: Forces regeneration of excerpts for all posts, even if they already have one.
+*   `--purge`: **Deletes all existing posts, comments, tags, and categories** before starting the import. Use with caution.
+*   `uploads=<path>`: Specifies the path to a local folder containing your WordPress `uploads` directory. Use this for offline imports where the original site is not reachable.
+*   `root=<pattern>`: A regular expression to match the root URL of your old site (e.g., `^https?://my-old-site.com`). Required when using `uploads`.
 
-Example CLI run:
+#### Example Offline Import
+
+This command runs an import using a local backup of media files, purging the database first.
 
 ```bash
-pnpm wxr:import -- path=./export.xml --rebuild-excerpts --verbose
+pnpm wxr:import -- path=./export.xml --purge uploads=/path/to/wp-backup/uploads root='^https?://my-old-site.com' --verbose
 ```
 
 ---
