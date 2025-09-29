@@ -11,6 +11,8 @@
     "build": "next build",
     "start": "next start",
     "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:status": "changeset status",
     "test": "vitest run",
     "test:watch": "vitest",
     "drizzle:generate": "drizzle-kit generate",
