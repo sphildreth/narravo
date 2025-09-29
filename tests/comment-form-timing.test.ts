@@ -2,20 +2,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { validateAntiAbuse } from '@/lib/rateLimit';
 
+// Mock the db module
+vi.mock("@/lib/db", () => ({
+  db: {}
+}));
+
+// Mock the config service
+const mockGetNumber = vi.fn();
+vi.mock("@/lib/config", () => ({
+  ConfigServiceImpl: vi.fn().mockImplementation(() => ({
+    getNumber: mockGetNumber
+  }))
+}));
+
 describe('Comment Form Timing Fix', () => {
   beforeEach(() => {
-    // Mock the config service
-    vi.doMock('@/lib/config', () => ({
-      ConfigServiceImpl: class {
-        async getNumber(key: string) {
-          const defaults: Record<string, number> = {
-            'RATE.COMMENTS-PER-MINUTE': 5,
-            'RATE.MIN-SUBMIT-SECS': 2
-          };
-          return Promise.resolve(defaults[key] || null);
-        }
-      }
-    }));
+    // Setup default config values
+    mockGetNumber.mockImplementation((key: string) => {
+      const defaults: Record<string, number> = {
+        'RATE.COMMENTS-PER-MINUTE': 5,
+        'RATE.MIN-SUBMIT-SECS': 2
+      };
+      return Promise.resolve(defaults[key] || null);
+    });
   });
 
   afterEach(() => {

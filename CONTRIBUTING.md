@@ -14,6 +14,11 @@ Thanks for your interest in contributing!
 
 We use [Changesets](https://github.com/changesets/changesets) for automated versioning and changelog generation.
 
+**Prerequisites**: Ensure dependencies are installed first:
+```bash
+pnpm install
+```
+
 **For every code change**, please run:
 ```bash
 pnpm changeset
