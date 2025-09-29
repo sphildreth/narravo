@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { render, cleanup } from "@testing-library/react";
+// Note: screen and waitFor not available in this version, using container queries and setTimeout instead
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -172,7 +173,7 @@ describe("TipTap Editor Task List Rendering", () => {
     const taskItems = container.querySelectorAll('ul[data-type="taskList"] li[data-checked]');
     
     // Check each task item has proper flexbox layout
-    taskItems.forEach((taskItem) => {
+    taskItems.forEach((taskItem: any) => {
       const computedStyles = window.getComputedStyle(taskItem as HTMLElement);
       expect(computedStyles.display).toBe('flex');
       expect(computedStyles.alignItems).toBe('flex-start');
@@ -315,7 +316,7 @@ describe("TipTap Editor Task List Rendering", () => {
 
     // Test with longer content to ensure wrapping works correctly
     const longTextTask = Array.from(container.querySelectorAll('ul[data-type="taskList"] li[data-checked]'))
-      .find(item => item.textContent?.includes('even longer text'));
+      .find((item: any) => item.textContent?.includes('even longer text'));
     
     expect(longTextTask).toBeTruthy();
     
@@ -325,7 +326,7 @@ describe("TipTap Editor Task List Rendering", () => {
       expect(computedStyles.alignItems).toBe('flex-start');
       
       // Ensure the checkbox stays at the top while text wraps
-      const checkbox = longTextTask.querySelector('input[type="checkbox"]');
+      const checkbox = (longTextTask as any).querySelector('input[type="checkbox"]');
       if (checkbox) {
         const checkboxStyles = window.getComputedStyle(checkbox as HTMLElement);
         expect(checkboxStyles.marginTop).toBe('0.125rem'); // Slight top alignment

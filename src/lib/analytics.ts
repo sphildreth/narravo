@@ -190,7 +190,12 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
       // Upsert daily views (if table exists). Swallow missing-table errors.
       try {
         // Determine if this is considered unique for the day
+        // We need to check BEFORE the current insertion, so we exclude records from "now" onwards
+        // to avoid counting the record we just inserted in this transaction
         let isUniqueForDay = false;
+        const dayStart = new Date(`${currentDate}T00:00:00.000Z`);
+        const currentTime = new Date();
+        
         if (sessionId) {
           const seen = await tx
             .select({ id: postViewEvents.id })
@@ -199,7 +204,8 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
               and(
                 eq(postViewEvents.postId, postId),
                 eq(postViewEvents.sessionId, sessionId),
-                gte(postViewEvents.ts, new Date(`${currentDate}T00:00:00.000Z`))
+                gte(postViewEvents.ts, dayStart),
+                sql`${postViewEvents.ts} < ${currentTime}`
               )
             )
             .limit(1);
@@ -214,7 +220,8 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
                 and(
                   eq(postViewEvents.postId, postId),
                   eq(postViewEvents.ipHash, ipHashForDay),
-                  gte(postViewEvents.ts, new Date(`${currentDate}T00:00:00.000Z`))
+                  gte(postViewEvents.ts, dayStart),
+                  sql`${postViewEvents.ts} < ${currentTime}`
                 )
               )
               .limit(1);
