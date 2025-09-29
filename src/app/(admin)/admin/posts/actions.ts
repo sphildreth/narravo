@@ -11,11 +11,11 @@ import slugify from "slugify";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { markdownToHtmlSync } from "@/lib/markdown";
 import { setPostTags, setPostCategory, getAllTags, getAllCategories, getPostTags, getPostCategory } from "@/lib/taxonomy";
+import { getStorageService } from "@/lib/s3";
+import { localStorageService } from "@/lib/local-storage";
 import { z } from "zod";
 import { randomUUID } from "crypto";
-import { promises as fs } from "fs";
 import logger from '@/lib/logger';
-import path from "path";
 
 // Types for post management
 export interface PostsFilter {
@@ -284,16 +284,34 @@ export async function createPost(formData: FormData) {
       if (featuredImageFile.size > 5 * 1024 * 1024) { // 5MB limit
         return { error: "Featured image file too large (max 5MB)" };
       }
-      const arrayBuffer = await featuredImageFile.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const ext = featuredImageFile.name.includes('.') ? '.' + featuredImageFile.name.split('.').pop()!.toLowerCase() : (
-        featuredImageFile.type === 'image/png' ? '.png' : featuredImageFile.type === 'image/webp' ? '.webp' : featuredImageFile.type === 'image/gif' ? '.gif' : '.jpg'
-      );
-      const fileName = `${randomUUID()}${ext}`;
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'featured');
-      await fs.mkdir(uploadDir, { recursive: true });
-      await fs.writeFile(path.join(uploadDir, fileName), buffer);
-      finalFeaturedUrl = `/uploads/featured/${fileName}`;
+      
+      try {
+        const arrayBuffer = await featuredImageFile.arrayBuffer();
+        const buffer = new Uint8Array(arrayBuffer);
+        
+        const ext = featuredImageFile.name.includes('.') 
+          ? featuredImageFile.name.split('.').pop()!.toLowerCase()
+          : (featuredImageFile.type === 'image/png' ? 'png' : 
+             featuredImageFile.type === 'image/webp' ? 'webp' : 
+             featuredImageFile.type === 'image/gif' ? 'gif' : 'jpg');
+        
+        // Try to use S3/R2 storage first, fallback to local storage
+        const storageService = getStorageService();
+        if (storageService) {
+          // Use cloud storage (S3/R2)
+          const key = `featured/${randomUUID()}.${ext}`;
+          await storageService.putObject(key, buffer, featuredImageFile.type);
+          finalFeaturedUrl = storageService.getPublicUrl(key);
+        } else {
+          // Use local storage service
+          const key = `featured/${randomUUID()}.${ext}`;
+          await localStorageService.putObject(key, buffer, featuredImageFile.type);
+          finalFeaturedUrl = localStorageService.getPublicUrl(key);
+        }
+      } catch (error) {
+        logger.error("Error uploading featured image:", error);
+        return { error: "Failed to upload featured image" };
+      }
     } else if (featuredImageUrl && featuredImageUrl.trim() !== "") {
       finalFeaturedUrl = featuredImageUrl;
     }
@@ -419,16 +437,34 @@ export async function updatePost(formData: FormData) {
       if (featuredImageFile.size > 5 * 1024 * 1024) {
         return { error: "Featured image file too large (max 5MB)" };
       }
-      const arrayBuffer = await featuredImageFile.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const ext = featuredImageFile.name.includes('.') ? '.' + featuredImageFile.name.split('.').pop()!.toLowerCase() : (
-        featuredImageFile.type === 'image/png' ? '.png' : featuredImageFile.type === 'image/webp' ? '.webp' : featuredImageFile.type === 'image/gif' ? '.gif' : '.jpg'
-      );
-      const fileName = `${randomUUID()}${ext}`;
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'featured');
-      await fs.mkdir(uploadDir, { recursive: true });
-      await fs.writeFile(path.join(uploadDir, fileName), buffer);
-      finalFeaturedUrl = `/uploads/featured/${fileName}`;
+      
+      try {
+        const arrayBuffer = await featuredImageFile.arrayBuffer();
+        const buffer = new Uint8Array(arrayBuffer);
+        
+        const ext = featuredImageFile.name.includes('.') 
+          ? featuredImageFile.name.split('.').pop()!.toLowerCase()
+          : (featuredImageFile.type === 'image/png' ? 'png' : 
+             featuredImageFile.type === 'image/webp' ? 'webp' : 
+             featuredImageFile.type === 'image/gif' ? 'gif' : 'jpg');
+        
+        // Try to use S3/R2 storage first, fallback to local storage
+        const storageService = getStorageService();
+        if (storageService) {
+          // Use cloud storage (S3/R2)
+          const key = `featured/${randomUUID()}.${ext}`;
+          await storageService.putObject(key, buffer, featuredImageFile.type);
+          finalFeaturedUrl = storageService.getPublicUrl(key);
+        } else {
+          // Use local storage service
+          const key = `featured/${randomUUID()}.${ext}`;
+          await localStorageService.putObject(key, buffer, featuredImageFile.type);
+          finalFeaturedUrl = localStorageService.getPublicUrl(key);
+        }
+      } catch (error) {
+        logger.error("Error uploading featured image:", error);
+        return { error: "Failed to upload featured image" };
+      }
     } else if (featuredImageUrl && featuredImageUrl.trim() !== "") {
       finalFeaturedUrl = featuredImageUrl;
     }
