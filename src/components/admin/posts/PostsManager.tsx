@@ -7,6 +7,7 @@ import Link from "next/link";
 import { performBulkAction, type PostsFilter, type PostsSortOptions } from "@/app/(admin)/admin/posts/actions";
 import { useDateFormat } from "@/lib/dateFormat.client";
 import { formatDateSafe } from "@/lib/dateFormat";
+import logger from '@/lib/logger';
 
 interface Post {
   id: string;
@@ -114,7 +115,7 @@ export default function PostsManager({ initialData, filter, sort, page }: PostsM
         alert(result.error || "Failed to perform action");
       }
     } catch (error) {
-      console.error("Bulk action error:", error);
+      logger.error("Bulk action error:", error);
       alert("An error occurred while performing the action");
     } finally {
       setIsProcessing(false);

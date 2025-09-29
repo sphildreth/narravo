@@ -8,6 +8,7 @@ import { posts } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { revalidateTag, revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import logger from '@/lib/logger';
 import { z } from "zod";
 
 const deletePostSchema = z.object({
@@ -61,7 +62,7 @@ export async function deletePostAction(formData: FormData) {
       message: `Post "${post.title}" deleted successfully` 
     };
   } catch (error) {
-    console.error("Error deleting post:", error);
+    logger.error("Error deleting post:", error);
     
     // Handle specific admin authorization error
     if (error instanceof Error && error.message === "Forbidden") {

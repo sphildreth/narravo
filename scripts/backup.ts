@@ -5,7 +5,7 @@ import { posts, users, comments, commentAttachments, reactions, redirects, confi
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import { getS3Config, S3Service } from "@/lib/s3";
+import logger from "@/lib/logger";
 
 export interface BackupManifest {
   version: number;
@@ -46,7 +46,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
   } = options;
 
   if (verbose) {
-    console.log("Starting backup creation...");
+    logger.info("Starting backup creation...");
   }
 
   const zip = new JSZip();
@@ -66,7 +66,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
   };
 
   // Export posts
-  if (verbose) console.log("Exporting posts...");
+  if (verbose) logger.info("Exporting posts...");
   const postsData = await db.select().from(posts);
   manifest.counts.posts = postsData.length;
   const postsJson = JSON.stringify(postsData, null, 2);
@@ -79,7 +79,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
   };
 
   // Export users
-  if (verbose) console.log("Exporting users...");
+  if (verbose) logger.info("Exporting users...");
   const usersData = await db.select().from(users);
   manifest.counts.users = usersData.length;
   const usersJson = JSON.stringify(usersData, null, 2);
@@ -92,7 +92,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
   };
 
   // Export comments
-  if (verbose) console.log("Exporting comments...");
+  if (verbose) logger.info("Exporting comments...");
   const commentsData = await db.select().from(comments);
   manifest.counts.comments = commentsData.length;
   const commentsJson = JSON.stringify(commentsData, null, 2);
@@ -105,7 +105,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
   };
 
   // Export comment attachments
-  if (verbose) console.log("Exporting comment attachments...");
+  if (verbose) logger.info("Exporting comment attachments...");
   const attachmentsData = await db.select().from(commentAttachments);
   const attachmentsJson = JSON.stringify(attachmentsData, null, 2);
   const attachmentsHash = crypto.createHash('sha256').update(attachmentsJson).digest('hex');
@@ -117,7 +117,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
   };
 
   // Export reactions
-  if (verbose) console.log("Exporting reactions...");
+  if (verbose) logger.info("Exporting reactions...");
   const reactionsData = await db.select().from(reactions);
   manifest.counts.reactions = reactionsData.length;
   const reactionsJson = JSON.stringify(reactionsData, null, 2);
@@ -130,7 +130,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
   };
 
   // Export redirects
-  if (verbose) console.log("Exporting redirects...");
+  if (verbose) logger.info("Exporting redirects...");
   const redirectsData = await db.select().from(redirects);
   manifest.counts.redirects = redirectsData.length;
   const redirectsJson = JSON.stringify(redirectsData, null, 2);
@@ -143,7 +143,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
   };
 
   // Export configuration
-  if (verbose) console.log("Exporting configuration...");
+  if (verbose) logger.info("Exporting configuration...");
   const configData = await db.select().from(configuration);
   manifest.counts.configuration = configData.length;
   const configJson = JSON.stringify(configData, null, 2);
@@ -157,7 +157,7 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
 
   // Export media manifest (without actual files for MVP)
   if (includeMedia) {
-    if (verbose) console.log("Creating media manifest...");
+    if (verbose) logger.info("Creating media manifest...");
     
     // Collect all media URLs from comment attachments
     const mediaUrls = new Set<string>();
@@ -184,16 +184,16 @@ export async function createBackup(options: BackupOptions = {}): Promise<string>
   zip.file("manifest.json", manifestJson);
 
   // Generate zip file
-  if (verbose) console.log("Generating zip file...");
+  if (verbose) logger.info("Generating zip file...");
   const zipBuffer = await zip.generateAsync({ type: "uint8array" });
   
   // Write to disk
   await fs.writeFile(outputPath, zipBuffer);
   
   if (verbose) {
-    console.log(`Backup created: ${outputPath}`);
-    console.log(`Total size: ${zipBuffer.length} bytes`);
-    console.log("Counts:", manifest.counts);
+    logger.info(`Backup created: ${outputPath}`);
+    logger.info(`Total size: ${zipBuffer.length} bytes`);
+    logger.info("Counts:", manifest.counts);
   }
 
   return outputPath;
@@ -212,11 +212,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     verbose,
   })
     .then(path => {
-      console.log(`✅ Backup created successfully: ${path}`);
+      logger.info(`✅ Backup created successfully: ${path}`);
       process.exit(0);
     })
     .catch(error => {
-      console.error("❌ Backup failed:", error);
+      logger.error("❌ Backup failed:", error);
       process.exit(1);
     });
 }

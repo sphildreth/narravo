@@ -4,6 +4,7 @@
 
 import { useState, useCallback } from "react";
 import ArticleCard, { type ArticleCardPost } from "./ArticleCard";
+import logger from '@/lib/logger';
 
 type LoadMoreProps = {
   initialPosts: ArticleCardPost[];
@@ -66,7 +67,7 @@ export default function LoadMore({
       setTimeout(() => document.body.removeChild(announcement), 1000);
 
     } catch (err) {
-      console.error('Error loading more posts:', err);
+      logger.error('Error loading more posts:', err);
       setError(err instanceof Error ? err.message : 'Failed to load more posts');
     } finally {
       setLoading(false);

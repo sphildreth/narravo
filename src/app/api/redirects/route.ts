@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getRedirects } from "@/lib/redirects";
+import logger from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic"; // avoid prerendering during static export
@@ -14,7 +15,7 @@ export async function GET() {
     });
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
-      console.warn("Failed to load redirects; returning empty list");
+      logger.warn("Failed to load redirects; returning empty list");
     }
     return Response.json([], {
       headers: {

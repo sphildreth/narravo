@@ -4,6 +4,7 @@ import { posts, postDailyViews, postViewEvents } from "@/drizzle/schema";
 import { sql, eq, gte, desc, and, count, sum, inArray } from "drizzle-orm";
 import { ConfigServiceImpl } from "./config";
 import crypto from "crypto";
+import logger from './logger';
 
 const config = new ConfigServiceImpl({ db });
 
@@ -237,7 +238,7 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
 
     return true;
   } catch (error) {
-    console.error("Failed to record view:", error);
+    logger.error("Failed to record view:", error);
     return false;
   }
 }

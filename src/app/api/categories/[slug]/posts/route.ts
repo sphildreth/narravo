@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPostsByCategory, getCategoryBySlug } from "@/lib/taxonomy";
+import logger from '@/lib/logger';
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional().default(10),
@@ -73,9 +74,9 @@ export async function GET(
     try {
       const resolvedParams = await params;
       const actualSlug = resolvedParams.slug;
-      console.error(`Error in /api/categories/${actualSlug}/posts:`, error);
+      logger.error(`Error in /api/categories/${actualSlug}/posts:`, error);
     } catch {
-      console.error(`Error in /api/categories/${slug}/posts:`, error);
+      logger.error(`Error in /api/categories/${slug}/posts:`, error);
     }
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: "Internal server error" } },

@@ -1,6 +1,7 @@
 "use server";
 // SPDX-License-Identifier: Apache-2.0
 
+import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { getModerationQueue, revalidateAfterModeration, type ModerationFilter } from "@/lib/moderation";
 import { moderateComments, type ModerateInput, type ModerationRepo } from "@/lib/adminModeration";
@@ -10,7 +11,7 @@ import { eq, sql, desc, asc } from "drizzle-orm";
 import { ConfigServiceImpl } from "@/lib/config";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { createCommentCore, sanitizeMarkdown } from "@/lib/comments";
-import { z } from "zod";
+import logger from "@/lib/logger";
 
 class DrizzleModerationRepo implements ModerationRepo {
   async updateStatus(ids: string[], status: "approved" | "spam" | "deleted"): Promise<number> {
@@ -239,7 +240,7 @@ export async function removeCommentAttachment(attachmentId: string) {
 
     return { success: true };
   } catch (error) {
-    console.error("Error removing attachment:", error);
+    logger.error("Error removing attachment:", error);
     return { error: "Failed to remove attachment" };
   }
 }
@@ -337,7 +338,7 @@ export async function createAdminReply(formData: FormData) {
 
     return { success: true, comment };
   } catch (error) {
-    console.error("Error creating admin reply:", error);
+    logger.error("Error creating admin reply:", error);
     return { error: error instanceof Error ? error.message : "Failed to create reply" };
   }
 }
@@ -376,7 +377,7 @@ export async function hardDeleteComments(commentIds: string[]) {
 
     return { success: true, deleted: totalCount };
   } catch (error) {
-    console.error("Error hard deleting comments:", error);
+    logger.error("Error hard deleting comments:", error);
     return { error: "Failed to delete comments" };
   }
 }

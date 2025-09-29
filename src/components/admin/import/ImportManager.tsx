@@ -7,6 +7,7 @@ import { startImportJob, cancelImportJob, retryImportJob, deleteImportJob } from
 import { useRouter } from "next/navigation";
 import type { importJobs } from "@/drizzle/schema";
 import { Modal } from "@/components/admin/config/Modal";
+import logger from '@/lib/logger';
 
 type ImportJob = typeof importJobs.$inferSelect;
 
@@ -139,7 +140,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
         job.id === jobId ? { ...job, status: 'cancelling' as const } : job
       ));
     } catch (error) {
-      console.error('Failed to cancel job:', error);
+      logger.error('Failed to cancel job:', error);
     }
   };
 
@@ -154,7 +155,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
         ));
       }
     } catch (error) {
-      console.error('Failed to retry job:', error);
+      logger.error('Failed to retry job:', error);
     }
   };
 
@@ -168,7 +169,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
         setDeleteConfirm(null);
       }
     } catch (error) {
-      console.error('Failed to delete job:', error);
+      logger.error('Failed to delete job:', error);
       setUploadError(error instanceof Error ? error.message : 'Failed to delete job');
     }
   };

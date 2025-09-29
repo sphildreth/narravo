@@ -13,6 +13,7 @@ import { markdownToHtmlSync } from "@/lib/markdown";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
+import logger from '@/lib/logger';
 import path from "path";
 
 // Types for post management
@@ -308,7 +309,7 @@ export async function createPost(formData: FormData) {
     
     return { success: true, post: newPost };
   } catch (error) {
-    console.error("Error creating post:", error);
+    logger.error("Error creating post:", error);
     return { error: "Failed to create post" };
   }
 }
@@ -419,7 +420,7 @@ export async function updatePost(formData: FormData) {
     
     return { success: true, post: updatedPost };
   } catch (error) {
-    console.error("Error updating post:", error);
+    logger.error("Error updating post:", error);
     return { error: "Failed to update post" };
   }
 }
@@ -448,7 +449,7 @@ export async function deletePost(postId: string) {
     
     return { success: true };
   } catch (error) {
-    console.error("Error deleting post:", error);
+    logger.error("Error deleting post:", error);
     return { error: "Failed to delete post" };
   }
 }
@@ -507,7 +508,7 @@ export async function performBulkAction(formData: FormData) {
     
     return { success: true, updated };
   } catch (error) {
-    console.error("Error performing bulk action:", error);
+    logger.error("Error performing bulk action:", error);
     return { error: "Failed to perform bulk action" };
   }
 }
@@ -608,7 +609,7 @@ export async function togglePostLock(postId: string) {
       message: updatedPost.isLocked ? "Post locked" : "Post unlocked"
     };
   } catch (error) {
-    console.error("Error toggling post lock:", error);
+    logger.error("Error toggling post lock:", error);
     return { error: "Failed to toggle post lock" };
   }
 }
@@ -652,7 +653,7 @@ export async function unpublishPost(postId: string) {
     
     return { success: true, message: "Post unpublished" };
   } catch (error) {
-    console.error("Error unpublishing post:", error);
+    logger.error("Error unpublishing post:", error);
     return { error: "Failed to unpublish post" };
   }
 }

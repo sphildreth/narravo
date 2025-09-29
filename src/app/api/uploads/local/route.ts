@@ -3,6 +3,8 @@ import { NextRequest } from "next/server";
 import { localStorageService } from "@/lib/local-storage";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
+import logger from '@/lib/logger';
 
 function isSafeKey(key: string): boolean {
   if (!key) return false;
@@ -113,7 +115,7 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("/api/uploads/local error:", err);
+    logger.error("/api/uploads/local error:", err);
     return new Response(JSON.stringify({ ok: false, error: { code: "INTERNAL", message: "Upload failed" } }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

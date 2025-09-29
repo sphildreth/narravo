@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-/**
- * Performance instrumentation utilities for Narravo
- */
+import logger from "@/lib/logger";
 
 export interface PerformanceTiming {
   name: string;
@@ -81,7 +79,7 @@ export function logSlowQuery(
   threshold: number = 50
 ): void {
   if (duration >= threshold) {
-    console.warn(`[SLOW QUERY] ${duration.toFixed(1)}ms:`, query.substring(0, 200));
+    logger.warn(`[SLOW QUERY] ${duration.toFixed(1)}ms:`, query.substring(0, 200));
   }
 }
 
@@ -102,7 +100,7 @@ export function createMark(name: string): () => number {
       return measure?.duration || 0;
     } catch (error) {
       // Fallback if performance API fails
-      console.warn('Performance measurement failed:', error);
+      logger.warn('Performance measurement failed:', error);
       return 0;
     } finally {
       // Clean up marks to prevent memory leaks
@@ -141,7 +139,7 @@ export function createDatabaseInterceptor(): DatabaseInterceptor {
         .reduce((sum, _) => sum + duration, 0);
       
       if (totalDbTime >= 150) {
-        console.warn(`[HIGH DB TIME] Total request DB time: ${totalDbTime.toFixed(1)}ms`);
+        logger.warn(`[HIGH DB TIME] Total request DB time: ${totalDbTime.toFixed(1)}ms`);
       }
     }
   };

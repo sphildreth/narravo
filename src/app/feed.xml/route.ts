@@ -2,6 +2,7 @@
 import { getPostsForRSS, generateRSSXML, getSiteMetadata } from "@/lib/rss";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
+import logger from '@/lib/logger';
 
 // Revalidate the feed every hour
 export const revalidate = 3600;
@@ -15,7 +16,7 @@ export async function GET() {
     if (c != null) latestCount = c;
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
-      console.warn('feed.xml: falling back to default FEED.LATEST-COUNT due to config/db error');
+      logger.warn('feed.xml: falling back to default FEED.LATEST-COUNT due to config/db error');
     }
   }
 
@@ -24,7 +25,7 @@ export async function GET() {
     posts = await getPostsForRSS(latestCount);
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
-      console.warn('feed.xml: failed to load posts; returning empty feed');
+      logger.warn('feed.xml: failed to load posts; returning empty feed');
     }
     posts = [];
   }

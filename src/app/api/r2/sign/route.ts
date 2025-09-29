@@ -4,6 +4,7 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { S3Service, getS3Config } from "@/lib/s3";
 import { db } from "@/lib/db";
 import { localStorageService } from "@/lib/local-storage";
+import logger from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
   try {
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error) {
-    console.error("Error in /api/r2/sign:", error);
+    logger.error("Error in /api/r2/sign:", error);
     return new Response(
       JSON.stringify({ 
         error: { 

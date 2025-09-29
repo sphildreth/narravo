@@ -149,7 +149,7 @@ describe("WXR Importer - Offline Media", () => {
   });
 
   it("should log a warning when a local media file is not found", async () => {
-    const consoleWarnSpy = vi.spyOn(console, "warn");
+    const consoleLogSpy = vi.spyOn(console, "log");
     const options: ImportOptions = {
       dryRun: false,
       verbose: true,
@@ -159,7 +159,7 @@ describe("WXR Importer - Offline Media", () => {
 
     await importWxr(WXR_FILE_PATH, options);
 
-    // Check that the warning for the missing file was logged
-    expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Source file not found, skipping."));
+    // Check that the warning for the missing file was logged via logger.warn (which uses console.log)
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringMatching(/\[WARN\].*Source file not found, skipping\./));
   });
 });

@@ -1,5 +1,6 @@
 "use server";
 // SPDX-License-Identifier: Apache-2.0
+import { headers } from "next/headers";
 import { getCommentTreeForPost, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
 import { ConfigServiceImpl } from "@/lib/config";
 import { requireSession } from "@/lib/auth";
@@ -9,7 +10,7 @@ import { posts, comments, commentAttachments } from "@/drizzle/schema";
 import { eq, sql, count } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 import { enqueueVideoPosterGeneration } from "@/lib/jobs";
-import { headers } from "next/headers";
+import logger from "@/lib/logger";
 
 export async function loadReplies(params: { postId: string; parentPath: string | null; already?: number; cursor?: string | null; topLevel?: boolean; }) {
   if (params.topLevel) {
@@ -148,7 +149,7 @@ export async function createComment(params: {
               attachment.key
             );
           } catch (error) {
-            console.error('Failed to enqueue poster generation:', error);
+            logger.error('Failed to enqueue poster generation:', error);
             // Don't fail the comment creation if poster generation fails
           }
         }
@@ -161,7 +162,7 @@ export async function createComment(params: {
     return { success: true, commentId: result.id };
 
   } catch (error) {
-    console.error('Failed to create comment:', error);
+    logger.error('Failed to create comment:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to create comment' 

@@ -3,8 +3,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import CommentUpload from "@/components/CommentUpload";
 import { createComment } from "./actions";
+import CommentUpload from "@/components/CommentUpload";
+import logger from "@/lib/logger";
 
 interface CommentFormProps {
   postId: string;
@@ -77,7 +78,7 @@ export default function CommentForm({
       }
     } catch (err) {
       setError("An unexpected error occurred");
-      console.error("Comment submission error:", err);
+      logger.error("Comment submission error:", err);
     } finally {
       setIsSubmitting(false);
     }

@@ -11,6 +11,7 @@ import {
   checkSlugAvailability 
 } from "@/app/(admin)/admin/posts/actions";
 import TiptapEditor from "@/components/editor/TiptapEditor";
+import logger from '@/lib/logger';
 
 interface Post {
   id: string;
@@ -84,7 +85,7 @@ export default function PostForm({ post }: PostFormProps) {
         setErrors(prev => ({ ...prev, slug: result.error || "Failed to generate slug" }));
       }
     } catch (error) {
-      console.error("Error generating slug:", error);
+      logger.error("Error generating slug:", error);
       setErrors(prev => ({ ...prev, slug: "Failed to generate slug" }));
     } finally {
       setIsGeneratingSlug(false);
@@ -108,7 +109,7 @@ export default function PostForm({ post }: PostFormProps) {
           setErrors(prev => ({ ...prev, slug: "" }));
         }
       } catch (error) {
-        console.error("Error checking slug availability:", error);
+        logger.error("Error checking slug availability:", error);
         setSlugAvailable(null);
       }
     }, 500);
@@ -183,7 +184,7 @@ export default function PostForm({ post }: PostFormProps) {
           setErrors({ general: result.error || "Failed to save post" });
         }
       } catch (error) {
-        console.error("Error saving post:", error);
+        logger.error("Error saving post:", error);
         setErrors({ general: "An unexpected error occurred" });
       }
     });

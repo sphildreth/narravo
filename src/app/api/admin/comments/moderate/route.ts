@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { moderateComments, type ModerateInput, type ModerationRepo } from "@/lib/adminModeration";
 import { db } from "@/lib/db";
 import { comments, commentAttachments } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { moderateComments, type ModerationRepo } from "@/lib/adminModeration";
+import logger from "@/lib/logger";
 
 class DrizzleModerationRepo implements ModerationRepo {
   async updateStatus(ids: string[], status: "approved" | "spam" | "deleted"): Promise<number> {
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 400;
-    if (status === 400) console.error("/api/admin/comments/moderate error:", err);
+    if (status === 400) logger.error("/api/admin/comments/moderate error:", err);
     return new Response(JSON.stringify({ ok: false, error: { message } }), { status, headers: { "Content-Type": "application/json" } });
   }
 }

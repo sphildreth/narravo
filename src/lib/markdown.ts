@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { marked } from "marked";
-import { sanitizeHtml } from "./sanitize";
+import { sanitizeHtml as sanitizeHtmlFunc } from "@/lib/sanitize";
+import logger from "@/lib/logger";
 
 export function expandShortcodes(markdown: string): string {
   if (!markdown || typeof markdown !== "string") return "";
@@ -131,16 +132,16 @@ export function markdownToHtmlSync(markdown: string): string {
     const rawHtml = marked.parse(preprocessed) as string;
 
     // Sanitize the resulting HTML first
-    const sanitizedHtml = sanitizeHtml(rawHtml);
+    const sanitizedHtml = sanitizeHtmlFunc(rawHtml);
     
     // Then post-process for security attributes
     const processedHtml = postProcessHtml(sanitizedHtml);
     
     return processedHtml;
   } catch (error) {
-    console.error('Error converting markdown to HTML:', error);
+    logger.error('Error converting markdown to HTML:', error);
     // Return a safe fallback
-    return sanitizeHtml(`<p>Error processing content</p>`);
+    return sanitizeHtmlFunc(`<p>Error processing content</p>`);
   }
 }
 
@@ -162,16 +163,16 @@ export async function markdownToHtml(markdown: string): Promise<string> {
     const rawHtml = await marked(preprocessed) as string;
 
     // Sanitize the resulting HTML first
-    const sanitizedHtml = sanitizeHtml(rawHtml);
+    const sanitizedHtml = sanitizeHtmlFunc(rawHtml);
     
     // Then post-process for security attributes
     const processedHtml = postProcessHtml(sanitizedHtml);
     
     return processedHtml;
   } catch (error) {
-    console.error('Error converting markdown to HTML:', error);
+    logger.error('Error converting markdown to HTML:', error);
     // Return a safe fallback
-    return sanitizeHtml(`<p>Error processing content</p>`);
+    return sanitizeHtmlFunc(`<p>Error processing content</p>`);
   }
 }
 
@@ -211,7 +212,7 @@ export function extractExcerpt(markdown: string, maxLength: number = 160): strin
     
     return truncated + '...';
   } catch (error) {
-    console.error('Error extracting excerpt from markdown:', error);
+    logger.error('Error extracting excerpt from markdown:', error);
     return '';
   }
 }

@@ -3,6 +3,7 @@
 
 import { useState, useRef } from "react";
 import { Upload, X, FileImage, FileVideo, AlertCircle } from "lucide-react";
+import logger from '@/lib/logger';
 
 interface UploadedFile {
   key: string;
@@ -121,7 +122,7 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
       };
 
     } catch (error) {
-      console.error('Upload error:', error);
+      logger.error('Upload error:', error);
       addError(file.name, 'Upload failed');
       return null;
     }

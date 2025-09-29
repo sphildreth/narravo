@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import logger from '@/lib/logger';
 import { 
   checkRateLimit, 
   recordAndCheckRateLimit,
@@ -346,7 +347,7 @@ describe("Anti-abuse validation", () => {
 
     // Debug output
     if (!result.valid) {
-      console.log("Validation failed:", result.error);
+      logger.debug("Validation failed:", result.error);
     }
 
     expect(result.valid).toBe(true);

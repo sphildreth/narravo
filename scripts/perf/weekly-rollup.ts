@@ -7,6 +7,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { BenchmarkResult } from './report.js';
+import logger from '@/lib/logger';
 
 interface WeeklyTrend {
   metric: string;
@@ -79,14 +80,14 @@ async function collectBenchmarkData(startDate: Date, endDate: Date): Promise<Ben
               const benchmark: BenchmarkResult = JSON.parse(data);
               benchmarks.push(benchmark);
             } catch (error) {
-              console.warn(`Failed to parse benchmark file ${file}:`, error);
+              logger.warn(`Failed to parse benchmark file ${file}:`, error);
             }
           }
         }
       }
     }
   } catch (error) {
-    console.warn('No benchmark data found:', error);
+    logger.warn('No benchmark data found:', error);
   }
 
   return benchmarks.sort((a, b) => 
@@ -295,7 +296,7 @@ ${recommendations.map(r => `- ${r}`).join('\n')}
  * Main execution
  */
 async function main() {
-  console.log('📊 Generating weekly performance rollup...');
+  logger.info('📊 Generating weekly performance rollup...');
   
   try {
     const report = await generateWeeklyRollup();
@@ -309,13 +310,13 @@ async function main() {
     const filepath = path.join(reportDir, filename);
     await fs.writeFile(filepath, markdown);
     
-    console.log(`✅ Weekly report generated: ${filepath}`);
+    logger.info(`✅ Weekly report generated: ${filepath}`);
     
     // Output summary to console
-    console.log('\n' + markdown);
+    logger.info('\n' + markdown);
     
   } catch (error) {
-    console.error('❌ Failed to generate weekly report:', error);
+    logger.error('❌ Failed to generate weekly report:', error);
     process.exit(1);
   }
 }

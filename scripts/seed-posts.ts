@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import "dotenv/config";
+import { randomUUID } from "crypto";
 import { Client } from "pg";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import slugify from "slugify";
-import { randomUUID } from "crypto";
+import logger from "@/lib/logger";
 
 import { posts, users, comments } from "@/drizzle/schema";
 
@@ -255,7 +256,7 @@ async function main() {
       })
       .returning({ id: posts.id, slug: posts.slug, publishedAt: posts.publishedAt });
 
-    console.log(`Upserted ${insertedPosts.length} posts (total staged: ${postsData.length}).`);
+    logger.info(`Upserted ${insertedPosts.length} posts (total staged: ${postsData.length}).`);
 
     // Comments
     const allComments = insertedPosts.flatMap((p) => buildCommentsForPost(p, userIds));
@@ -266,9 +267,9 @@ async function main() {
         const chunk = allComments.slice(i, i + chunkSize);
         await db.insert(comments).values(chunk);
       }
-      console.log(`Inserted ${allComments.length} comments across ${insertedPosts.length} posts.`);
+      logger.info(`Inserted ${allComments.length} comments across ${insertedPosts.length} posts.`);
     } else {
-      console.log("No comments generated for this run.");
+      logger.info("No comments generated for this run.");
     }
   } finally {
     await client.end();
@@ -276,6 +277,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  logger.error(err);
   process.exit(1);
 });
