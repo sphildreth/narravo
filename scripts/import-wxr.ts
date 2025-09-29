@@ -4,6 +4,7 @@ import { parseStringPromise } from "xml2js";
 import { db } from "@/lib/db";
 import { posts, redirects, categories, tags, postTags, comments, users, importJobs, importJobErrors } from "@/drizzle/schema";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { validateAndProtectIframes, restoreProtectedIframes, defaultProviders } from "./iframe-allowlist";
 import { getS3Config, S3Service } from "@/lib/s3";
 import { localStorageService, LocalStorageService } from "@/lib/local-storage";
 import slugify from "slugify";
@@ -14,7 +15,7 @@ import crypto from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import { expandShortcodes } from "@/lib/markdown";
 import { generateExcerpt } from "@/lib/excerpts/ExcerptService";
-import { validateAndProtectIframes, restoreProtectedIframes, defaultProviders } from "./iframe-allowlist";
+import logger from "@/lib/logger";
 
 /**
  * Represents the structure of an <item> element in a WordPress WXR export file.
@@ -326,7 +327,7 @@ async function handleLocalMedia(
   }
 
   if (verbose) {
-    console.log(`\n📂 Matched local media URL: ${url}`);
+    logger.info(`\n📂 Matched local media URL: ${url}`);
   }
 
   // Extract the relative path from the URL by removing the root and the wp-content/uploads part.
@@ -338,14 +339,14 @@ async function handleLocalMedia(
     const match = urlPath.match(wpContentUploadsRegex);
 
     if (!match || typeof match.index === 'undefined') {
-      if (verbose) console.warn(`  ⚠️ URL matched root but does not contain /wp-content/uploads/. Skipping: ${urlPath}`);
+      if (verbose) logger.warn(`  ⚠️ URL matched root but does not contain /wp-content/uploads/. Skipping: ${urlPath}`);
       return { isLocal: true, url: null }; // Handled, but skipped
     }
 
     relativePath = urlPath.substring(match.index + match[0].length);
 
   } catch (e) {
-    if (verbose) console.warn(`  ⚠️ Could not parse URL, skipping: ${url}`);
+    if (verbose) logger.warn(`  ⚠️ Could not parse URL, skipping: ${url}`);
     return { isLocal: true, url: null };
   }
 
@@ -353,24 +354,24 @@ async function handleLocalMedia(
   const destinationKey = path.join("imported-media", relativePath).replace(/\\/g, "/");
 
   if (verbose) {
-    console.log(`  -> Relative path: ${relativePath}`);
-    console.log(`  -> Source file: ${sourcePath}`);
-    console.log(`  -> Destination key: ${destinationKey}`);
+    logger.info(`  -> Relative path: ${relativePath}`);
+    logger.info(`  -> Source file: ${sourcePath}`);
+    logger.info(`  -> Destination key: ${destinationKey}`);
   }
 
   if (!fs.existsSync(sourcePath)) {
-    if (verbose) console.warn(`  ❌ Source file not found, skipping.`);
+    if (verbose) logger.warn(`  ❌ Source file not found, skipping.`);
     return { isLocal: true, url: null }; // Handled, but file missing
   }
 
   if (dryRun) {
-    if (verbose) console.log(`  ⏩ Dry-run: Would copy to ${destinationKey}`);
+    if (verbose) logger.info(`  ⏩ Dry-run: Would copy to ${destinationKey}`);
     // In dry-run, we can return a predictable path for URL rewriting tests
     return { isLocal: true, url: `/${destinationKey}` };
   }
 
   if (!localService) {
-    if (verbose) console.error("  ❌ Local storage service not available, cannot copy file.");
+    if (verbose) logger.error("  ❌ Local storage service not available, cannot copy file.");
     return { isLocal: true, url: null };
   }
 
@@ -381,12 +382,12 @@ async function handleLocalMedia(
     const publicUrl = localService.getPublicUrl(destinationKey);
 
     if (verbose) {
-      console.log(`  ✅ Copied successfully: ${publicUrl}`);
+      logger.info(`  ✅ Copied successfully: ${publicUrl}`);
     }
     return { isLocal: true, url: publicUrl };
   } catch (error) {
     if (verbose) {
-      console.error(`  ❌ Failed to copy local media ${sourcePath}:`, error);
+      logger.error(`  ❌ Failed to copy local media ${sourcePath}:`, error);
     }
     return { isLocal: true, url: null };
   }
@@ -419,7 +420,7 @@ async function downloadMedia(
 
   // In dry-run without remote storage configured, avoid making real network calls
   if (dryRun && !s3Service) {
-    if (verbose) console.log(`⏩ Dry-run without S3 configured, skipping media download: ${url}`);
+    if (verbose) logger.info(`⏩ Dry-run without S3 configured, skipping media download: ${url}`);
     return null;
   }
 
@@ -442,7 +443,7 @@ async function downloadMedia(
     }
 
     if (verbose) {
-      console.log(`📥 Downloading media: ${url}`);
+      logger.info(`📥 Downloading media: ${url}`);
     }
 
     // Download file
@@ -467,21 +468,21 @@ async function downloadMedia(
     const contentType = response.headers.get('content-type') || guessContentType(url);
     
     if (verbose) {
-      console.log(`💾 Uploading ${buffer.length} bytes as ${key} (${contentType})`);
+      logger.info(`💾 Uploading ${buffer.length} bytes as ${key} (${contentType})`);
     }
     
     if (s3Service) {
       await s3Service.putObject(key, buffer, contentType);
       const publicUrl = s3Service.getPublicUrl(key);
       if (verbose) {
-        console.log(`✅ Successfully uploaded to S3: ${url} -> ${publicUrl}`);
+        logger.info(`✅ Successfully uploaded to S3: ${url} -> ${publicUrl}`);
       }
       return publicUrl;
     } else if (localService) {
       await localService.putObject(key, buffer, contentType);
       const publicUrl = localService.getPublicUrl(key);
       if (verbose) {
-        console.log(`✅ Successfully uploaded to local storage: ${url} -> ${publicUrl}`);
+        logger.info(`✅ Successfully uploaded to local storage: ${url} -> ${publicUrl}`);
       }
       return publicUrl;
     }
@@ -489,9 +490,9 @@ async function downloadMedia(
     return null;
   } catch (error) {
     if (verbose) {
-      console.error(`❌ Failed to download media ${url}:`, error);
+      logger.error(`❌ Failed to download media ${url}:`, error);
     } else {
-      console.warn(`Skipping media ${url}:`, error);
+      logger.warn(`Skipping media ${url}:`, error);
     }
     return null;
   }
@@ -509,7 +510,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
   let replacementCount = 0;
   
   if (verbose) {
-    console.log(`🔄 Rewriting media URLs in HTML content (${html.length} characters, ${mediaUrlMap.size} mappings available)`);
+    logger.info(`🔄 Rewriting media URLs in HTML content (${html.length} characters, ${mediaUrlMap.size} mappings available)`);
   }
   
   // Create a comprehensive URL replacement function that handles both exact matches and WordPress dimensions
@@ -585,7 +586,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
           
           if (verbose) {
             const isWordPress = removeWordPressDimensions(value) !== value;
-            console.log(`🎬 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in video shortcode [${key}]: ${value} -> ${newUrl}`);
+            logger.info(`🎬 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in video shortcode [${key}]: ${value} -> ${newUrl}`);
           }
         }
       }
@@ -625,7 +626,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
           
           if (verbose) {
             const isWordPress = removeWordPressDimensions(value) !== value;
-            console.log(`🎵 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in audio shortcode [${key}]: ${value} -> ${newUrl}`);
+            logger.info(`🎵 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in audio shortcode [${key}]: ${value} -> ${newUrl}`);
           }
         }
       }
@@ -658,7 +659,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
       if (newUrl) {
         if (verbose) {
           const isWordPress = removeWordPressDimensions(url) !== url;
-          console.log(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL: ${url} -> ${newUrl}`);
+          logger.info(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL: ${url} -> ${newUrl}`);
         }
         replacementCount++;
         return fullMatch.replace(url, newUrl);
@@ -691,13 +692,13 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
           if (!widthMatch && width) {
             newMatch = newMatch.replace('<img', `<img width="${width}"`);
             if (verbose) {
-              console.log(`📐 Added width="${width}" to img tag`);
+              logger.info(`📐 Added width="${width}" to img tag`);
             }
           }
           if (!heightMatch && height) {
             newMatch = newMatch.replace('<img', `<img height="${height}"`);
             if (verbose) {
-              console.log(`📐 Added height="${height}" to img tag`);
+              logger.info(`📐 Added height="${height}" to img tag`);
             }
           }
           return newMatch;
@@ -724,7 +725,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
           srcsetChanged = true;
           if (verbose) {
             const isWordPress = removeWordPressDimensions(urlPart) !== urlPart;
-            console.log(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in srcset: ${urlPart} -> ${newUrl}`);
+            logger.info(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in srcset: ${urlPart} -> ${newUrl}`);
           }
           replacementCount++;
         }
@@ -746,7 +747,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
       if (newUrl) {
         if (verbose) {
           const isWordPress = removeWordPressDimensions(url) !== url;
-          console.log(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in CSS: ${url} -> ${newUrl}`);
+          logger.info(`🔗 Replacing ${isWordPress ? 'WordPress dimensioned' : 'exact'} URL in CSS: ${url} -> ${newUrl}`);
         }
         replacementCount++;
         return `url(${quote}${newUrl}${quote})`;
@@ -756,7 +757,7 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
   });
   
   if (verbose) {
-    console.log(`✅ URL rewriting completed. Total replacements: ${replacementCount}`);
+    logger.info(`✅ URL rewriting completed. Total replacements: ${replacementCount}`);
   }
   
   return rewritten;
@@ -1026,7 +1027,7 @@ function removeWordPressDimensions(url: string, verbose: boolean = false): strin
     const originalUrl = url.replace(/-\d+x\d+(\.[a-zA-Z0-9]+)$/, '$1');
     if (verbose) {
       const dimensions = match[0].replace(/\.[a-zA-Z0-9]+$/, '').replace('-', '');
-      console.log(`🖼️  WordPress dimension removal: ${url} -> ${originalUrl} (removed: ${dimensions})`);
+      logger.info(`🖼️  WordPress dimension removal: ${url} -> ${originalUrl} (removed: ${dimensions})`);
     }
     return originalUrl;
   }
@@ -1045,7 +1046,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
   if (!html) return urls;
 
   if (verbose) {
-    console.log(`🔍 Extracting media URLs from HTML content (${html.length} characters)`);
+    logger.info(`🔍 Extracting media URLs from HTML content (${html.length} characters)`);
   }
 
   // Helper to decide if an href should be considered a media asset
@@ -1076,9 +1077,9 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
         const originalUrl = removeWordPressDimensions(u, verbose);
         urls.add(originalUrl);
         if (verbose && originalUrl !== u) {
-          console.log(`📎 Found dimensioned image URL in src/data-src/poster: ${u}`);
+          logger.info(`📎 Found dimensioned image URL in src/data-src/poster: ${u}`);
         } else if (verbose) {
-          console.log(`📎 Found media URL in src/data-src/poster: ${u}`);
+          logger.info(`📎 Found media URL in src/data-src/poster: ${u}`);
         }
       }
     }
@@ -1092,7 +1093,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
     if (!raw) continue;
     const parts = raw.split(',');
     if (verbose) {
-      console.log(`📎 Found srcset with ${parts.length} entries: ${raw.substring(0, 100)}${raw.length > 100 ? '...' : ''}`);
+      logger.info(`📎 Found srcset with ${parts.length} entries: ${raw.substring(0, 100)}${raw.length > 100 ? '...' : ''}`);
     }
     for (const part of parts) {
       const urlPart = (part.trim().split(/\s+/)[0] ?? "");
@@ -1101,7 +1102,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
         const originalUrl = removeWordPressDimensions(urlPart, verbose);
         urls.add(originalUrl);
         if (verbose && originalUrl !== urlPart) {
-          console.log(`📎 Found dimensioned image URL in srcset: ${urlPart}`);
+          logger.info(`📎 Found dimensioned image URL in srcset: ${urlPart}`);
         }
       }
     }
@@ -1115,7 +1116,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
     if (u && isHttpUrl(u)) {
       urls.add(u);
       if (verbose) {
-        console.log(`📎 Found media URL in source element: ${u}`);
+        logger.info(`📎 Found media URL in source element: ${u}`);
       }
     }
   }
@@ -1130,7 +1131,7 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
       const originalUrl = removeWordPressDimensions(u, verbose);
       urls.add(originalUrl);
       if (verbose) {
-        console.log(`📎 Found media URL in CSS url(): ${u}`);
+        logger.info(`📎 Found media URL in CSS url(): ${u}`);
       }
     }
   }
@@ -1145,15 +1146,15 @@ function extractMediaUrlsFromHtml(html: string, verbose: boolean = false): Set<s
       const originalUrl = removeWordPressDimensions(u, verbose);
       urls.add(originalUrl);
       if (verbose) {
-        console.log(`📎 Found media URL in anchor href: ${u}`);
+        logger.info(`📎 Found media URL in anchor href: ${u}`);
       }
     }
   }
 
   if (verbose) {
-    console.log(`✅ Extracted ${urls.size} unique media URLs from HTML`);
+    logger.info(`✅ Extracted ${urls.size} unique media URLs from HTML`);
     if (urls.size > 0) {
-      console.log(`   URLs found: ${Array.from(urls).join(', ')}`);
+      logger.info(`   URLs found: ${Array.from(urls).join(', ')}`);
     }
   }
 
@@ -1251,7 +1252,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     } else {
       // Use local storage as fallback for development
       localService = localStorageService;
-      if (verbose) console.log("📁 Using local filesystem storage (no S3/R2 configured)");
+      if (verbose) logger.info("📁 Using local filesystem storage (no S3/R2 configured)");
     }
   }
 
@@ -1294,7 +1295,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     // Purge data if requested (complete reset: database + all uploaded files)
     if (purgeBeforeImport && !dryRun) {
-      if (verbose) console.log("🗑️ Purging existing data...");
+      if (verbose) logger.info("🗑️ Purging existing data...");
       
       // Delete in correct order to respect foreign keys
       await db.delete(postTags);
@@ -1326,28 +1327,28 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           try {
             if (s3Service) {
               await s3Service.deletePrefix(prefix);
-              if (verbose) console.log(`🧹 S3/R2 storage purged: ${prefix}`);
+              if (verbose) logger.info(`🧹 S3/R2 storage purged: ${prefix}`);
             } else if (localService) {
               await localService.deletePrefix(prefix);
-              if (verbose) console.log(`🧹 Local storage purged: ${prefix}`);
+              if (verbose) logger.info(`🧹 Local storage purged: ${prefix}`);
             }
           } catch (e) {
-            if (verbose) console.warn(`Warning: failed to purge prefix "${prefix}":`, e);
+            if (verbose) logger.warn(`Warning: failed to purge prefix "${prefix}":`, e);
           }
         }
       } catch (e) {
-        if (verbose) console.warn("Warning: failed to initialize storage for purge:", e);
+        if (verbose) logger.warn("Warning: failed to initialize storage for purge:", e);
       }
 
-      if (verbose) console.log("✅ Purge completed");
+      if (verbose) logger.info("✅ Purge completed");
     }
 
     let stageStart = Date.now();
     // Parse XML
-    if (verbose) console.log("📖 Parsing WXR file...");
+    if (verbose) logger.info("📖 Parsing WXR file...");
     const xml = await readFile(filePath, "utf-8");
     const doc = await parseStringPromise(xml, { explicitArray: false, ignoreAttrs: false });
-    if (verbose) console.log(`   -> XML parsing completed in ${Date.now() - stageStart}ms`);
+    if (verbose) logger.info(`   -> XML parsing completed in ${Date.now() - stageStart}ms`);
     
     const items = doc.rss?.channel?.item ?? [];
     const itemArray = Array.isArray(items) ? items : [items];
@@ -1356,8 +1357,8 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     // Debug logging for tests
     if (verbose) {
-      console.log("Parsed document structure:", JSON.stringify(doc, null, 2));
-      console.log("Items found:", itemArray.length);
+      logger.info("Parsed document structure:", JSON.stringify(doc, null, 2));
+      logger.info("Items found:", itemArray.length);
     }
 
     // Parse all items first
@@ -1373,7 +1374,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       });
     }
 
-    if (verbose) console.log(`📝 Processing ${itemArray.length} items...`);
+    if (verbose) logger.info(`📝 Processing ${itemArray.length} items...`);
 
     for (const item of itemArray) {
       const parsed = parseWxrItem(item);
@@ -1383,7 +1384,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
           const status = item["wp:status"];
           if (!allowedStatuses.includes(status || "")) {
             if (verbose) {
-              console.log(`⏩ Skipping post "${parsed.title}" with status "${status}"`);
+              logger.info(`⏩ Skipping post "${parsed.title}" with status "${status}"`);
             }
             result.summary.skipped++;
             continue;
@@ -1434,7 +1435,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     if (!skipMedia && (s3Service || localService)) {
       stageStart = Date.now();
       const allMedia = new Set<string>();
-      if (verbose) console.log("🔍 Expanding shortcodes and scanning for media in all posts...");
+      if (verbose) logger.info("🔍 Expanding shortcodes and scanning for media in all posts...");
 
       // Add attachment URLs first
       for (const a of attachmentItems) {
@@ -1446,7 +1447,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         const expandedHtml = expandShortcodes(p.html);
         processedPostContent.set(p.importedSystemId, expandedHtml);
         if (verbose) {
-          console.log(`🔍 Processing post "${p.title}" for media URLs...`);
+          logger.info(`🔍 Processing post "${p.title}" for media URLs...`);
         }
         for (const u of extractMediaUrlsFromHtml(expandedHtml, verbose)) {
           allMedia.add(u);
@@ -1455,12 +1456,12 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
       const medias = Array.from(allMedia);
       if (verbose) {
-        console.log(`📊 Media processing summary:`);
-        console.log(`   - Found ${medias.length} unique media URLs across all posts`);
-        console.log(`   - Concurrency limit: ${concurrency}`);
-        console.log(`   - Allowed hosts: ${normalizedAllowedHosts.length > 0 ? normalizedAllowedHosts.join(', ') : 'all hosts'}`);
+        logger.info(`📊 Media processing summary:`);
+        logger.info(`   - Found ${medias.length} unique media URLs across all posts`);
+        logger.info(`   - Concurrency limit: ${concurrency}`);
+        logger.info(`   - Allowed hosts: ${normalizedAllowedHosts.length > 0 ? normalizedAllowedHosts.join(', ') : 'all hosts'}`);
       }
-      if (verbose && medias.length) console.log(`📥 Downloading ${medias.length} media files (concurrency=${concurrency})...`);
+      if (verbose && medias.length) logger.info(`📥 Downloading ${medias.length} media files (concurrency=${concurrency})...`);
 
       await runWithConcurrency(medias, concurrency, async (url) => {
         try {
@@ -1474,7 +1475,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
             if (newUrl) result.mediaUrls.set(url, newUrl);
           }
         } catch (e) {
-          if (verbose) console.warn("Media download failed:", url, e);
+          if (verbose) logger.warn("Media download failed:", url, e);
         }
         return undefined as unknown as void;
       });
@@ -1482,22 +1483,22 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       if (verbose) {
         const successCount = result.mediaUrls.size;
         const failCount = medias.length - successCount;
-        console.log(`📊 Media download completed: ${successCount} succeeded, ${failCount} failed`);
+        logger.info(`📊 Media download completed: ${successCount} succeeded, ${failCount} failed`);
         if (successCount > 0) {
-          console.log(`   Successfully downloaded URLs: ${Array.from(result.mediaUrls.keys()).slice(0, 5).join(', ')}${result.mediaUrls.size > 5 ? ` ... and ${result.mediaUrls.size - 5} more` : ''}`);
+          logger.info(`   Successfully downloaded URLs: ${Array.from(result.mediaUrls.keys()).slice(0, 5).join(', ')}${result.mediaUrls.size > 5 ? ` ... and ${result.mediaUrls.size - 5} more` : ''}`);
         }
-        console.log(`   -> Media processing completed in ${Date.now() - stageStart}ms`);
+        logger.info(`   -> Media processing completed in ${Date.now() - stageStart}ms`);
       }
     } else {
       // If skipping media, we still need to expand shortcodes for consistent processing in the main loop.
-      if (verbose) console.log("🔍 Expanding shortcodes for all posts (media download skipped)...");
+      if (verbose) logger.info("🔍 Expanding shortcodes for all posts (media download skipped)...");
       for (const p of postItems) {
         processedPostContent.set(p.importedSystemId, expandShortcodes(p.html));
       }
     }
 
     if (verbose && postItems.length > 0) {
-      console.log(`📄 Processing ${postItems.length} posts...`);
+      logger.info(`📄 Processing ${postItems.length} posts...`);
       stageStart = Date.now();
     }
 
@@ -1654,7 +1655,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
               try {
                 const url = new URL(post.originalUrl);
                 const fromPath = url.pathname;
-                const toPath = `/posts/${post.slug}`;
+                const toPath = `/${post.slug}`;
                 if (fromPath !== toPath) {
                   await tx.insert(redirects).values({ fromPath, toPath, status: 301 })
                     .onConflictDoUpdate({ target: redirects.fromPath, set: { toPath, status: 301 } });
@@ -1870,25 +1871,25 @@ async function run() {
     try {
       new RegExp(rootArg);
     } catch (e) {
-      console.error(`❌ Invalid --root regular expression provided: ${rootArg}`);
+      logger.error(`❌ Invalid --root regular expression provided: ${rootArg}`);
       if (e instanceof Error) {
-        console.error(e.message);
+        logger.error(e.message);
       }
       process.exit(1);
     }
   }
 
-  console.log(`Starting WXR import from: ${pathArg}`);
-  if (dryRun) console.log("🏃 DRY RUN MODE - No changes will be made");
-  if (skipMedia) console.log("📷 SKIP MEDIA MODE - Media will not be downloaded");
+  logger.info(`Starting WXR import from: ${pathArg}`);
+  if (dryRun) logger.info("🏃 DRY RUN MODE - No changes will be made");
+  if (skipMedia) logger.info("📷 SKIP MEDIA MODE - Media will not be downloaded");
   if (uploadsArg && rootArg) {
-    console.log(`📂 Using local uploads from: ${uploadsArg}`);
-    console.log(`🔗 Matching root URL pattern: ${rootArg}`);
+    logger.info(`📂 Using local uploads from: ${uploadsArg}`);
+    logger.info(`🔗 Matching root URL pattern: ${rootArg}`);
   }
-  if (allowedHosts.length > 0) console.log(`🔒 Allowed media hosts: ${allowedHosts.join(", ")}`);
-  if (concurrency) console.log(`🧵 Concurrency: ${concurrency}`);
-  if (rebuildExcerpts) console.log("📝 Rebuilding excerpts for all posts");
-  if (purgeBeforeImport) console.log("🗑️ Purging all existing data and files before import");
+  if (allowedHosts.length > 0) logger.info(`🔒 Allowed media hosts: ${allowedHosts.join(", ")}`);
+  if (concurrency) logger.info(`🧵 Concurrency: ${concurrency}`);
+  if (rebuildExcerpts) logger.info("📝 Rebuilding excerpts for all posts");
+  if (purgeBeforeImport) logger.info("🗑️ Purging all existing data and files before import");
 
   const startTime = Date.now();
   const opts: ImportOptions = { dryRun, skipMedia, verbose, allowedHosts, rebuildExcerpts, purgeBeforeImport };
@@ -1902,26 +1903,26 @@ async function run() {
   const result = await importWxr(pathArg, opts);
   const duration = Date.now() - startTime;
 
-  console.log("\n📊 Import Summary:");
-  console.log(`   Total items: ${result.summary.totalItems}`);
-  console.log(`   Posts imported: ${result.summary.postsImported}`);
-  console.log(`   Attachments processed: ${result.summary.attachmentsProcessed}`);
-  console.log(`   Redirects created: ${result.summary.redirectsCreated}`);
-  console.log(`   Skipped: ${result.summary.skipped}`);
-  console.log(`   Duration: ${duration}ms`);
+  logger.info("\n📊 Import Summary:");
+  logger.info(`   Total items: ${result.summary.totalItems}`);
+  logger.info(`   Posts imported: ${result.summary.postsImported}`);
+  logger.info(`   Attachments processed: ${result.summary.attachmentsProcessed}`);
+  logger.info(`   Redirects created: ${result.summary.redirectsCreated}`);
+  logger.info(`   Skipped: ${result.summary.skipped}`);
+  logger.info(`   Duration: ${duration}ms`);
 
   if (result.errors.length > 0) {
-    console.log("\n❌ Errors:");
+    logger.info("\n❌ Errors:");
     result.errors.forEach(error => {
-      console.log(`   ${error.item}: ${error.error}`);
+      logger.info(`   ${error.item}: ${error.error}`);
     });
   }
 
   if (result.mediaUrls.size > 0) {
-    console.log(`\n📷 Media URLs remapped: ${result.mediaUrls.size}`);
+    logger.info(`\n📷 Media URLs remapped: ${result.mediaUrls.size}`);
     if (verbose) {
       for (const [oldUrl, newUrl] of result.mediaUrls) {
-        console.log(`   ${oldUrl} -> ${newUrl}`);
+        logger.info(`   ${oldUrl} -> ${newUrl}`);
       }
     }
   }
@@ -1936,7 +1937,7 @@ async function run() {
 
   const checkpointPath = `${pathArg}.checkpoint.json`;
   await writeFile(checkpointPath, JSON.stringify(checkpointData, null, 2));
-  console.log(`\n💾 Checkpoint saved to: ${checkpointPath}`);
+  logger.info(`\n💾 Checkpoint saved to: ${checkpointPath}`);
 
   if (result.errors.length > 0) {
     process.exit(1);
@@ -1945,7 +1946,7 @@ async function run() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   run().catch(e => {
-    console.error("💥 Import failed:", e);
+    logger.error("💥 Import failed:", e);
     process.exit(1);
   });
 }

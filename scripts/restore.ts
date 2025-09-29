@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { posts, users, comments, commentAttachments, reactions, redirects, configuration } from "@/drizzle/schema";
 import fs from "node:fs/promises";
 import { eq, and, sql, between } from "drizzle-orm";
+import logger from "@/lib/logger";
 import type { BackupManifest } from "./backup";
 
 export interface RestoreOptions {
@@ -44,7 +45,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
   } = options;
 
   if (verbose) {
-    console.log(`${dryRun ? "Previewing" : "Starting"} restore from: ${backupPath}`);
+    logger.info(`${dryRun ? "Previewing" : "Starting"} restore from: ${backupPath}`);
   }
 
   // Read and parse zip file
@@ -61,9 +62,9 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
   const manifest: BackupManifest = JSON.parse(manifestContent);
 
   if (verbose) {
-    console.log(`Backup version: ${manifest.version}`);
-    console.log(`Created: ${manifest.createdUtc}`);
-    console.log("Original counts:", manifest.counts);
+    logger.info(`Backup version: ${manifest.version}`);
+    logger.info(`Created: ${manifest.createdUtc}`);
+    logger.info("Original counts:", manifest.counts);
   }
 
   const preview: RestorePreview = {
@@ -105,7 +106,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
     preview.tables.posts = { toInsert: 0, toUpdate: 0, toSkip: 0 };
 
     if (verbose && filteredPostsData.length !== allPostsData.length) {
-      console.log(`Filtered posts: ${filteredPostsData.length} of ${allPostsData.length}`);
+      logger.info(`Filtered posts: ${filteredPostsData.length} of ${allPostsData.length}`);
     }
 
     if (!dryRun) {
@@ -138,7 +139,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
                 .where(eq(posts.id, existingPost.id));
               
               preview.tables.posts.toUpdate++;
-              if (verbose) console.log(`Updated post: ${post.slug}`);
+              if (verbose) logger.info(`Updated post: ${post.slug}`);
             }
           } else {
             // Insert new post
@@ -151,10 +152,10 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
             });
             
             preview.tables.posts.toInsert++;
-            if (verbose) console.log(`Inserted post: ${post.slug}`);
+            if (verbose) logger.info(`Inserted post: ${post.slug}`);
           }
         } catch (error) {
-          if (verbose) console.warn(`Failed to restore post ${post.slug}:`, error);
+          if (verbose) logger.warn(`Failed to restore post ${post.slug}:`, error);
           preview.tables.posts.toSkip++;
         }
       }
@@ -210,15 +211,15 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
                   .where(eq(users.id, existingUser.id));
                 
                 preview.tables.users.toUpdate++;
-                if (verbose) console.log(`Updated user: ${user.email}`);
+                if (verbose) logger.info(`Updated user: ${user.email}`);
               }
             } else {
               await db.insert(users).values(user);
               preview.tables.users.toInsert++;
-              if (verbose) console.log(`Inserted user: ${user.email}`);
+              if (verbose) logger.info(`Inserted user: ${user.email}`);
             }
           } catch (error) {
-            if (verbose) console.warn(`Failed to restore user ${user.email}:`, error);
+            if (verbose) logger.warn(`Failed to restore user ${user.email}:`, error);
             preview.tables.users.toSkip++;
           }
         }
@@ -278,7 +279,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
                   .where(eq(configuration.id, existingConfig.id));
                 
                 preview.tables.configuration.toUpdate++;
-                if (verbose) console.log(`Updated config: ${config.key}`);
+                if (verbose) logger.info(`Updated config: ${config.key}`);
               }
             } else {
               await db.insert(configuration).values({
@@ -288,10 +289,10 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
               });
               
               preview.tables.configuration.toInsert++;
-              if (verbose) console.log(`Inserted config: ${config.key}`);
+              if (verbose) logger.info(`Inserted config: ${config.key}`);
             }
           } catch (error) {
-            if (verbose) console.warn(`Failed to restore config ${config.key}:`, error);
+            if (verbose) logger.warn(`Failed to restore config ${config.key}:`, error);
             preview.tables.configuration.toSkip++;
           }
         }
@@ -323,22 +324,22 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
 
   if (dryRun) {
     if (verbose) {
-      console.log("\n=== DRY RUN PREVIEW ===");
-      console.log("Changes that would be made:");
+      logger.info("\n=== DRY RUN PREVIEW ===");
+      logger.info("Changes that would be made:");
       Object.entries(preview.tables).forEach(([table, counts]) => {
-        console.log(`${table}: insert ${counts.toInsert}, update ${counts.toUpdate}, skip ${counts.toSkip}`);
+        logger.info(`${table}: insert ${counts.toInsert}, update ${counts.toUpdate}, skip ${counts.toSkip}`);
       });
       
       if (preview.filteredRecords.posts > 0) {
-        console.log(`\nFiltered to ${preview.filteredRecords.posts} posts`);
+        logger.info(`\nFiltered to ${preview.filteredRecords.posts} posts`);
       }
     }
     return preview;
   } else {
     if (verbose) {
-      console.log("\n=== RESTORE COMPLETE ===");
+      logger.info("\n=== RESTORE COMPLETE ===");
       Object.entries(preview.tables).forEach(([table, counts]) => {
-        console.log(`${table}: inserted ${counts.toInsert}, updated ${counts.toUpdate}, skipped ${counts.toSkip}`);
+        logger.info(`${table}: inserted ${counts.toInsert}, updated ${counts.toUpdate}, skipped ${counts.toSkip}`);
       });
     }
   }
@@ -350,15 +351,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const backupPath = args[0];
   
   if (!backupPath) {
-    console.error("Usage: tsx scripts/restore.ts <backup.zip> [options]");
-    console.error("Options:");
-    console.error("  --dry-run          Preview changes without applying them");
-    console.error("  --verbose, -v      Enable verbose output");
-    console.error("  --slugs slug1,slug2  Restore only specific posts by slug");
-    console.error("  --start-date YYYY-MM-DD  Restore posts from this date onwards");
-    console.error("  --end-date YYYY-MM-DD    Restore posts up to this date");
-    console.error("  --skip-users       Skip restoring users");
-    console.error("  --skip-config      Skip restoring configuration");
+    logger.error("Usage: tsx scripts/restore.ts <backup.zip> [options]");
+    logger.error("Options:");
+    logger.error("  --dry-run          Preview changes without applying them");
+    logger.error("  --verbose, -v      Enable verbose output");
+    logger.error("  --slugs slug1,slug2  Restore only specific posts by slug");
+    logger.error("  --start-date YYYY-MM-DD  Restore posts from this date onwards");
+    logger.error("  --end-date YYYY-MM-DD    Restore posts up to this date");
+    logger.error("  --skip-users       Skip restoring users");
+    logger.error("  --skip-config      Skip restoring configuration");
     process.exit(1);
   }
 
@@ -398,11 +399,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   restoreBackup(options)
     .then(() => {
-      console.log("✅ Restore completed successfully");
+      logger.info("✅ Restore completed successfully");
       process.exit(0);
     })
     .catch(error => {
-      console.error("❌ Restore failed:", error);
+      logger.error("❌ Restore failed:", error);
       process.exit(1);
     });
 }

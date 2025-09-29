@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-import { db } from "./db";
+import { revalidateTag } from "next/cache";
+import { db } from "@/lib/db";
 import { reactions, posts, comments } from "@/drizzle/schema";
 import { and, eq, count, sql } from "drizzle-orm";
-import { revalidateTag } from "next/cache";
+import logger from "@/lib/logger";
 
 export type TargetType = "post" | "comment";
 export type ReactionKind = "like" | "dislike" | "heart" | "laugh" | "thumbsup" | "thumbsdown";
@@ -72,7 +73,7 @@ export async function toggleReaction(
       return { added: true };
     }
   } catch (error) {
-    console.error("Error toggling reaction:", error);
+    logger.error("Error toggling reaction:", error);
     return { added: false, error: "Failed to toggle reaction" };
   }
 }
@@ -105,7 +106,7 @@ export async function getReactionCounts(
     }
     return result;
   } catch (error) {
-    console.error("Error getting reaction counts:", error);
+    logger.error("Error getting reaction counts:", error);
     return {};
   }
 }
@@ -136,7 +137,7 @@ export async function getUserReactions(
     }
     return result;
   } catch (error) {
-    console.error("Error getting user reactions:", error);
+    logger.error("Error getting user reactions:", error);
     return {};
   }
 }
@@ -166,7 +167,7 @@ export async function getMultipleReactionCounts(
 
     return final;
   } catch (error) {
-    console.error("Error getting multiple reaction counts:", error);
+    logger.error("Error getting multiple reaction counts:", error);
     return {};
   }
 }

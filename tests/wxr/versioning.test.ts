@@ -32,12 +32,12 @@ describe("WXR: Versioning & Compatibility", () => {
     const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await importWxr(fixturePath, { dryRun: true, verbose: true });
     
-    // Check if verbose logs include parsed structure
-    expect(consoleLogSpy).toHaveBeenCalledWith("Parsed document structure:", expect.any(String));
+    // Check if verbose logs include parsed structure (logger adds timestamp and [INFO] prefix)
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringMatching(/\[INFO\] Parsed document structure:/), expect.any(String));
     
     // Find the call that contains the parsed structure and check for wp:wxr_version
     const parsedStructureCalls = consoleLogSpy.mock.calls.filter(call => 
-      call[0] === "Parsed document structure:"
+      typeof call[0] === 'string' && call[0].includes('Parsed document structure:')
     );
     expect(parsedStructureCalls.length).toBe(1);
     

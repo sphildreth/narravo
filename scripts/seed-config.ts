@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
+import logger from "@/lib/logger";
 
 async function main() {
   const service = new ConfigServiceImpl({ db });
@@ -64,10 +65,10 @@ async function main() {
   await service.setGlobal("SITE.ABOUT-ME.TITLE", "About Me", { type: "string", required: true });
   await service.setGlobal("SITE.ABOUT-ME.CONTENT", "", { type: "string", required: true });
 
-  console.log("Seeded configuration defaults.");
+  logger.info("Seeded configuration defaults.");
 }
 
 main().catch((err) => {
-  console.error(err);
+  logger.error(err);
   process.exit(1);
 });

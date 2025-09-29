@@ -8,6 +8,7 @@
 
 import { promises as fs } from "fs";
 import path from "path";
+import logger from "@/lib/logger";
 
 const ROOT = process.cwd();
 const SPDX_TEXT = "SPDX-License-Identifier: Apache-2.0";
@@ -189,13 +190,13 @@ async function main() {
       if (did) changed++;
     } catch (err) {
       // Non-fatal; just log and continue
-      console.error(`SPDX: failed to process ${f}:`, (err as Error).message);
+      logger.error(`SPDX: failed to process ${f}:`, (err as Error).message);
     }
   }
-  console.log(`SPDX: processed ${all.length} files, added header to ${changed} files.`);
+  logger.info(`SPDX: processed ${all.length} files, added header to ${changed} files.`);
 }
 
 main().catch((e) => {
-  console.error(e);
+  logger.error(e);
   process.exit(1);
 });

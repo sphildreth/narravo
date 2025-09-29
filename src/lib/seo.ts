@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { listPosts } from "@/lib/posts";
-import { listArchiveMonths } from "@/lib/archives"; // Use listArchiveMonths
+import { listArchiveMonths } from "@/lib/archives";
+import logger from "@/lib/logger";
 import type { PostDTO } from "@/types/content";
 import type { Metadata } from "next";
 
@@ -31,7 +32,7 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
     } while (nextCursor);
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
-      console.warn('Sitemap: failed to list posts; continuing with partial sitemap');
+      logger.warn('Sitemap: failed to list posts; continuing with partial sitemap');
     }
   }
 
@@ -41,7 +42,7 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
     archiveMonths = await listArchiveMonths();
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
-      console.warn('Sitemap: failed to list archive months; continuing without archives');
+      logger.warn('Sitemap: failed to list archive months; continuing without archives');
     }
   }
   const years = new Set<number>(); // To keep track of unique years for yearly archives

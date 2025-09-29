@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { db } from "@/lib/db";
-import { sql } from "drizzle-orm";
 import { redirects } from "@/drizzle/schema";
+import { sql } from "drizzle-orm";
+import logger from "@/lib/logger";
 
 export type Redirect = {
   fromPath: string;
@@ -28,7 +29,7 @@ export async function getRedirects(): Promise<Redirect[]> {
     }));
   } catch (err) {
     if (process.env.NODE_ENV !== "test") {
-      console.warn("Redirects: DB unavailable, returning empty list");
+      logger.warn("Redirects: DB unavailable, returning empty list");
     }
     return [];
   }

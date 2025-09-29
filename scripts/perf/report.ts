@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { execSync } from 'child_process';
 /**
  * Performance benchmarking and reporting script
  * Generates performance snapshots and trend analysis
@@ -6,7 +7,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
+import logger from "@/lib/logger";
 
 interface BenchmarkResult {
   timestamp: string;
@@ -62,7 +63,7 @@ function getBranch(): string {
  */
 async function runLighthouse(): Promise<BenchmarkResult['lighthouse']> {
   try {
-    console.log('🔍 Running Lighthouse...');
+    logger.info('🔍 Running Lighthouse...');
     
     // Run lighthouse CI and capture results
     execSync('npx lhci autorun --config=lighthouserc.json', { 
@@ -105,7 +106,7 @@ async function runLighthouse(): Promise<BenchmarkResult['lighthouse']> {
  */
 async function runLoadTest(): Promise<BenchmarkResult['loadTest']> {
   try {
-    console.log('🚛 Running load test...');
+    logger.info('🚛 Running load test...');
     
     const { runLoadTest } = await import('./smoke.autocannon.js');
     const { success, result } = await runLoadTest({
@@ -124,7 +125,7 @@ async function runLoadTest(): Promise<BenchmarkResult['loadTest']> {
       errorRate: result.errors / result.requests.total,
     };
   } catch (error) {
-    console.warn('⚠️ Load test failed:', error instanceof Error ? error.message : String(error));
+    logger.warn('⚠️ Load test failed:', error instanceof Error ? error.message : String(error));
     return undefined;
   }
 }
@@ -134,7 +135,7 @@ async function runLoadTest(): Promise<BenchmarkResult['loadTest']> {
  */
 async function analyzeBundleSize(): Promise<BenchmarkResult['bundleSize']> {
   try {
-    console.log('📦 Analyzing bundle size...');
+    logger.info('📦 Analyzing bundle size...');
     
     // Build with analyzer
     execSync('ANALYZE=true npm run build', { stdio: 'inherit' });
@@ -181,7 +182,7 @@ async function analyzeBundleSize(): Promise<BenchmarkResult['bundleSize']> {
       cssSize: Math.round(cssSize / 1024), // KB
     };
   } catch (error) {
-    console.warn('⚠️ Bundle analysis failed:', error instanceof Error ? error.message : String(error));
+    logger.warn('⚠️ Bundle analysis failed:', error instanceof Error ? error.message : String(error));
     return undefined;
   }
 }
