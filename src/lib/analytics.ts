@@ -182,10 +182,11 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
       });
 
       // Update total views count
-      await tx
-        .update(posts)
-        .set({ viewsTotal: sql`${posts.viewsTotal} + 1` })
-        .where(eq(posts.id, postId));
+      await tx.execute(sql`
+        UPDATE posts 
+        SET views_total = views_total + 1 
+        WHERE id = ${postId}
+      `);
 
       // Upsert daily views (if table exists). Swallow missing-table errors.
       try {

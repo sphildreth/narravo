@@ -16,6 +16,7 @@ async function main() {
   await service.setGlobal("COMMENTS.MAX-DEPTH", 5, { type: "integer", required: true });
   await service.setGlobal("COMMENTS.TOP-PAGE-SIZE", 10, { type: "integer", required: true });
   await service.setGlobal("COMMENTS.REPLIES-PAGE-SIZE", 3, { type: "integer", required: true });
+  await service.setGlobal("COMMENTS.AUTO-APPROVE", true, { type: "boolean", required: true });
 
   // Rate limits
   await service.setGlobal("RATE.COMMENTS-PER-MINUTE", 5, { type: "integer", required: true });

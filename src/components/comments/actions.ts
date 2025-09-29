@@ -44,6 +44,7 @@ export async function createComment(params: {
 }) {
   const session = await requireSession();
   const userId = session.user?.id;
+  const isAdmin = Boolean(session.user && (session.user as any).isAdmin);
   
   if (!userId) {
     throw new Error("User ID not found in session");
@@ -70,6 +71,9 @@ export async function createComment(params: {
     const config = new ConfigServiceImpl({ db });
     const maxDepth = await config.getNumber("COMMENTS.MAX-DEPTH");
     if (maxDepth == null) throw new Error("Missing required config: COMMENTS.MAX-DEPTH");
+
+    // Check if comments should be auto-approved
+    const autoApprove = await config.getBoolean("COMMENTS.AUTO-APPROVE") ?? false;
 
     // Create comment using existing core logic
     const deps = {
@@ -99,6 +103,9 @@ export async function createComment(params: {
         return Number(result[0]?.count || 0);
       },
       insertComment: async (data: any) => {
+        // Determine comment status based on user role and configuration
+        const commentStatus = (isAdmin || autoApprove) ? 'approved' : 'pending';
+        
         const result = await db.insert(comments).values({
           postId: data.postId,
           parentId: data.parentId,
@@ -107,7 +114,7 @@ export async function createComment(params: {
           bodyMd: data.bodyMd,
           bodyHtml: data.bodyHtml,
           userId,
-          status: 'pending', // Comments start as pending for moderation
+          status: commentStatus,
         }).returning({ id: comments.id });
         if (!result[0]) {
           throw new Error("Failed to insert comment");
