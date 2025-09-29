@@ -1,0 +1,30 @@
+name: Tag on Release Merge
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "CHANGELOG.md"
+      - "package.json"
+
+jobs:
+  tag-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: 
+          fetch-depth: 0
+      - name: Read version
+        id: v
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Create tag if missing
+        run: |
+          if git rev-parse "v${{ steps.v.outputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ steps.v.outputs.version }} already exists."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag "v${{ steps.v.outputs.version }}" -m "Release v${{ steps.v.outputs.version }}"
+            git push origin "v${{ steps.v.outputs.version }}"
+          fi

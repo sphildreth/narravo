@@ -55,9 +55,9 @@ next-env.d.ts
 # Ignore the uploads folder
 public/uploads/**
 
+# Auto-generated version file
 *.tsbuildinfo
 **/*.tsbuildinfo
 tsconfig.tsbuildinfo
-*.tsbuildinfo
-**/*.tsbuildinfo
-tsconfig.tsbuildinfo
+
+src/version.ts
