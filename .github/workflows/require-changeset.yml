@@ -1,0 +1,29 @@
+name: Require Changeset for Code Changes
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: 
+          fetch-depth: 0
+      - name: Fetch base
+        run: git fetch origin "$GITHUB_BASE_REF" --depth=1
+      - name: Detect code changes and changesets
+        run: |
+          set -e
+          # Files considered "code" for this repo; tweak as needed
+          CODE_PAT='^(src/|app/|public/|scripts/|drizzle/|next\.config\.(mjs|js)|package\.json|pnpm-lock\.yaml|tsconfig\.json)'
+          CHANGED=$(git diff --name-only "origin/$GITHUB_BASE_REF"... "HEAD" | tr -d '\r')
+          CODE_CHANGED=$(echo "$CHANGED" | grep -E "$CODE_PAT" || true)
+          HAS_CHANGESET=$(echo "$CHANGED" | grep -E '^\.changeset/.*\.md$' || true)
+
+          echo -e "Changed files:\n$CHANGED"
+          if [ -n "$CODE_CHANGED" ] && [ -z "$HAS_CHANGESET" ]; then
+            echo "::error::Code changes detected but no changeset found. Run 'pnpm changeset' and commit the generated file in .changeset/."
+            exit 1
+          fi
+          echo "OK"

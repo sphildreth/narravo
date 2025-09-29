@@ -54,3 +54,6 @@ next-env.d.ts
 
 # Ignore the uploads folder
 public/uploads/**
+
+# Auto-generated version file
+src/version.ts
