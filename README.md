@@ -302,20 +302,6 @@ We use [Vitest](https://vitest.dev/) with [Testing Library](https://testing-libr
 
 ---
 
-## 🤝 Contributing
-
-We welcome contributions! Please refer to our [CONTRIBUTING.md](./docs/CONTRIBUTING.md) for detailed guidelines.
-
-**Quick Guidelines:**
-
-*   Use `pnpm` for package management.
-*   Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for clear commit messages.
-*   Keep Pull Requests focused and include tests for behavior changes.
-*   Align with existing project patterns (App Router, Server Actions, Drizzle, Zod).
-*   Update documentation (`docs/` and `README.md`) as needed.
-
----
-
 ## 📄 License
 
 This project is licensed under the Apache License, Version 2.0. See the [LICENSE](./LICENSE) and [NOTICE](./NOTICE) files for more details.

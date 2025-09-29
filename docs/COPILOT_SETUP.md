@@ -32,17 +32,7 @@ Created a prompt template specifically for Next.js development:
 - Updated verification commands
 - Proper file paths and structure references
 
-### 4. `docs/CONTRIBUTING.md` (UPDATED)  
-Enhanced the contributing guide with comprehensive information:
-- Detailed tech stack overview
-- Complete development setup instructions
-- Code style and quality guidelines
-- Testing information
-- Database change workflow
-- Commit and PR guidelines
-- Verification commands
-
-### 5. `docs/DEVELOPMENT.md` (NEW)
+### 4. `docs/DEVELOPMENT.md` (NEW)
 Created a practical development guide with:
 - Quick reference for common commands
 - Code patterns and examples for Next.js App Router
@@ -83,7 +73,6 @@ Developers and AI assistants can now reference:
 - `.github/copilot-instructions.md` for comprehensive coding guidelines
 - `docs/AGENTS.md` for automation-safe tasks and constraints
 - `docs/DEVELOPMENT.md` for practical development patterns
-- `docs/CONTRIBUTING.md` for contribution workflow
 - `docs/PROMPT_TEMPLATE.md` for structured feature requests
 
 This setup ensures that GitHub Copilot and other AI coding assistants understand the project's architecture, constraints, and best practices specific to the Next.js/TypeScript implementation.
