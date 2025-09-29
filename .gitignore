@@ -58,3 +58,6 @@ public/uploads/**
 *.tsbuildinfo
 **/*.tsbuildinfo
 tsconfig.tsbuildinfo
+*.tsbuildinfo
+**/*.tsbuildinfo
+tsconfig.tsbuildinfo
