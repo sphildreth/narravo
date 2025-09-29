@@ -8,6 +8,7 @@ import { eq, like, desc, asc, sql, and, or, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { isEmailAdmin } from "@/lib/admin";
+import logger from '@/lib/logger';
 
 // Types for user management
 export interface UsersFilter {
@@ -339,7 +340,7 @@ export async function anonymizeUser(formData: FormData) {
       message: `User "${user.name || user.email}" has been anonymized. ${commentCount} comments are now anonymous.`
     };
   } catch (error) {
-    console.error("Error anonymizing user:", error);
+    logger.error("Error anonymizing user:", error);
     return { error: "Failed to anonymize user" };
   }
 }
@@ -402,7 +403,7 @@ export async function deleteUser(formData: FormData) {
       message: `User "${user.name || user.email}" and ${commentCount} comment(s) have been deleted.`,
     };
   } catch (error) {
-    console.error("Error deleting user:", error);
+    logger.error("Error deleting user:", error);
     return { error: "Failed to delete user" };
   }
 }
@@ -471,7 +472,7 @@ export async function exportUserData(userId: string) {
     
     return { success: true, data: exportData };
   } catch (error) {
-    console.error("Error exporting user data:", error);
+    logger.error("Error exporting user data:", error);
     return { error: "Failed to export user data" };
   }
 }
@@ -509,7 +510,7 @@ export async function getAdminVisibility() {
       registeredAdmins: adminUsers.length,
     };
   } catch (error) {
-    console.error("Error getting admin visibility:", error);
+    logger.error("Error getting admin visibility:", error);
     return {
       adminEmails: [],
       adminUsers: [],

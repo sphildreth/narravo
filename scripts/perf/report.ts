@@ -96,7 +96,7 @@ async function runLighthouse(): Promise<BenchmarkResult['lighthouse']> {
       fcp: Math.round(result.audits['first-contentful-paint'].numericValue),
     };
   } catch (error) {
-    console.warn('⚠️ Lighthouse failed:', error instanceof Error ? error.message : String(error));
+    logger.warn('⚠️ Lighthouse failed:', error instanceof Error ? error.message : String(error));
     return undefined;
   }
 }
@@ -191,16 +191,16 @@ async function analyzeBundleSize(): Promise<BenchmarkResult['bundleSize']> {
  * Generate performance benchmark report
  */
 async function generateBenchmark(environment: 'local' | 'staging' | 'production' = 'local') {
-  console.log('🏃‍♂️ Starting performance benchmark...');
+  logger.info('🏃‍♂️ Starting performance benchmark...');
   
   const timestamp = new Date().toISOString();
   const commitSha = getCommitSha();
   const branch = getBranch();
   
-  console.log(`Environment: ${environment}`);
-  console.log(`Commit: ${commitSha}`);
-  console.log(`Branch: ${branch}`);
-  console.log(`Timestamp: ${timestamp}`);
+  logger.info(`Environment: ${environment}`);
+  logger.info(`Commit: ${commitSha}`);
+  logger.info(`Branch: ${branch}`);
+  logger.info(`Timestamp: ${timestamp}`);
   
   const benchmark: BenchmarkResult = {
     timestamp,
@@ -233,15 +233,15 @@ async function generateBenchmark(environment: 'local' | 'staging' | 'production'
   const reportFile = path.join(benchmarkDir, `report-${commitSha}.md`);
   await fs.writeFile(reportFile, reportContent);
   
-  console.log('✅ Benchmark complete!');
-  console.log(`📄 Report saved to: ${reportFile}`);
-  console.log(`📊 Data saved to: ${benchmarkFile}`);
+  logger.info('✅ Benchmark complete!');
+  logger.info(`📄 Report saved to: ${reportFile}`);
+  logger.info(`📊 Data saved to: ${benchmarkFile}`);
   
   // Check if results meet targets
   const issues = validateResults(benchmark);
   if (issues.length > 0) {
-    console.log('\n⚠️ Performance Issues Detected:');
-    issues.forEach(issue => console.log(`  - ${issue}`));
+    logger.info('\n⚠️ Performance Issues Detected:');
+    issues.forEach(issue => logger.info(`  - ${issue}`));
     process.exit(1);
   }
   
@@ -336,7 +336,7 @@ function validateResults(benchmark: BenchmarkResult): string[] {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const environment = (process.argv[2] as any) || 'local';
   generateBenchmark(environment).catch(error => {
-    console.error('❌ Benchmark failed:', error);
+    logger.error('❌ Benchmark failed:', error);
     process.exit(1);
   });
 }

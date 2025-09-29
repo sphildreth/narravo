@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
 import { headers } from "next/headers";
+import logger from '@/lib/logger';
 
 async function extractIpAddress(request: NextRequest): Promise<string> {
   const headersList = await headers();
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
     return new Response(null, { status: 204 });
 
   } catch (error) {
-    console.error('RUM processing error:', error);
+    logger.error('RUM processing error:', error);
     return new Response('Internal error', { status: 500 });
   }
 }
@@ -189,7 +190,7 @@ async function processMetrics(data: {
 }): Promise<void> {
   // Log metrics for debugging (in production, send to analytics service)
   if (process.env.NODE_ENV === 'development') {
-    console.log('RUM Metrics:', JSON.stringify(data, null, 2));
+    logger.debug('RUM Metrics:', JSON.stringify(data, null, 2));
   }
   
   // TODO: In production implementation:

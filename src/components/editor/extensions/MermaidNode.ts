@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey, Transaction, EditorState } from '@tiptap/pm/state'
+import logger from '@/lib/logger';
 
 declare global {
   interface Window {
@@ -133,7 +134,7 @@ export const MermaidNode = Node.create({
               try {
                 tr = tr.replaceWith(from, to, node);
               } catch (e) {
-                console.error('MermaidAutoConvert replacement failed:', e);
+                logger.error('MermaidAutoConvert replacement failed:', e);
               }
             }
           }
@@ -192,7 +193,7 @@ export const MermaidNode = Node.create({
                         tr = tr.delete(pos, pos + node.nodeSize);
                       }
                     } catch (cleanupError) {
-                      console.warn('Fragment cleanup failed:', cleanupError);
+                      logger.warn('Fragment cleanup failed:', cleanupError);
                     }
                   }
                 }
@@ -280,7 +281,7 @@ export const MermaidNode = Node.create({
               gantt: { axisFormat: '%Y-%m-%d' }
             });
           } catch (configError) {
-            console.error('Failed to configure for cross-subgraph rendering:', configError);
+            logger.error('Failed to configure for cross-subgraph rendering:', configError);
           }
         }
 
@@ -288,7 +289,7 @@ export const MermaidNode = Node.create({
           try {
             await window.mermaid.parse(source);
           } catch (syntaxErr) {
-            console.error('Mermaid parse error:', syntaxErr);
+            logger.error('Mermaid parse error:', syntaxErr);
             contentDiv.innerHTML = `<div style="color:#dc2626;font-size:14px;padding:8px;background:#fef2f2;border-radius:4px;">Syntax Error: ${syntaxErr instanceof Error ? syntaxErr.message : 'Invalid diagram'}<details style="margin-top:8px;"><summary style="cursor:pointer;">Show source</summary><pre style="margin-top:8px;white-space:pre-wrap;max-height:220px;overflow:auto;font-family:monospace;font-size:12px;">${source.replace(/</g,'&lt;')}</pre></details></div>`;
             return;
           }
@@ -363,7 +364,7 @@ export const MermaidNode = Node.create({
                 const thirdAttempt = await tryRender(3);
                 ok = thirdAttempt.ok;
               } catch (e) {
-                console.error('Cross-subgraph rendering attempt failed:', e);
+                logger.error('Cross-subgraph rendering attempt failed:', e);
               }
             }
           }

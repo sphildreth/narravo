@@ -10,6 +10,7 @@ import { importWxr } from "../../../scripts/import-wxr";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { nanoid } from "nanoid";
+import logger from '@/lib/logger';
 
 interface ImportJobResult {
   job?: typeof importJobs.$inferSelect | undefined;
@@ -78,7 +79,7 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
             jobId: job.id,
           });
         } catch (error) {
-          console.error("Import job failed:", error);
+          logger.error("Import job failed:", error);
           await db.update(importJobs)
             .set({ 
               status: "failed",
@@ -142,7 +143,7 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
     
     return { job: updatedJob || job };
   } catch (error) {
-    console.error("Start import job error:", error);
+    logger.error("Start import job error:", error);
     return { error: error instanceof Error ? error.message : "Failed to start import job" };
   }
 }
@@ -184,7 +185,7 @@ export async function cancelImportJob(jobId: string): Promise<ImportJobResult> {
     revalidatePath("/admin/system/import");
     return { job };
   } catch (error) {
-    console.error("Cancel import job error:", error);
+    logger.error("Cancel import job error:", error);
     return { error: error instanceof Error ? error.message : "Failed to cancel import job" };
   }
 }
@@ -248,7 +249,7 @@ export async function retryImportJob(jobId: string): Promise<ImportJobResult> {
           jobId: job.id,
         });
       } catch (error) {
-        console.error("Retry import job failed:", error);
+        logger.error("Retry import job failed:", error);
         await db.update(importJobs)
           .set({ 
             status: "failed",
@@ -262,7 +263,7 @@ export async function retryImportJob(jobId: string): Promise<ImportJobResult> {
     revalidatePath("/admin/system/import");
     return { job };
   } catch (error) {
-    console.error("Retry import job error:", error);
+    logger.error("Retry import job error:", error);
     return { error: error instanceof Error ? error.message : "Failed to retry import job" };
   }
 }
@@ -294,7 +295,7 @@ export async function deleteImportJob(jobId: string): Promise<ImportJobResult> {
     revalidatePath("/admin/system/import");
     return { job: existingJob };
   } catch (error) {
-    console.error("Delete import job error:", error);
+    logger.error("Delete import job error:", error);
     return { error: error instanceof Error ? error.message : "Failed to delete import job" };
   }
 }

@@ -1862,8 +1862,8 @@ async function run() {
     : undefined;
 
   if (!pathArg) {
-    console.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [--rebuild-excerpts] [--purge] [allowedHosts=example.com,cdn.example.com] [concurrency=8] [uploads=/path/to/uploads] [root=^https?://example.com$]");
-    console.error("  --purge: Delete all existing posts, comments, categories, tags, redirects, and uploaded files before import");
+    logger.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [--rebuild-excerpts] [--purge] [allowedHosts=example.com,cdn.example.com] [concurrency=8] [uploads=/path/to/uploads] [root=^https?://example.com$]");
+    logger.error("  --purge: Delete all existing posts, comments, categories, tags, redirects, and uploaded files before import");
     process.exit(1);
   }
 

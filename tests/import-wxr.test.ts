@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import logger from '@/lib/logger';
 import path from "node:path";
 import { db } from "@/lib/db";
 import { posts, redirects, importJobs, importJobErrors } from "@/drizzle/schema";
@@ -212,7 +213,7 @@ describe("WXR Import", () => {
       const result = await importWxr("test.xml", { dryRun: true, verbose: true });
 
       // Debug output to see what's actually parsed
-      console.log("Import result:", result);
+      logger.debug("Import result:", result);
 
       expect(result.summary.totalItems).toBe(3);
       expect(result.summary.postsImported).toBe(1); // Only published posts

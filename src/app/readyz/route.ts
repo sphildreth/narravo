@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getS3Config } from "@/lib/s3";
 import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
 import { sql } from "drizzle-orm";
+import logger from '@/lib/logger';
 
 export const revalidate = 0; // Do not cache
 
@@ -51,7 +52,7 @@ export async function GET() {
 
   if (errors.length > 0) {
     const errorMessage = `Readiness check failed: ${errors.join(", ")}`;
-    console.error(`/readyz error:`, errorMessage);
+    logger.error(`/readyz error:`, errorMessage);
     return new Response(errorMessage, { status: 503 });
   }
 

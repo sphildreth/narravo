@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
+import path from "path";
+import logger from '@/lib/logger';
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dataOperationLogs, posts, comments, commentAttachments } from "@/drizzle/schema";
@@ -241,7 +243,7 @@ export async function POST(req: NextRequest) {
                 // Avoid noisy warning for mocked environments lacking leftJoin
                 const msg = e instanceof Error ? e.message : String(e);
                 if (!/leftJoin is not a function/i.test(msg)) {
-                  console.warn("Warning: failed to delete some imported-media during purge:", e);
+                  logger.warn("Warning: failed to delete some imported-media during purge:", e);
                 }
               }
 

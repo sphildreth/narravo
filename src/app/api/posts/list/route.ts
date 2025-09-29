@@ -5,6 +5,7 @@ import { z } from "zod";
 import { listPosts } from "@/lib/posts";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
+import logger from '@/lib/logger';
 
 export const dynamic = "force-dynamic"; // avoid static prerender; this route depends on request URL
 
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error in /api/posts/list:", error);
+    logger.error("Error in /api/posts/list:", error);
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: "Internal server error" } },
       { status: 500 }

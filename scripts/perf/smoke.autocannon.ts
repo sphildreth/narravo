@@ -5,6 +5,7 @@
  */
 
 import autocannon from 'autocannon';
+import logger from '@/lib/logger';
 
 const DEFAULT_CONFIG = {
   url: 'http://localhost:3000',
@@ -48,10 +49,10 @@ const DEFAULT_CONFIG = {
  * Run performance load test
  */
 async function runLoadTest(options: Record<string, any> = {}) {
-  console.log('🚀 Starting load test...');
-  console.log(`Target: ${options.url || DEFAULT_CONFIG.url}`);
-  console.log(`Duration: ${options.duration || DEFAULT_CONFIG.duration}s`);
-  console.log(`Rate: ${options.overallRate || 50} req/s`);
+  logger.info('🚀 Starting load test...');
+  logger.info(`Target: ${options.url || DEFAULT_CONFIG.url}`);
+  logger.info(`Duration: ${options.duration || DEFAULT_CONFIG.duration}s`);
+  logger.info(`Rate: ${options.overallRate || 50} req/s`);
   
   const config = { 
     ...DEFAULT_CONFIG, 
@@ -63,39 +64,39 @@ async function runLoadTest(options: Record<string, any> = {}) {
   try {
     const result = await autocannon(config);
     
-    console.log('\n📊 Load Test Results:');
-    console.log('====================');
-    console.log(`Requests/sec: ${result.requests.average}`);
-    console.log(`Latency p50: ${(result.latency as any).p50 || result.latency.mean}ms`);
-    console.log(`Latency p95: ${(result.latency as any).p95 || result.latency.max}ms`);
-    console.log(`Latency p99: ${(result.latency as any).p99 || result.latency.max}ms`);
-    console.log(`Throughput: ${(result.throughput.average / 1024 / 1024).toFixed(2)} MB/sec`);
-    console.log(`Errors: ${result.errors}`);
-    console.log(`Timeouts: ${result.timeouts}`);
+    logger.info('\n📊 Load Test Results:');
+    logger.info('====================');
+    logger.info(`Requests/sec: ${result.requests.average}`);
+    logger.info(`Latency p50: ${(result.latency as any).p50 || result.latency.mean}ms`);
+    logger.info(`Latency p95: ${(result.latency as any).p95 || result.latency.max}ms`);
+    logger.info(`Latency p99: ${(result.latency as any).p99 || result.latency.max}ms`);
+    logger.info(`Throughput: ${(result.throughput.average / 1024 / 1024).toFixed(2)} MB/sec`);
+    logger.info(`Errors: ${result.errors}`);
+    logger.info(`Timeouts: ${result.timeouts}`);
     
     // Check against SLO targets
     const p95Target = 400; // 400ms p95 target for TTFB
     const errorRateTarget = 0.01; // 1% error rate max
     const errorRate = result.errors / result.requests.total;
     
-    console.log('\n🎯 SLO Validation:');
-    console.log('==================');
+    logger.info('\n🎯 SLO Validation:');
+    logger.info('==================');
     const p95Latency = (result.latency as any).p95 || result.latency.max;
-    console.log(`P95 Latency: ${p95Latency}ms (target: <${p95Target}ms) ${p95Latency <= p95Target ? '✅' : '❌'}`);
-    console.log(`Error Rate: ${(errorRate * 100).toFixed(2)}% (target: <${(errorRateTarget * 100).toFixed(1)}%) ${errorRate <= errorRateTarget ? '✅' : '❌'}`);
+    logger.info(`P95 Latency: ${p95Latency}ms (target: <${p95Target}ms) ${p95Latency <= p95Target ? '✅' : '❌'}`);
+    logger.info(`Error Rate: ${(errorRate * 100).toFixed(2)}% (target: <${(errorRateTarget * 100).toFixed(1)}%) ${errorRate <= errorRateTarget ? '✅' : '❌'}`);
     
     const passed = p95Latency <= p95Target && errorRate <= errorRateTarget;
     
     if (passed) {
-      console.log('\n✅ Load test PASSED - All SLOs met');
+      logger.info('\n✅ Load test PASSED - All SLOs met');
       return { success: true, result };
     } else {
-      console.log('\n❌ Load test FAILED - SLO violations detected');
+      logger.warn('\n❌ Load test FAILED - SLO violations detected');
       return { success: false, result };
     }
     
   } catch (error) {
-    console.error('❌ Load test failed:', error);
+    logger.error('❌ Load test failed:', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }

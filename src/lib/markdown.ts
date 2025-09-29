@@ -170,7 +170,7 @@ export async function markdownToHtml(markdown: string): Promise<string> {
     
     return processedHtml;
   } catch (error) {
-    console.error('Error converting markdown to HTML:', error);
+    logger.error('Error converting markdown to HTML:', error);
     // Return a safe fallback
     return sanitizeHtmlFunc(`<p>Error processing content</p>`);
   }

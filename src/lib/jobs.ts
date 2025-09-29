@@ -8,6 +8,7 @@
 import { S3Service, getS3Config } from "./s3";
 import { db } from "./db";
 import { commentAttachments } from "@/drizzle/schema";
+import logger from './logger';
 import { eq } from "drizzle-orm";
 
 export interface JobContext {
@@ -34,7 +35,7 @@ export async function generateVideoPoster(
   context: JobContext
 ): Promise<void> {
   try {
-    console.log(`Starting poster generation for attachment ${job.attachmentId}`);
+    logger.info(`Starting poster generation for attachment ${job.attachmentId}`);
     
     // For MVP, we'll create a placeholder poster URL
     // In production, this would involve actual video processing
@@ -62,11 +63,11 @@ export async function generateVideoPoster(
       .set({ posterUrl })
       .where(eq(commentAttachments.id, job.attachmentId));
     
-    console.log(`Poster generation completed for attachment ${job.attachmentId}`);
+    logger.info(`Poster generation completed for attachment ${job.attachmentId}`);
     
   } catch (error) {
     if (process.env.NODE_ENV !== "test") {
-      console.error(`Failed to generate poster for attachment ${job.attachmentId}:`, error);
+      logger.error(`Failed to generate poster for attachment ${job.attachmentId}:`, error);
     }
     // In production, this would be retried or marked as failed
     throw error;
@@ -113,7 +114,7 @@ export async function validateVideoDuration(
   // 2. Extract duration using ffprobe
   // 3. Compare with maxDurationSeconds
   
-  console.log(`Video duration validation skipped for MVP: ${videoUrl}`);
+  logger.info(`Video duration validation skipped for MVP: ${videoUrl}`);
   return true; // Always pass in MVP
 }
 
@@ -126,7 +127,7 @@ export async function cleanupFailedUploads(): Promise<void> {
   // 2. Delete the associated S3 objects
   // 3. Remove the database records
   
-  console.log('Cleanup job completed (MVP no-op)');
+  logger.info('Cleanup job completed (MVP no-op)');
 }
 
 // Export for testing

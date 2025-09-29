@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import logger from '@/lib/logger';
 
 const FIXTURE_DIR = process.env.FIXTURE_DIR || "./tests/fixtures/wxr";
 
@@ -46,7 +47,7 @@ export function listFixtures(): string[] {
       .filter(file => file.endsWith('.xml') || file.endsWith('.wxr'))
       .sort();
   } catch (error) {
-    console.error(`Error reading fixture directory: ${absoluteFixtureDir}`);
+    logger.error(`Error reading fixture directory: ${absoluteFixtureDir}`);
     throw error;
   }
 }
