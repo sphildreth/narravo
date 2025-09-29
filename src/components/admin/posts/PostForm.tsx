@@ -8,10 +8,15 @@ import {
   createPost, 
   updatePost, 
   generateSlugFromTitle, 
-  checkSlugAvailability 
+  checkSlugAvailability,
+  getAllTagsAction,
+  getAllCategoriesAction,
+  getPostTagsAction,
+  getPostCategoryAction
 } from "@/app/(admin)/admin/posts/actions";
 import TiptapEditor from "@/components/editor/TiptapEditor";
 import logger from '@/lib/logger';
+import type { TagDTO, CategoryDTO } from "@/types/content";
 
 interface Post {
   id: string;
@@ -24,6 +29,7 @@ interface Post {
   updatedAt: Date | null;
   featuredImageUrl?: string | null;
   featuredImageAlt?: string | null;
+  categoryId?: string | null;
 }
 
 interface PostFormProps {
@@ -37,6 +43,16 @@ export default function PostForm({ post }: PostFormProps) {
   const [isGeneratingSlug, setIsGeneratingSlug] = useState(false);
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   
+  // State for tags and categories
+  const [availableTags, setAvailableTags] = useState<TagDTO[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<CategoryDTO[]>([]);
+  const [selectedTags, setSelectedTags] = useState<TagDTO[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryDTO | null>(null);
+  const [tagInput, setTagInput] = useState("");
+  const [categoryInput, setCategoryInput] = useState("");
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  
   // Form state
   const [formData, setFormData] = useState({
     title: post?.title || "",
@@ -48,6 +64,105 @@ export default function PostForm({ post }: PostFormProps) {
     featuredImageUrl: post?.featuredImageUrl || "",
     featuredImageAlt: post?.featuredImageAlt || "",
   });
+
+  // Load available tags and categories on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [tagsResult, categoriesResult] = await Promise.all([
+          getAllTagsAction(),
+          getAllCategoriesAction()
+        ]);
+        
+        if (tagsResult.success) {
+          setAvailableTags(tagsResult.tags);
+        }
+        if (categoriesResult.success) {
+          setAvailableCategories(categoriesResult.categories);
+        }
+        
+        // If editing existing post, load its tags and category
+        if (post?.id) {
+          const [postTagsResult, postCategoryResult] = await Promise.all([
+            getPostTagsAction(post.id),
+            post.categoryId ? getPostCategoryAction(post.categoryId) : Promise.resolve({ success: true, category: null })
+          ]);
+          
+          if (postTagsResult.success) {
+            setSelectedTags(postTagsResult.tags);
+          }
+          if (postCategoryResult.success && postCategoryResult.category) {
+            setSelectedCategory(postCategoryResult.category);
+          }
+        }
+      } catch (error) {
+        logger.error("Error loading tags and categories:", error);
+      }
+    };
+    
+    loadData();
+  }, [post?.id, post?.categoryId]);
+
+  // Tag management functions
+  const addTag = (tag: TagDTO) => {
+    if (!selectedTags.find(t => t.id === tag.id)) {
+      setSelectedTags([...selectedTags, tag]);
+    }
+    setTagInput("");
+    setShowTagDropdown(false);
+  };
+
+  const removeTag = (tagId: string) => {
+    setSelectedTags(selectedTags.filter(t => t.id !== tagId));
+  };
+
+  const createNewTag = async (name: string) => {
+    try {
+      // Simulate creating tag by adding to selected tags with temp ID
+      const newTag: TagDTO = {
+        id: `temp-${Date.now()}`,
+        name: name.trim(),
+        slug: name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+        createdAt: new Date().toISOString()
+      };
+      addTag(newTag);
+    } catch (error) {
+      logger.error("Error creating new tag:", error);
+    }
+  };
+
+  const selectCategory = (category: CategoryDTO) => {
+    setSelectedCategory(category);
+    setCategoryInput("");
+    setShowCategoryDropdown(false);
+  };
+
+  const createNewCategory = async (name: string) => {
+    try {
+      // Simulate creating category by setting as selected with temp ID
+      const newCategory: CategoryDTO = {
+        id: `temp-${Date.now()}`,
+        name: name.trim(),
+        slug: name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+        createdAt: new Date().toISOString()
+      };
+      setSelectedCategory(newCategory);
+      setCategoryInput("");
+      setShowCategoryDropdown(false);
+    } catch (error) {
+      logger.error("Error creating new category:", error);
+    }
+  };
+
+  // Filter functions for dropdowns
+  const filteredTags = availableTags.filter(tag => 
+    tag.name.toLowerCase().includes(tagInput.toLowerCase()) &&
+    !selectedTags.find(selected => selected.id === tag.id)
+  );
+
+  const filteredCategories = availableCategories.filter(category =>
+    category.name.toLowerCase().includes(categoryInput.toLowerCase())
+  );
 
   // Local (deferred) featured image file state
   const [featuredImageFile, setFeaturedImageFile] = useState<File | null>(null);
@@ -150,6 +265,13 @@ export default function PostForm({ post }: PostFormProps) {
         submitData.append("slug", formData.slug);
         submitData.append("excerpt", formData.excerpt);
         submitData.append("bodyMd", formData.bodyMd);
+        
+        // Add tags and category data
+        submitData.append("tags", JSON.stringify(selectedTags.map(tag => tag.name)));
+        if (selectedCategory) {
+          submitData.append("category", selectedCategory.name);
+        }
+        
         // Featured image handling (deferred upload): if a file is chosen we append it;
         // otherwise rely on URL value (could be empty string)
         if (featuredImageFile) {
@@ -336,6 +458,181 @@ export default function PostForm({ post }: PostFormProps) {
           />
           <p className="mt-1 text-xs text-muted-foreground">
             {formData.excerpt.length}/300 characters
+          </p>
+        </div>
+
+        {/* Tags */}
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            Tags
+          </label>
+          <div className="space-y-3">
+            {/* Selected tags */}
+            {selectedTags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {selectedTags.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
+                  >
+                    {tag.name}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag.id)}
+                      className="ml-1 text-blue-600 hover:text-blue-800"
+                      disabled={isPending}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            
+            {/* Tag input with dropdown */}
+            <div className="relative">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => {
+                  setTagInput(e.target.value);
+                  setShowTagDropdown(e.target.value.length > 0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (tagInput.trim()) {
+                      if (filteredTags.length > 0) {
+                        addTag(filteredTags[0]!);
+                      } else {
+                        createNewTag(tagInput.trim());
+                      }
+                    }
+                  }
+                  if (e.key === 'Escape') {
+                    setShowTagDropdown(false);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-border rounded-md text-sm"
+                placeholder="Add tags..."
+                disabled={isPending}
+              />
+              
+              {/* Tag dropdown */}
+              {showTagDropdown && (tagInput.length > 0) && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {filteredTags.length > 0 ? (
+                    filteredTags.map((tag) => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => addTag(tag)}
+                        className="w-full px-3 py-2 text-left hover:bg-gray-50 text-sm"
+                        disabled={isPending}
+                      >
+                        {tag.name}
+                      </button>
+                    ))
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => createNewTag(tagInput.trim())}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-50 text-sm text-blue-600"
+                      disabled={isPending}
+                    >
+                      Create new tag: "{tagInput.trim()}"
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Type tag names and press Enter to add them
+          </p>
+        </div>
+
+        {/* Category */}
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            Category
+          </label>
+          <div className="space-y-3">
+            {/* Selected category */}
+            {selectedCategory && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded-md text-sm">
+                {selectedCategory.name}
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory(null)}
+                  className="ml-1 text-green-600 hover:text-green-800"
+                  disabled={isPending}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            
+            {/* Category input with dropdown */}
+            <div className="relative">
+              <input
+                type="text"
+                value={categoryInput}
+                onChange={(e) => {
+                  setCategoryInput(e.target.value);
+                  setShowCategoryDropdown(e.target.value.length > 0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (categoryInput.trim()) {
+                      if (filteredCategories.length > 0) {
+                        selectCategory(filteredCategories[0]!);
+                      } else {
+                        createNewCategory(categoryInput.trim());
+                      }
+                    }
+                  }
+                  if (e.key === 'Escape') {
+                    setShowCategoryDropdown(false);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-border rounded-md text-sm"
+                placeholder="Select or create category..."
+                disabled={isPending}
+              />
+              
+              {/* Category dropdown */}
+              {showCategoryDropdown && (categoryInput.length > 0) && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {filteredCategories.length > 0 ? (
+                    filteredCategories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => selectCategory(category)}
+                        className="w-full px-3 py-2 text-left hover:bg-gray-50 text-sm"
+                        disabled={isPending}
+                      >
+                        {category.name}
+                      </button>
+                    ))
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => createNewCategory(categoryInput.trim())}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-50 text-sm text-green-600"
+                      disabled={isPending}
+                    >
+                      Create new category: "{categoryInput.trim()}"
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Posts can only have one category
           </p>
         </div>
 

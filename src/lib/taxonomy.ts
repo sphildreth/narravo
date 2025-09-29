@@ -264,3 +264,73 @@ export async function getCategoryBySlug(slug: string): Promise<CategoryDTO | nul
     createdAt: category.createdAt?.toISOString() || new Date().toISOString(),
   };
 }
+
+/**
+ * Get all tags (for selection in post editor)
+ */
+export async function getAllTags(): Promise<TagDTO[]> {
+  const result = await db
+    .select()
+    .from(tags)
+    .orderBy(sql`name`)
+    .limit(1000); // reasonable limit for UI dropdown
+  
+  return result.map((tag: any) => ({
+    id: tag.id,
+    name: tag.name,
+    slug: tag.slug,
+    createdAt: tag.createdAt?.toISOString() || new Date().toISOString(),
+  }));
+}
+
+/**
+ * Get all categories (for selection in post editor)
+ */
+export async function getAllCategories(): Promise<CategoryDTO[]> {
+  const result = await db
+    .select()
+    .from(categories)
+    .orderBy(sql`name`)
+    .limit(1000); // reasonable limit for UI dropdown
+  
+  return result.map((category: any) => ({
+    id: category.id,
+    name: category.name,
+    slug: category.slug,
+    createdAt: category.createdAt?.toISOString() || new Date().toISOString(),
+  }));
+}
+
+/**
+ * Remove all tags from a post and optionally add new ones
+ */
+export async function setPostTags(postId: string, tagNames: string[]): Promise<void> {
+  // Remove existing tags for this post
+  await db
+    .delete(postTags)
+    .where(sql`post_id = ${postId}`);
+    
+  // Add new tags if provided
+  if (tagNames.length > 0) {
+    await addTagsToPost(postId, tagNames);
+  }
+}
+
+/**
+ * Set the category for a post
+ */
+export async function setPostCategory(postId: string, categoryName?: string): Promise<void> {
+  let categoryId: string | null = null;
+  
+  if (categoryName && categoryName.trim()) {
+    const category = await upsertCategory(categoryName.trim());
+    categoryId = category.id;
+  }
+  
+  // Update the post's category
+  await db.execute(sql`
+    UPDATE posts 
+    SET category_id = ${categoryId}, updated_at = now() 
+    WHERE id = ${postId}
+  `);
+}

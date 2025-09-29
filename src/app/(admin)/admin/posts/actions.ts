@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import slugify from "slugify";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { markdownToHtmlSync } from "@/lib/markdown";
+import { setPostTags, setPostCategory, getAllTags, getAllCategories, getPostTags, getPostCategory } from "@/lib/taxonomy";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
@@ -217,6 +218,19 @@ export async function createPost(formData: FormData) {
   
   // If a file is present we defer storing until after validation of other fields.
   const featuredImageFile = formData.get("featuredImageFile") as File | null;
+  
+  // Extract tags and category from form data
+  const tagsJson = formData.get("tags") as string;
+  const categoryName = formData.get("category") as string || null;
+  
+  let tagNames: string[] = [];
+  if (tagsJson) {
+    try {
+      tagNames = JSON.parse(tagsJson) as string[];
+    } catch (e) {
+      return { error: "Invalid tags data" };
+    }
+  }
 
   const data = {
     title: formData.get("title") as string,
@@ -304,6 +318,15 @@ export async function createPost(formData: FormData) {
       throw new Error("Failed to create post");
     }
     
+    // Add tags and category after post creation
+    if (tagNames.length > 0) {
+      await setPostTags(newPost.id, tagNames);
+    }
+    
+    if (categoryName) {
+      await setPostCategory(newPost.id, categoryName);
+    }
+    
     // Revalidate caches
     await revalidateAfterPostChange(newPost.id);
     
@@ -319,6 +342,19 @@ export async function updatePost(formData: FormData) {
   await requireAdmin();
   
   const featuredImageFile = formData.get("featuredImageFile") as File | null;
+  
+  // Extract tags and category from form data
+  const tagsJson = formData.get("tags") as string;
+  const categoryName = formData.get("category") as string || null;
+  
+  let tagNames: string[] = [];
+  if (tagsJson) {
+    try {
+      tagNames = JSON.parse(tagsJson) as string[];
+    } catch (e) {
+      return { error: "Invalid tags data" };
+    }
+  }
 
   const data = {
     id: formData.get("id") as string,
@@ -414,6 +450,16 @@ export async function updatePost(formData: FormData) {
       })
       .where(eq(posts.id, id))
       .returning();
+    
+    // Update tags and category
+    await setPostTags(id, tagNames);
+    
+    if (categoryName) {
+      await setPostCategory(id, categoryName);
+    } else {
+      // Clear category if none selected
+      await setPostCategory(id);
+    }
     
     // Revalidate caches
     await revalidateAfterPostChange(id);
@@ -655,5 +701,59 @@ export async function unpublishPost(postId: string) {
   } catch (error) {
     logger.error("Error unpublishing post:", error);
     return { error: "Failed to unpublish post" };
+  }
+}
+
+// Server actions for taxonomy data loading
+
+// Get all tags for post editor
+export async function getAllTagsAction() {
+  await requireAdmin();
+  
+  try {
+    const tags = await getAllTags();
+    return { success: true, tags };
+  } catch (error) {
+    logger.error("Error loading tags:", error);
+    return { success: false, error: "Failed to load tags", tags: [] };
+  }
+}
+
+// Get all categories for post editor
+export async function getAllCategoriesAction() {
+  await requireAdmin();
+  
+  try {
+    const categories = await getAllCategories();
+    return { success: true, categories };
+  } catch (error) {
+    logger.error("Error loading categories:", error);
+    return { success: false, error: "Failed to load categories", categories: [] };
+  }
+}
+
+// Get tags for a specific post
+export async function getPostTagsAction(postId: string) {
+  await requireAdmin();
+  
+  try {
+    const tags = await getPostTags(postId);
+    return { success: true, tags };
+  } catch (error) {
+    logger.error("Error loading post tags:", error);
+    return { success: false, error: "Failed to load post tags", tags: [] };
+  }
+}
+
+// Get category for a specific post
+export async function getPostCategoryAction(categoryId: string) {
+  await requireAdmin();
+  
+  try {
+    const category = await getPostCategory(categoryId);
+    return { success: true, category };
+  } catch (error) {
+    logger.error("Error loading post category:", error);
+    return { success: false, error: "Failed to load post category", category: null };
   }
 }
