@@ -37,6 +37,8 @@ export default function CommentForm({
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [formStartTime] = useState(() => Date.now()); // Track when form was first rendered
+  const [honeypot, setHoneypot] = useState(""); // Honeypot field for spam detection
 
   // Focus the comment textarea when deep-linked with ?comment=1 or #comment
   useEffect(() => {
@@ -66,11 +68,14 @@ export default function CommentForm({
         parentId,
         bodyMd: bodyMd.trim(),
         attachments,
+        honeypot,
+        submitStartTime: formStartTime,
       });
 
       if (result.success) {
         setBodyMd("");
         setAttachments([]);
+        setHoneypot("");
         onSuccess?.();
         router.refresh(); // Refresh to show the new comment
       } else {
@@ -88,11 +93,26 @@ export default function CommentForm({
     setBodyMd("");
     setAttachments([]);
     setError(null);
+    setHoneypot("");
     onCancel?.();
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Honeypot field - hidden from users but visible to bots */}
+      <div style={{ position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
+        <label htmlFor="website">Website (leave blank):</label>
+        <input
+          type="text"
+          id="website"
+          name="website"
+          value={honeypot}
+          onChange={(e) => setHoneypot(e.target.value)}
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </div>
+
       {/* Text Area */}
       <div>
         <textarea
