@@ -54,3 +54,10 @@ next-env.d.ts
 
 # Ignore the uploads folder
 public/uploads/**
+
+*.tsbuildinfo
+**/*.tsbuildinfo
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+**/*.tsbuildinfo
+tsconfig.tsbuildinfo
