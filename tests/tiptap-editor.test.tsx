@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, cleanup } from "@testing-library/react";
+// Note: screen is not available in this version, using container queries instead
 
 // IMPORTANT: mocks must be declared before importing the component under test
 vi.mock("isomorphic-dompurify", () => ({
@@ -53,14 +54,14 @@ describe("TiptapEditor", () => {
   });
 
   it("displays toolbar with expected buttons", () => {
-    render(<TiptapEditor initialMarkdown="" />);
-    // Use getAllByTitle to tolerate duplicate buttons without failing
-    expect(screen.getAllByTitle("Bold (Ctrl+B)").length).toBeGreaterThan(0);
-    expect(screen.getAllByTitle("Italic (Ctrl+I)").length).toBeGreaterThan(0);
-    expect(screen.getAllByTitle("Heading 1").length).toBeGreaterThan(0);
-    expect(screen.getAllByTitle("Align Left").length).toBeGreaterThan(0);
-    expect(screen.getAllByTitle("Insert Image").length).toBeGreaterThan(0);
-    expect(screen.getAllByTitle("Code Block").length).toBeGreaterThan(0);
+    const { container } = render(<TiptapEditor initialMarkdown="" />);
+    // Use container queries to tolerate duplicate buttons without failing
+    expect(container.querySelectorAll('[title="Bold (Ctrl+B)"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[title="Italic (Ctrl+I)"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[title="Heading 1"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[title="Align Left"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[title="Insert Image"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[title="Code Block"]').length).toBeGreaterThan(0);
   });
 
   it("exports helper functions", () => {

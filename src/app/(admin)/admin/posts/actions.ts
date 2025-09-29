@@ -10,11 +10,12 @@ import { redirect } from "next/navigation";
 import slugify from "slugify";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { markdownToHtmlSync } from "@/lib/markdown";
+import { setPostTags, setPostCategory, getAllTags, getAllCategories, getPostTags, getPostCategory } from "@/lib/taxonomy";
+import { getStorageService } from "@/lib/s3";
+import { localStorageService } from "@/lib/local-storage";
 import { z } from "zod";
 import { randomUUID } from "crypto";
-import { promises as fs } from "fs";
 import logger from '@/lib/logger';
-import path from "path";
 
 // Types for post management
 export interface PostsFilter {
@@ -217,6 +218,19 @@ export async function createPost(formData: FormData) {
   
   // If a file is present we defer storing until after validation of other fields.
   const featuredImageFile = formData.get("featuredImageFile") as File | null;
+  
+  // Extract tags and category from form data
+  const tagsJson = formData.get("tags") as string;
+  const categoryName = formData.get("category") as string || null;
+  
+  let tagNames: string[] = [];
+  if (tagsJson) {
+    try {
+      tagNames = JSON.parse(tagsJson) as string[];
+    } catch (e) {
+      return { error: "Invalid tags data" };
+    }
+  }
 
   const data = {
     title: formData.get("title") as string,
@@ -270,16 +284,34 @@ export async function createPost(formData: FormData) {
       if (featuredImageFile.size > 5 * 1024 * 1024) { // 5MB limit
         return { error: "Featured image file too large (max 5MB)" };
       }
-      const arrayBuffer = await featuredImageFile.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const ext = featuredImageFile.name.includes('.') ? '.' + featuredImageFile.name.split('.').pop()!.toLowerCase() : (
-        featuredImageFile.type === 'image/png' ? '.png' : featuredImageFile.type === 'image/webp' ? '.webp' : featuredImageFile.type === 'image/gif' ? '.gif' : '.jpg'
-      );
-      const fileName = `${randomUUID()}${ext}`;
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'featured');
-      await fs.mkdir(uploadDir, { recursive: true });
-      await fs.writeFile(path.join(uploadDir, fileName), buffer);
-      finalFeaturedUrl = `/uploads/featured/${fileName}`;
+      
+      try {
+        const arrayBuffer = await featuredImageFile.arrayBuffer();
+        const buffer = new Uint8Array(arrayBuffer);
+        
+        const ext = featuredImageFile.name.includes('.') 
+          ? featuredImageFile.name.split('.').pop()!.toLowerCase()
+          : (featuredImageFile.type === 'image/png' ? 'png' : 
+             featuredImageFile.type === 'image/webp' ? 'webp' : 
+             featuredImageFile.type === 'image/gif' ? 'gif' : 'jpg');
+        
+        // Try to use S3/R2 storage first, fallback to local storage
+        const storageService = getStorageService();
+        if (storageService) {
+          // Use cloud storage (S3/R2)
+          const key = `featured/${randomUUID()}.${ext}`;
+          await storageService.putObject(key, buffer, featuredImageFile.type);
+          finalFeaturedUrl = storageService.getPublicUrl(key);
+        } else {
+          // Use local storage service
+          const key = `featured/${randomUUID()}.${ext}`;
+          await localStorageService.putObject(key, buffer, featuredImageFile.type);
+          finalFeaturedUrl = localStorageService.getPublicUrl(key);
+        }
+      } catch (error) {
+        logger.error("Error uploading featured image:", error);
+        return { error: "Failed to upload featured image" };
+      }
     } else if (featuredImageUrl && featuredImageUrl.trim() !== "") {
       finalFeaturedUrl = featuredImageUrl;
     }
@@ -304,6 +336,15 @@ export async function createPost(formData: FormData) {
       throw new Error("Failed to create post");
     }
     
+    // Add tags and category after post creation
+    if (tagNames.length > 0) {
+      await setPostTags(newPost.id, tagNames);
+    }
+    
+    if (categoryName) {
+      await setPostCategory(newPost.id, categoryName);
+    }
+    
     // Revalidate caches
     await revalidateAfterPostChange(newPost.id);
     
@@ -319,6 +360,19 @@ export async function updatePost(formData: FormData) {
   await requireAdmin();
   
   const featuredImageFile = formData.get("featuredImageFile") as File | null;
+  
+  // Extract tags and category from form data
+  const tagsJson = formData.get("tags") as string;
+  const categoryName = formData.get("category") as string || null;
+  
+  let tagNames: string[] = [];
+  if (tagsJson) {
+    try {
+      tagNames = JSON.parse(tagsJson) as string[];
+    } catch (e) {
+      return { error: "Invalid tags data" };
+    }
+  }
 
   const data = {
     id: formData.get("id") as string,
@@ -383,16 +437,34 @@ export async function updatePost(formData: FormData) {
       if (featuredImageFile.size > 5 * 1024 * 1024) {
         return { error: "Featured image file too large (max 5MB)" };
       }
-      const arrayBuffer = await featuredImageFile.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const ext = featuredImageFile.name.includes('.') ? '.' + featuredImageFile.name.split('.').pop()!.toLowerCase() : (
-        featuredImageFile.type === 'image/png' ? '.png' : featuredImageFile.type === 'image/webp' ? '.webp' : featuredImageFile.type === 'image/gif' ? '.gif' : '.jpg'
-      );
-      const fileName = `${randomUUID()}${ext}`;
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'featured');
-      await fs.mkdir(uploadDir, { recursive: true });
-      await fs.writeFile(path.join(uploadDir, fileName), buffer);
-      finalFeaturedUrl = `/uploads/featured/${fileName}`;
+      
+      try {
+        const arrayBuffer = await featuredImageFile.arrayBuffer();
+        const buffer = new Uint8Array(arrayBuffer);
+        
+        const ext = featuredImageFile.name.includes('.') 
+          ? featuredImageFile.name.split('.').pop()!.toLowerCase()
+          : (featuredImageFile.type === 'image/png' ? 'png' : 
+             featuredImageFile.type === 'image/webp' ? 'webp' : 
+             featuredImageFile.type === 'image/gif' ? 'gif' : 'jpg');
+        
+        // Try to use S3/R2 storage first, fallback to local storage
+        const storageService = getStorageService();
+        if (storageService) {
+          // Use cloud storage (S3/R2)
+          const key = `featured/${randomUUID()}.${ext}`;
+          await storageService.putObject(key, buffer, featuredImageFile.type);
+          finalFeaturedUrl = storageService.getPublicUrl(key);
+        } else {
+          // Use local storage service
+          const key = `featured/${randomUUID()}.${ext}`;
+          await localStorageService.putObject(key, buffer, featuredImageFile.type);
+          finalFeaturedUrl = localStorageService.getPublicUrl(key);
+        }
+      } catch (error) {
+        logger.error("Error uploading featured image:", error);
+        return { error: "Failed to upload featured image" };
+      }
     } else if (featuredImageUrl && featuredImageUrl.trim() !== "") {
       finalFeaturedUrl = featuredImageUrl;
     }
@@ -414,6 +486,16 @@ export async function updatePost(formData: FormData) {
       })
       .where(eq(posts.id, id))
       .returning();
+    
+    // Update tags and category
+    await setPostTags(id, tagNames);
+    
+    if (categoryName) {
+      await setPostCategory(id, categoryName);
+    } else {
+      // Clear category if none selected
+      await setPostCategory(id);
+    }
     
     // Revalidate caches
     await revalidateAfterPostChange(id);
@@ -655,5 +737,59 @@ export async function unpublishPost(postId: string) {
   } catch (error) {
     logger.error("Error unpublishing post:", error);
     return { error: "Failed to unpublish post" };
+  }
+}
+
+// Server actions for taxonomy data loading
+
+// Get all tags for post editor
+export async function getAllTagsAction() {
+  await requireAdmin();
+  
+  try {
+    const tags = await getAllTags();
+    return { success: true, tags };
+  } catch (error) {
+    logger.error("Error loading tags:", error);
+    return { success: false, error: "Failed to load tags", tags: [] };
+  }
+}
+
+// Get all categories for post editor
+export async function getAllCategoriesAction() {
+  await requireAdmin();
+  
+  try {
+    const categories = await getAllCategories();
+    return { success: true, categories };
+  } catch (error) {
+    logger.error("Error loading categories:", error);
+    return { success: false, error: "Failed to load categories", categories: [] };
+  }
+}
+
+// Get tags for a specific post
+export async function getPostTagsAction(postId: string) {
+  await requireAdmin();
+  
+  try {
+    const tags = await getPostTags(postId);
+    return { success: true, tags };
+  } catch (error) {
+    logger.error("Error loading post tags:", error);
+    return { success: false, error: "Failed to load post tags", tags: [] };
+  }
+}
+
+// Get category for a specific post
+export async function getPostCategoryAction(categoryId: string) {
+  await requireAdmin();
+  
+  try {
+    const category = await getPostCategory(categoryId);
+    return { success: true, category };
+  } catch (error) {
+    logger.error("Error loading post category:", error);
+    return { success: false, error: "Failed to load post category", category: null };
   }
 }
