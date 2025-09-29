@@ -3,6 +3,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import mermaid from 'mermaid';
+import logger from '@/lib/logger';
 
 // Type declaration for window.mermaid
 declare global {
@@ -45,7 +46,7 @@ export default function MermaidDiagram({ chart, className = "" }: MermaidDiagram
         const hasCrossSubgraphConnections = hasSubgraphs && /^\s*\w+\s*-->.*\w+\s*$/m.test(decodedChart);
         const hasHtmlTags = /<br\/?>/i.test(decodedChart) || /<small>/i.test(decodedChart);
         
-        console.log('MermaidDiagram render analysis:', { hasSubgraphs, hasCrossSubgraphConnections, hasHtmlTags });
+        logger.debug('MermaidDiagram render analysis:', { hasSubgraphs, hasCrossSubgraphConnections, hasHtmlTags });
 
         // Determine appropriate configuration based on diagram complexity
         const config = {
@@ -83,7 +84,7 @@ export default function MermaidDiagram({ chart, className = "" }: MermaidDiagram
           elementRef.current.innerHTML = svg;
         }
       } catch (error) {
-        console.error('Mermaid rendering error:', error);
+        logger.error('Mermaid rendering error:', error);
         if (elementRef.current) {
           elementRef.current.innerHTML = `
             <div class="border border-red-200 bg-red-50 p-4 rounded-md text-red-800 text-sm">

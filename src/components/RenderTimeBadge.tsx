@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import logger from "@/lib/logger";
 
 interface RenderTimeBadgeProps {
   serverMs?: number;
@@ -37,7 +38,7 @@ export function RenderTimeBadge({ serverMs, showBadge }: RenderTimeBadgeProps) {
         }
       } catch (error) {
         // Ignore errors parsing server timing
-        console.debug("Failed to parse server timing:", error);
+        logger.debug("Failed to parse server timing:", error);
       }
     }
 

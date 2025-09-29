@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { FileText, Download, Upload, Trash2, Clock } from "lucide-react";
+import logger from '@/lib/logger';
 
 interface AuditLogEntry {
   id: string;
@@ -30,7 +31,7 @@ export function AuditLogSection() {
       // For now, we'll show a placeholder
       setLogs([]);
     } catch (error) {
-      console.error("Failed to fetch audit logs:", error);
+      logger.error("Failed to fetch audit logs:", error);
     } finally {
       setLoading(false);
     }

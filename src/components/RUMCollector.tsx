@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useReportWebVitals } from 'next/web-vitals';
 import { useEffect, useRef } from 'react';
+import { useReportWebVitals } from 'next/web-vitals';
+import logger from '@/lib/logger';
 
 interface WebVitalMetric {
   name: string;
@@ -40,7 +41,7 @@ export function RUMCollector() {
     }, 1000);
   };
 
-  useReportWebVitals((metric) => {
+  useReportWebVitals((metric: WebVitalMetric) => {
     // Check if RUM collection should be disabled
     if (
       navigator.doNotTrack === '1' ||
@@ -126,7 +127,7 @@ function sendMetrics(metrics: WebVitalMetric[], useBeacon = false) {
     }).catch(error => {
       // Silently handle errors to avoid noise in user experience
       if (process.env.NODE_ENV === 'development') {
-        console.warn('Failed to send RUM metrics:', error);
+        logger.warn('Failed to send RUM metrics:', error);
       }
     });
   }

@@ -18,6 +18,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "tiptap-markdown";
 import { createLowlight } from "lowlight";
 import { MarkdownShortcodes } from './extensions/MarkdownShortcodes';
+import logger from "@/lib/logger";
 import { VideoShortcode } from './extensions/VideoShortcode';
 import { MermaidNode } from './extensions/MermaidNode';
 import 'highlight.js/styles/atom-one-dark.css';
@@ -200,7 +201,7 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   const expandedMarkdown = expandShortcodes(markdown);
   const previewReadyMarkdown = expandedMarkdown.replace(/<video(?![^>]*data-shortcode-preview)/g, '<video data-shortcode-preview="true"');
   
-  console.log('fromMarkdown processing:', {
+    logger.debug('fromMarkdown processing:', {
     originalMarkdown: markdown,
     expandedMarkdown,
     previewReadyMarkdown
@@ -219,14 +220,14 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   
   try {
     if (hasHTML) {
-      console.log('🔄 [TiptapEditor] Setting expanded HTML content');
+      logger.debug('🔄 [TiptapEditor] Setting expanded HTML content');
       editor.commands.setContent(previewReadyMarkdown);
     } else {
       const mdStorage = (editor.storage as any)?.markdown;
       const parser = mdStorage?.parser;
       if (parser) {
-        console.log('🔄 [TiptapEditor] Parsing markdown with tiptap-markdown parser');
-        console.log('🔄 [TiptapEditor] Content being parsed:', previewReadyMarkdown.substring(0, 300) + '...');
+        logger.debug('🔄 [TiptapEditor] Parsing markdown with tiptap-markdown parser');
+        logger.debug('🔄 [TiptapEditor] Content being parsed:', previewReadyMarkdown.substring(0, 300) + '...');
         const doc = parser.parse(previewReadyMarkdown);
         console.log('🔄 [TiptapEditor] Parsed document structure:', {
           nodeType: doc.type?.name,
@@ -239,7 +240,7 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
         });
         editor.commands.setContent(doc as any);
       } else {
-        console.log('🔄 [TiptapEditor] Markdown parser missing, inserting raw markdown as preformatted fallback');
+        logger.debug('🔄 [TiptapEditor] Markdown parser missing, inserting raw markdown as preformatted fallback');
         const escaped = previewReadyMarkdown
           .replace(/&/g, '&amp;')
           .replace(/</g, '&gt;');
@@ -247,7 +248,7 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
       }
     }
   } catch (err) {
-    console.error('fromMarkdown failed, fallback to pre block', err);
+    logger.error('fromMarkdown failed, fallback to pre block', err);
     const escaped = previewReadyMarkdown
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -257,7 +258,7 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   
   // Force a reparse with a small delay to ensure content is set first
   setTimeout(() => {
-    console.log('🔄 [TiptapEditor] Running delayed operations after content set');
+    logger.debug('🔄 [TiptapEditor] Running delayed operations after content set');
     reparseLowlight(editor);
     // Note: convertMermaidCodeBlocks is removed - the auto-conversion plugin in MermaidNode.ts handles this
   }, 100);
@@ -327,7 +328,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       });
       const signData = await signRes.json();
       if (!signRes.ok || signData?.error) {
-        console.error("Failed to sign upload:", signData?.error || signRes.statusText);
+        logger.error("Failed to sign upload:", signData?.error || signRes.statusText);
         return null;
       }
 
@@ -341,7 +342,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         if (fields["Content-Type"]) headers["Content-Type"] = fields["Content-Type"];
         const putRes = await fetch(signData.url as string, { method: "PUT", body: file, headers });
         if (!putRes.ok) {
-          console.error("Upload failed", await safeReadText(putRes));
+          logger.error("Upload failed", await safeReadText(putRes));
           return null;
         }
         publicUrl = (signData.publicUrl as string | undefined) || null;
@@ -360,7 +361,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         formData.append("file", file);
         const postRes = await fetch(signData.url as string, { method: "POST", body: formData });
         if (!postRes.ok) {
-          console.error("Upload failed", await safeReadText(postRes));
+          logger.error("Upload failed", await safeReadText(postRes));
           return null;
         }
         // Try to parse JSON response for local uploads
@@ -384,7 +385,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
 
       return publicUrl ?? null;
     } catch (err) {
-      console.error("Upload error:", err);
+      logger.error("Upload error:", err);
       return null;
     }
   }, []);

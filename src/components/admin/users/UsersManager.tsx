@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useDateFormat } from "@/lib/dateFormat.client";
 import { formatDateSafe } from "@/lib/dateFormat";
+import logger from '@/lib/logger';
 import { 
   anonymizeUser, 
   exportUserData, 
@@ -97,7 +98,7 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
         alert(result.error || "Failed to anonymize user");
       }
     } catch (error) {
-      console.error("Anonymization error:", error);
+      logger.error("Anonymization error:", error);
       alert("An error occurred while anonymizing the user");
     } finally {
       setIsProcessing(false);
@@ -134,7 +135,7 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
         alert(result.error || "Failed to delete user");
       }
     } catch (error) {
-      console.error("Delete user error:", error);
+      logger.error("Delete user error:", error);
       alert("An error occurred while deleting the user");
     } finally {
       setIsProcessing(false);
@@ -162,7 +163,7 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
         alert(result.error || "Failed to export user data");
       }
     } catch (error) {
-      console.error("Export error:", error);
+      logger.error("Export error:", error);
       alert("An error occurred while exporting user data");
     } finally {
       setIsProcessing(false);
@@ -180,7 +181,7 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
         alert("User not found");
       }
     } catch (error) {
-      console.error("Error loading user details:", error);
+      logger.error("Error loading user details:", error);
       alert("Failed to load user details");
     } finally {
       setIsProcessing(false);

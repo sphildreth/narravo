@@ -8,6 +8,7 @@ import type { ModerationResult, ModerationComment, ModerationFilter } from "@/li
 import type { ModerateAction } from "@/lib/adminModeration";
 import { useDateFormat } from "@/lib/dateFormat.client";
 import { formatDateSafe } from "@/lib/dateFormat";
+import logger from '@/lib/logger';
 
 interface ModerationQueueProps {
   initialData: ModerationResult;
@@ -71,7 +72,7 @@ export default function ModerationQueue({ initialData, filter, page }: Moderatio
         router.refresh();
         setSelectedIds([]);
       } catch (error) {
-        console.error("Moderation action failed:", error);
+        logger.error("Moderation action failed:", error);
         alert("Action failed. Please try again.");
       }
     });
@@ -318,7 +319,7 @@ function CommentCard({
         alert(result.error || "Failed to create reply");
       }
     } catch (error) {
-      console.error("Error creating reply:", error);
+      logger.error("Error creating reply:", error);
       alert("Failed to create reply");
     }
   };
@@ -337,7 +338,7 @@ function CommentCard({
         alert(result.error || "Failed to remove attachment");
       }
     } catch (error) {
-      console.error("Error removing attachment:", error);
+      logger.error("Error removing attachment:", error);
       alert("Failed to remove attachment");
     }
   };

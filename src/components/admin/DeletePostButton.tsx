@@ -5,6 +5,7 @@
 import { useState, useTransition } from "react";
 import { deletePostAction } from "@/app/actions/deletePost";
 import { useRouter } from "next/navigation";
+import logger from '@/lib/logger';
 
 type DeletePostButtonProps = {
   postId: string;
@@ -33,7 +34,7 @@ export default function DeletePostButton({ postId, postTitle }: DeletePostButton
           router.push("/");
         }
       } catch (err) {
-        console.error("Delete error:", err);
+        logger.error("Delete error:", err);
         setError("An unexpected error occurred");
         setShowConfirm(false);
       }

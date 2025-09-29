@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from "react";
+import logger from '@/lib/logger';
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    console.error("App error:", error);
+    logger.error("App error:", error);
   }, [error]);
 
   const hint = (

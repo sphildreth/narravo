@@ -4,6 +4,7 @@
 import { useRef, useState, useTransition } from "react";
 import { toggleReactionAction } from "./actions";
 import type { TargetType, ReactionKind, ReactionCounts, UserReactions } from "@/lib/reactions";
+import logger from "@/lib/logger";
 
 // Reaction button mappings
 const REACTION_EMOJIS: Record<ReactionKind, string> = {
@@ -76,13 +77,13 @@ export default function ReactionButtons({
           // Revert optimistic update on error
           setLocalCounts(counts);
           setLocalUserReactions(userReactions);
-          console.error("Failed to toggle reaction:", result.error);
+          logger.error("Failed to toggle reaction:", result.error);
         }
       } catch (error) {
         // Revert optimistic update on error
         setLocalCounts(counts);
         setLocalUserReactions(userReactions);
-        console.error("Failed to toggle reaction:", error);
+        logger.error("Failed to toggle reaction:", error);
       }
     });
   };
