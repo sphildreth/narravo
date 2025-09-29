@@ -11,9 +11,6 @@
     "prebuild": "node scripts/write-version.mjs",
     "build": "next build",
     "start": "next start",
-    "changeset": "changeset",
-    "changeset:version": "changeset version",
-    "changeset:status": "changeset status",
     "test": "vitest run",
     "test:watch": "vitest",
     "drizzle:generate": "drizzle-kit generate",
@@ -87,7 +84,6 @@
     "zod": "4.1.11"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.7",
     "@lhci/cli": "^0.15.1",
     "@next/bundle-analyzer": "^15.5.4",
     "@playwright/test": "^1.55.1",
