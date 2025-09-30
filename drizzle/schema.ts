@@ -175,6 +175,40 @@ export const postViewEvents = pgTable(
   })
 );
 
+export const pageViewEvents = pgTable(
+  "page_view_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    path: text("path").notNull(), // "/", "/about", "/category/tech", etc.
+    ts: timestamp("ts", { withTimezone: true }).default(sql`now()`),
+    sessionId: text("session_id"),
+    ipHash: text("ip_hash"),
+    userAgent: text("user_agent"),
+    referrerHost: text("referrer_host"),
+    referrerPath: text("referrer_path"),
+    userLang: text("user_lang"),
+    bot: boolean("bot").notNull().default(false),
+  },
+  (table) => ({
+    pathTsIndex: index("page_view_events_path_ts_idx").on(table.path, table.ts),
+    tsIndex: index("page_view_events_ts_idx").on(table.ts),
+  })
+);
+
+export const pageDailyViews = pgTable(
+  "page_daily_views",
+  {
+    day: text("day").notNull(), // DATE format YYYY-MM-DD
+    path: text("path").notNull(),
+    views: integer("views").notNull().default(0),
+    uniques: integer("uniques").notNull().default(0),
+  },
+  (table) => ({
+    primaryKey: primaryKey({ columns: [table.day, table.path] }),
+    pathDayIndex: index("page_daily_views_path_day_idx").on(table.path, table.day),
+  })
+);
+
 // Post-tag junction table
 export const postTags = pgTable("post_tags", {
   postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }).notNull(),

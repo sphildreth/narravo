@@ -18,7 +18,6 @@ import UnpublishPostButton from "@/components/admin/posts/UnpublishPostButton";
 import Link from "next/link";
 import Prose from "@/components/Prose";
 import { RenderTimeBadge } from "@/components/RenderTimeBadge";
-import { RUMCollector } from "@/components/RUMCollector";
 import { measureAsync, createServerTimingHeader } from "@/lib/performance";
 import { formatDateSafe } from "@/lib/dateFormat";
 
@@ -167,7 +166,6 @@ export default async function PostPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd }}
       />
-      <RUMCollector />
       <main className="max-w-screen mx-auto px-6 my-7 grid gap-7">
         <ViewTracker postId={post.id} sessionWindowMinutes={sessionWindowMinutes} />
         <div className="order-1 md:order-2 grid gap-6">

@@ -1,14 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { recordView } from "@/lib/analytics";
+import { recordView, recordPageView } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
 import logger from '@/lib/logger';
 
-const bodySchema = z.object({
+const postViewSchema = z.object({
   postId: z.string().uuid(),
   sessionId: z.string().min(1).max(128).optional(),
 });
+
+const pageViewSchema = z.object({
+  type: z.literal("page"),
+  path: z.string().min(1).max(255),
+  sessionId: z.string().min(1).max(128).optional(),
+});
+
+const legacyPostViewSchema = z.object({
+  postId: z.string().uuid(),
+  sessionId: z.string().min(1).max(128).optional(),
+});
+
+const bodySchema = z.union([
+  pageViewSchema,
+  postViewSchema,
+  legacyPostViewSchema,
+]);
 
 export async function POST(req: Request) {
   try {
@@ -44,19 +61,38 @@ export async function POST(req: Request) {
       ip = req.headers.get("x-real-ip") ?? undefined;
     }
 
-    // Build payload respecting exactOptionalPropertyTypes
-    const payload = {
-      postId: parsed.data.postId,
-      ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}),
-      ...(ip ? { ip } : {}),
-      ...(ua ? { ua } : {}),
-      ...(referer ? { referer } : {}),
-      ...(lang ? { lang } : {}),
-    } as const;
+    // Handle different types of view tracking
+    let result: boolean;
+    
+    if ("type" in parsed.data && parsed.data.type === "page") {
+      // Page view tracking
+      const payload = {
+        path: parsed.data.path,
+        ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}),
+        ...(ip ? { ip } : {}),
+        ...(ua ? { ua } : {}),
+        ...(referer ? { referer } : {}),
+        ...(lang ? { lang } : {}),
+      } as const;
 
-    // Record the view (best-effort)
-    logger.debug("📊 About to record view with payload:", payload);
-    const result = await recordView(payload as any);
+      logger.debug("📊 About to record page view with payload:", payload);
+      result = await recordPageView(payload as any);
+    } else {
+      // Post view tracking (legacy and new format)
+      const postData = parsed.data as { postId: string; sessionId?: string };
+      const payload = {
+        postId: postData.postId,
+        ...(postData.sessionId ? { sessionId: postData.sessionId } : {}),
+        ...(ip ? { ip } : {}),
+        ...(ua ? { ua } : {}),
+        ...(referer ? { referer } : {}),
+        ...(lang ? { lang } : {}),
+      } as const;
+
+      logger.debug("📊 About to record post view with payload:", payload);
+      result = await recordView(payload as any);
+    }
+    
     logger.debug("📊 Record view result:", result);
 
     // Always return 204 to avoid leaking details to clients

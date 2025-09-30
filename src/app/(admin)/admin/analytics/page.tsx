@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { listPosts } from "@/lib/posts";
-import { getPostSparkline, getPostViewCounts } from "@/lib/analytics";
+import { getPostSparkline, getPostViewCounts, getTrendingPages, getPageSparkline } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import Sparkline from "@/components/analytics/Sparkline";
@@ -28,6 +28,18 @@ export default async function AnalyticsPage() {
   const sparklines = await Promise.all(sparklinePromises);
   const sparklineMap = new Map(sparklines.map(s => [s.postId, s.data]));
 
+  // Get trending pages
+  const trendingPages = await getTrendingPages({ days: sparklineDays, limit: 10 });
+  
+  // Get sparkline data for each trending page
+  const pageSparklinePromises = trendingPages.map(async (page) => {
+    const sparklineData = await getPageSparkline(page.path, sparklineDays);
+    return { path: page.path, data: sparklineData };
+  });
+  
+  const pageSparklines = await Promise.all(pageSparklinePromises);
+  const pageSparklineMap = new Map(pageSparklines.map(s => [s.path, s.data]));
+
   // Format view count for display
   const formatViewCount = (count: number): string => {
     if (count < 1000) return count.toString();
@@ -48,6 +60,12 @@ export default async function AnalyticsPage() {
     };
   });
 
+  // Combine page data with sparklines
+  const pagesWithAnalytics = trendingPages.map(page => ({
+    ...page,
+    sparklineData: pageSparklineMap.get(page.path) || [],
+  }));
+
   // Sort by total views descending
   postsWithAnalytics.sort((a, b) => (b.viewsTotal || 0) - (a.viewsTotal || 0));
 
@@ -55,7 +73,7 @@ export default async function AnalyticsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-fg">Analytics</h1>
-        <p className="text-muted mt-1">Post performance over the last {sparklineDays} days</p>
+        <p className="text-muted mt-1">Site performance over the last {sparklineDays} days</p>
       </div>
 
       <div className="border border-border rounded-xl bg-card shadow-soft">
@@ -120,6 +138,59 @@ export default async function AnalyticsPage() {
           )}
         </div>
       </div>
+
+      {pagesWithAnalytics.length > 0 && (
+        <div className="border border-border rounded-xl bg-card shadow-soft">
+          <div className="p-6 border-b border-border">
+            <h2 className="text-lg font-semibold text-fg">Page Performance</h2>
+          </div>
+          
+          <div className="divide-y divide-border">
+            {pagesWithAnalytics.map((page) => (
+              <div key={page.path} className="p-6 hover:bg-muted/5 transition-colors">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-fg truncate">
+                      <Link 
+                        href={page.path}
+                        className="hover:underline font-mono"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {page.path}
+                      </Link>
+                    </h3>
+                    <div className="flex items-center gap-4 mt-1 text-sm text-muted">
+                      <span>{formatViewCount(page.viewsLastNDays || 0)} recent views</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-fg">
+                        {formatViewCount(page.viewsLastNDays || 0)}
+                      </div>
+                      <div className="text-xs text-muted">views</div>
+                    </div>
+                    
+                    <div className="flex flex-col items-end gap-1">
+                      <Sparkline 
+                        data={page.sparklineData} 
+                        width={120} 
+                        height={32}
+                        className="text-primary"
+                      />
+                      <div className="text-xs text-muted">
+                        {sparklineDays} days
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="border border-border rounded-xl bg-card shadow-soft p-6">
