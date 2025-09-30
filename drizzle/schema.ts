@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { pgTable, text, uuid, timestamp, integer, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, integer, foreignKey, primaryKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { pgEnum, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { boolean } from "drizzle-orm/pg-core";
@@ -151,7 +151,7 @@ export const postDailyViews = pgTable(
     uniques: integer("uniques").notNull().default(0),
   },
   (table) => ({
-    primaryKey: { columns: [table.day, table.postId] },
+    primaryKey: primaryKey({ columns: [table.day, table.postId] }),
     postIdDayIndex: index("post_daily_views_post_id_day_idx").on(table.postId, table.day),
   })
 );
