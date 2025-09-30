@@ -168,8 +168,11 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
   if (!currentDate) throw new Error("Invalid current date");
 
   try {
-  await db.transaction(async (tx: any) => {
+    await db.transaction(async (tx: any) => {
+      logger.debug("📊 Starting transaction");
+      
       // Insert view event
+      logger.debug("📊 Inserting view event");
       await tx.insert(postViewEvents).values({
         postId,
         sessionId,
@@ -180,16 +183,20 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
         userLang,
         bot: botDetected,
       });
+      logger.debug("📊 View event inserted successfully");
 
       // Update total views count
+      logger.debug("📊 Updating posts views_total");
       await tx.execute(sql`
         UPDATE posts 
         SET views_total = views_total + 1 
         WHERE id = ${postId}
       `);
+      logger.debug("📊 Posts views_total updated successfully");
 
       // Upsert daily views (if table exists). Swallow missing-table errors.
       try {
+        logger.debug("📊 Processing daily views update");
         // Determine if this is considered unique for the day
         // We need to check BEFORE the current insertion, so we exclude records from "now" onwards
         // to avoid counting the record we just inserted in this transaction
@@ -230,20 +237,33 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
           }
         }
 
-        await tx.execute(sql`
-          INSERT INTO post_daily_views (day, post_id, views, uniques)
-          VALUES (${currentDate}, ${postId}, 1, ${isUniqueForDay ? 1 : 0})
-          ON CONFLICT (day, post_id)
-          DO UPDATE SET
-            views = post_daily_views.views + 1,
-            uniques = post_daily_views.uniques + ${isUniqueForDay ? 1 : 0}
-        `);
+        logger.debug("📊 Daily views uniqueness check:", { isUniqueForDay });
+        await tx
+          .insert(postDailyViews)
+          .values({
+            day: currentDate,
+            postId,
+            views: 1,
+            uniques: isUniqueForDay ? 1 : 0,
+          })
+          .onConflictDoUpdate({
+            target: [postDailyViews.day, postDailyViews.postId],
+            set: {
+              views: sql`${postDailyViews.views} + 1`,
+              uniques: sql`${postDailyViews.uniques} + ${isUniqueForDay ? 1 : 0}`,
+            },
+          });
+        logger.debug("📊 Daily views updated successfully");
       } catch (err) {
+        logger.debug("📊 Daily views error (might be expected):", err);
         if (!isMissingDailyViewsRelation(err)) throw err;
         // If the table is missing, we simply skip daily aggregation.
       }
+      
+      logger.debug("📊 Transaction completed successfully");
     });
 
+    logger.debug("📊 recordView function returning true");
     return true;
   } catch (error) {
     logger.error("Failed to record view:", error);
