@@ -21,7 +21,13 @@ vi.mock('@/lib/db', () => ({
         insert: vi.fn().mockImplementation((table) => ({
           values: vi.fn().mockImplementation((data) => {
             viewEventInserts.push(data);
-            return Promise.resolve(undefined);
+            // Create a thenable object that also has onConflictDoUpdate
+            const result = Promise.resolve(undefined);
+            (result as any).onConflictDoUpdate = vi.fn().mockImplementation(() => {
+              dailyViewsUpserts.push(data);
+              return Promise.resolve(undefined);
+            });
+            return result;
           })
         })),
         update: vi.fn().mockImplementation((table) => ({
@@ -40,8 +46,8 @@ vi.mock('@/lib/db', () => ({
           }))
         })),
         execute: vi.fn().mockImplementation((query) => {
-          if (query.sql && query.sql.includes("INSERT INTO post_daily_views")) {
-            dailyViewsUpserts.push(query);
+          if (query && query.sql && query.sql.includes("UPDATE posts")) {
+            totalViewsUpdates.push(query);
           }
           return Promise.resolve(undefined);
         })
@@ -124,9 +130,15 @@ describe("Analytics View Tracking Fix", () => {
     vi.mocked(db.transaction).mockImplementation(async (fn: any) => {
       // Create config mock that returns false for COUNT-BOTS
       const tx = {
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockResolvedValue(undefined)
-        }),
+        insert: vi.fn().mockImplementation((table) => ({
+          values: vi.fn().mockImplementation((data) => {
+            const result = Promise.resolve(undefined);
+            (result as any).onConflictDoUpdate = vi.fn().mockImplementation(() => {
+              return Promise.resolve(undefined);
+            });
+            return result;
+          })
+        })),
         update: vi.fn().mockReturnValue({
           set: vi.fn().mockReturnValue({
             where: vi.fn().mockResolvedValue(undefined)
