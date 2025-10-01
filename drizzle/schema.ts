@@ -217,7 +217,7 @@ export const postTags = pgTable("post_tags", {
   postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }).notNull(),
   tagId: uuid("tag_id").references(() => tags.id, { onDelete: "cascade" }).notNull(),
 }, (table) => ({
-  postTagsPrimaryKey: { columns: [table.postId, table.tagId] },
+  pk: primaryKey({ columns: [table.postId, table.tagId] }),
   postTagsPostIdIndex: index("post_tags_post_id_idx").on(table.postId),
   postTagsTagIdIndex: index("post_tags_tag_id_idx").on(table.tagId),
 }));
@@ -227,7 +227,7 @@ export const commentTags = pgTable("comment_tags", {
   commentId: uuid("comment_id").references(() => comments.id, { onDelete: "cascade" }).notNull(),
   tagId: uuid("tag_id").references(() => tags.id, { onDelete: "cascade" }).notNull(),
 }, (table) => ({
-  commentTagsPrimaryKey: { columns: [table.commentId, table.tagId] },
+  pk: primaryKey({ columns: [table.commentId, table.tagId] }),
   commentTagsCommentIdIndex: index("comment_tags_comment_id_idx").on(table.commentId),
   commentTagsTagIdIndex: index("comment_tags_tag_id_idx").on(table.tagId),
 }));

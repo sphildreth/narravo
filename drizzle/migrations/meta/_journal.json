@@ -120,6 +120,13 @@
       "when": 1759324440110,
       "tag": "0016_rapid_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1759342167262,
+      "tag": "0017_tough_prodigy",
+      "breakpoints": true
     }
   ]
 }
