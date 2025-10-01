@@ -624,7 +624,12 @@ export async function getTrendingPages({ days = 7, limit = 10 }: { days?: number
         viewsLastNDays: sum(pageDailyViews.views),
       })
       .from(pageDailyViews)
-      .where(gte(pageDailyViews.day, startDateStr))
+      .where(
+        and(
+          gte(pageDailyViews.day, startDateStr),
+          sql`${pageDailyViews.path} != '/'` // Exclude the index page
+        )
+      )
       .groupBy(pageDailyViews.path)
       .orderBy(desc(sum(pageDailyViews.views)))
       .limit(limit);
@@ -748,6 +753,46 @@ export async function getPageSparkline(path: string, days: number = 30): Promise
     if (!isMissingDailyViewsRelation(err)) throw err;
     // Fallback: table missing, return zeros
     return sparklineData;
+  }
+}
+
+/**
+ * Get total views across all posts and pages on the site
+ */
+export async function getTotalSiteViews(): Promise<{ postViews: number; pageViews: number; totalViews: number }> {
+  try {
+    // Get total post views from the posts table
+    const postViewsResult = await db
+      .select({ totalPostViews: sum(posts.viewsTotal) })
+      .from(posts);
+    
+    const postViews = Number(postViewsResult[0]?.totalPostViews) || 0;
+
+    // Get total page views from page_daily_views table
+    let pageViews = 0;
+    try {
+      const pageViewsResult = await db
+        .select({ totalPageViews: sum(pageDailyViews.views) })
+        .from(pageDailyViews);
+      
+      pageViews = Number(pageViewsResult[0]?.totalPageViews) || 0;
+    } catch (err) {
+      if (!isMissingDailyViewsRelation(err)) throw err;
+      // If page_daily_views doesn't exist, pageViews stays 0
+    }
+
+    return {
+      postViews,
+      pageViews,
+      totalViews: postViews + pageViews,
+    };
+  } catch (err) {
+    logger.error("Error getting total site views:", err);
+    return {
+      postViews: 0,
+      pageViews: 0,
+      totalViews: 0,
+    };
   }
 }
 

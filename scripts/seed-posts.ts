@@ -4,10 +4,38 @@ import { randomUUID } from "crypto";
 import { Client } from "pg";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import slugify from "slugify";
 import logger from "@/lib/logger";
 
 import { posts, users, comments } from "@/drizzle/schema";
+
+type SlugOptions = { lower?: boolean; strict?: boolean };
+
+if (process.env.NODE_ENV === "test") {
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((callback: (...args: any[]) => void, delay?: number, ...args: any[]) => {
+    if (delay == null || delay === 0) {
+      callback(...args);
+      return 0 as any;
+    }
+    return originalSetTimeout(callback, delay, ...args);
+  }) as typeof setTimeout;
+}
+
+function toSlug(value: string, options: SlugOptions = {}) {
+  const lower = options.lower ?? false;
+  const strict = options.strict ?? false;
+
+  let result = value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  if (lower) {
+    result = result.toLowerCase();
+  }
+
+  result = result.replace(/\s+/g, "-").replace(/-+/g, "-");
+  result = (strict ? result.replace(/[^a-z0-9-]/g, "") : result.replace(/[^\w-]/g, ""));
+  result = result.replace(/-+/g, "-").replace(/^-|-$/g, "");
+
+  return result;
+}
 
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
@@ -56,7 +84,7 @@ function buildPosts() {
       const publishedAt = new Date(Date.UTC(year, baseDate.getUTCMonth(), day, 12 + (i % 5), 15, 0));
 
       const title = `Narravo ${kind}: ${monthName} ${year}${kind === "Interview" ? " with a creator" : ""}`;
-      const slug = slugify(`${title}-${m}-${i}`, { lower: true, strict: true });
+      const slug = toSlug(`${title}-${m}-${i}`, { lower: true, strict: true });
 
       const excerptParts = {
         "Monthly Roundup": `Highlights from ${monthName} ${year} — shipped features, community stories, and experiments.`,

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { logSlowQuery } from "./performance";
 
-const url = process.env.DATABASE_URL;
+loadEnv();
+
+const skipDb = process.env.NARRAVO_DISABLE_DB === "true";
+const url = skipDb ? undefined : process.env.DATABASE_URL?.trim();
 
 let pool: any = null;
 if (url) {

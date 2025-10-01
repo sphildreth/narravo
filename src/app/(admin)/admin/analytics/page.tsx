@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { listPosts } from "@/lib/posts";
-import { getPostSparkline, getPostViewCounts, getTrendingPages, getPageSparkline } from "@/lib/analytics";
+import { getPostSparkline, getPostViewCounts, getTrendingPages, getPageSparkline, getPageViewCounts, getTotalSiteViews } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import Sparkline from "@/components/analytics/Sparkline";
@@ -28,7 +28,7 @@ export default async function AnalyticsPage() {
   const sparklines = await Promise.all(sparklinePromises);
   const sparklineMap = new Map(sparklines.map(s => [s.postId, s.data]));
 
-  // Get trending pages
+  // Get trending pages (now excludes index page)
   const trendingPages = await getTrendingPages({ days: sparklineDays, limit: 10 });
   
   // Get sparkline data for each trending page
@@ -39,6 +39,14 @@ export default async function AnalyticsPage() {
   
   const pageSparklines = await Promise.all(pageSparklinePromises);
   const pageSparklineMap = new Map(pageSparklines.map(s => [s.path, s.data]));
+
+  // Get index page analytics
+  const indexPageCounts = await getPageViewCounts(["/"]);
+  const indexPageCount = indexPageCounts.get("/");
+  const indexSparklineData = await getPageSparkline("/", sparklineDays);
+
+  // Get total site views
+  const totalSiteViews = await getTotalSiteViews();
 
   // Format view count for display
   const formatViewCount = (count: number): string => {
@@ -75,6 +83,84 @@ export default async function AnalyticsPage() {
         <h1 className="text-2xl font-bold text-fg">Analytics</h1>
         <p className="text-muted mt-1">Site performance over the last {sparklineDays} days</p>
       </div>
+
+      {/* Total Site Views Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="border border-border rounded-xl bg-card shadow-soft p-6">
+          <h3 className="font-semibold text-fg mb-2">Total Site Views</h3>
+          <div className="text-2xl font-bold text-primary">
+            {formatViewCount(totalSiteViews.totalViews)}
+          </div>
+          <div className="text-xs text-muted mt-1">All time</div>
+        </div>
+        
+        <div className="border border-border rounded-xl bg-card shadow-soft p-6">
+          <h3 className="font-semibold text-fg mb-2">Post Views</h3>
+          <div className="text-2xl font-bold text-primary">
+            {formatViewCount(totalSiteViews.postViews)}
+          </div>
+          <div className="text-xs text-muted mt-1">All time</div>
+        </div>
+        
+        <div className="border border-border rounded-xl bg-card shadow-soft p-6">
+          <h3 className="font-semibold text-fg mb-2">Page Views</h3>
+          <div className="text-2xl font-bold text-primary">
+            {formatViewCount(totalSiteViews.pageViews)}
+          </div>
+          <div className="text-xs text-muted mt-1">All time</div>
+        </div>
+      </div>
+
+      {/* Index Page Section */}
+      {indexPageCount && (indexPageCount.viewsLastNDays > 0 || indexPageCount.totalViews > 0) && (
+        <div className="border border-border rounded-xl bg-card shadow-soft">
+          <div className="p-6 border-b border-border">
+            <h2 className="text-lg font-semibold text-fg">Homepage Analytics</h2>
+          </div>
+          
+          <div className="p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-fg">
+                  <Link 
+                    href="/"
+                    className="hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    / (Homepage)
+                  </Link>
+                </h3>
+                <div className="flex items-center gap-4 mt-1 text-sm text-muted">
+                  <span>{formatViewCount(indexPageCount.viewsLastNDays || 0)} recent views</span>
+                  <span>• {formatViewCount(indexPageCount.totalViews || 0)} total views</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <div className="text-lg font-bold text-fg">
+                    {formatViewCount(indexPageCount.viewsLastNDays || 0)}
+                  </div>
+                  <div className="text-xs text-muted">recent</div>
+                </div>
+                
+                <div className="flex flex-col items-end gap-1">
+                  <Sparkline 
+                    data={indexSparklineData} 
+                    width={120} 
+                    height={32}
+                    className="text-primary"
+                  />
+                  <div className="text-xs text-muted">
+                    {sparklineDays} days
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="border border-border rounded-xl bg-card shadow-soft">
         <div className="p-6 border-b border-border">
@@ -142,7 +228,8 @@ export default async function AnalyticsPage() {
       {pagesWithAnalytics.length > 0 && (
         <div className="border border-border rounded-xl bg-card shadow-soft">
           <div className="p-6 border-b border-border">
-            <h2 className="text-lg font-semibold text-fg">Page Performance</h2>
+            <h2 className="text-lg font-semibold text-fg">Other Page Performance</h2>
+            <p className="text-xs text-muted mt-1">Trending pages (excluding homepage and blog posts)</p>
           </div>
           
           <div className="divide-y divide-border">
@@ -192,6 +279,7 @@ export default async function AnalyticsPage() {
         </div>
       )}
 
+      {/* Additional Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="border border-border rounded-xl bg-card shadow-soft p-6">
           <h3 className="font-semibold text-fg mb-2">Total Posts</h3>
@@ -201,22 +289,23 @@ export default async function AnalyticsPage() {
         </div>
         
         <div className="border border-border rounded-xl bg-card shadow-soft p-6">
-          <h3 className="font-semibold text-fg mb-2">Total Views</h3>
+          <h3 className="font-semibold text-fg mb-2">Post Views</h3>
           <div className="text-2xl font-bold text-primary">
             {formatViewCount(
               postsWithAnalytics.reduce((sum, post) => sum + (post.viewsTotal || 0), 0)
             )}
           </div>
+          <div className="text-xs text-muted mt-1">All posts combined</div>
         </div>
         
         <div className="border border-border rounded-xl bg-card shadow-soft p-6">
-          <h3 className="font-semibold text-fg mb-2">Recent Views</h3>
+          <h3 className="font-semibold text-fg mb-2">Recent Post Views</h3>
           <div className="text-2xl font-bold text-primary">
             {formatViewCount(
               postsWithAnalytics.reduce((sum, post) => sum + (post.viewsLastNDays || 0), 0)
             )}
           </div>
-          <div className="text-xs text-muted mt-1">Last 7 days</div>
+          <div className="text-xs text-muted mt-1">Last {sparklineDays} days</div>
         </div>
       </div>
     </div>

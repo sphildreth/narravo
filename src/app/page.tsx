@@ -69,6 +69,7 @@ export default async function Page() {
         {disclaimerEnabled && (
           <><span className="mx-2">|</span><a href="/disclaimer">Disclaimer</a></>
         )}
+        <span className="mx-2">|</span><a href="/feed.xml">RSS</a>
       </footer>
     </>
   );

@@ -1,6 +1,22 @@
+/** @vitest-environment jsdom */
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST as viewApiHandler } from "@/app/api/metrics/view/route";
+
+vi.mock('next/server', () => ({
+  NextResponse: class NextResponse {
+    body: any;
+    status: number | undefined;
+    
+    constructor(body: any, init?: { status?: number }) {
+      this.body = body;
+      this.status = init?.status;
+    }
+    static json(data: any, init?: { status?: number }) {
+      return new NextResponse(JSON.stringify(data), init);
+    }
+  }
+}));
 
 // Mock the analytics module
 vi.mock("@/lib/analytics", () => ({
