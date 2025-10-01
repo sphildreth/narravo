@@ -333,6 +333,141 @@ tests/
 
 ---
 
+## ⚠️ IMPLEMENTATION REQUIREMENTS ⚠️
+
+**CRITICAL REMINDER FOR ALL TEST IMPLEMENTATIONS:**
+
+When implementing any test from this document, ALL tests MUST meet these non-negotiable requirements:
+
+### ✅ Quality Standards
+
+1. **Tests MUST Build Successfully**
+   - Run `pnpm build` - must pass without errors
+   - Run `pnpm typecheck` - must pass without TypeScript errors
+   - Zero compilation errors allowed
+
+2. **Tests MUST Run Successfully**
+   - Run `pnpm test` - all tests must pass
+   - No flaky tests - tests must be deterministic
+   - Proper test isolation - no side effects between tests
+
+3. **Type Safety Requirements**
+   - All variables must have proper TypeScript types
+   - No use of `any` type unless absolutely necessary (document why)
+   - Mock types must match actual implementation types
+   - Use proper type assertions with `satisfies` or `as const` where appropriate
+
+4. **Code Quality Standards**
+   - Follow existing test patterns in the codebase
+   - Use proper mocking strategies (database, external APIs, etc.)
+   - Include descriptive test names that explain what is being tested
+   - Add comments for complex test setup or assertions
+   - Clean up resources (database, files, timers) after tests
+
+5. **Test Structure**
+   - Arrange-Act-Assert pattern
+   - One logical assertion per test (prefer multiple focused tests)
+   - Use `describe` blocks to group related tests
+   - Include both positive and negative test cases
+
+6. **Database Mocking**
+   - Follow existing patterns: in-memory SQLite for unit tests
+   - Mock external services (Auth.js, S3, email, etc.)
+   - Reset database state between tests
+   - Use test fixtures for common data patterns
+
+7. **Component Testing Standards**
+   - Use React Testing Library (already configured)
+   - Test user interactions, not implementation details
+   - Use `screen` queries for accessibility
+   - Mock Next.js router and other framework features properly
+
+### 🚫 What NOT To Do
+
+- ❌ Do NOT submit tests with TypeScript errors
+- ❌ Do NOT submit tests that fail on first run
+- ❌ Do NOT use `@ts-ignore` or `@ts-expect-error` without documentation
+- ❌ Do NOT leave console.log statements in test code
+- ❌ Do NOT skip tests with `.skip()` unless documented with reason
+- ❌ Do NOT create tests with external dependencies (real DB, real API calls)
+- ❌ Do NOT commit commented-out test code
+
+### ✓ Pre-Submission Checklist
+
+Before marking any test task as complete, verify:
+
+```bash
+# 1. Type checking passes
+pnpm typecheck
+
+# 2. Tests build successfully
+pnpm build
+
+# 3. Tests run and pass
+pnpm test
+
+# 4. Specific test file passes
+pnpm test path/to/test-file.test.ts
+
+# 5. Watch mode works (for development)
+pnpm test:watch
+```
+
+### 📝 Documentation Requirements
+
+Each test file should include:
+
+- SPDX license header (see existing tests)
+- Brief description of what is being tested
+- Setup instructions if complex mocking is required
+- Explanation of any non-obvious test scenarios
+
+### Example: Good Test Structure
+
+```typescript
+// SPDX-License-Identifier: Apache-2.0
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { functionToTest } from '@/lib/module';
+
+describe('functionToTest', () => {
+  beforeEach(() => {
+    // Setup: Clear mocks, reset state
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    // Cleanup: Restore mocks, clear resources
+    vi.restoreAllMocks();
+  });
+
+  describe('successful cases', () => {
+    it('should return expected result for valid input', () => {
+      // Arrange
+      const input = 'test-value';
+      const expected = 'expected-result';
+
+      // Act
+      const result = functionToTest(input);
+
+      // Assert
+      expect(result).toBe(expected);
+    });
+  });
+
+  describe('error cases', () => {
+    it('should throw error for invalid input', () => {
+      // Arrange
+      const invalidInput = null;
+
+      // Act & Assert
+      expect(() => functionToTest(invalidInput)).toThrow('Expected error message');
+    });
+  });
+});
+```
+
+---
+
 ## Progress Tracking
 
 ### Summary
