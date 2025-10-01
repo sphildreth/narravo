@@ -1,29 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
+![Narravo Logo](./public/images/logo-60x57.png) Narravo: A Modern Next.js Blog Engine
 
-# ![Narravo Logo](./public/images/logo-60x57.png) Narravo: A Modern Next.js Blo## 🗄️ Database Management
-
-Navravo uses Drizzle ORM for type-safe database interactions and migrations.
-
-*   **Run Migrations:** Apply pending migrations to your database (production-safe).
-    ```bash
-    pnpm drizzle:migrate
-    ```
-*   **Generate Migrations:** Create new migration files based on schema changes.
-    ```bash
-    pnpm drizzle:generate
-    ```
-*   **Push Schema (Dev Only):** Quickly sync schema during local development.
-    ```bash
-    pnpm drizzle:push
-    ```
-*   **Seed Configuration:** Essential for initial setup and default settings.
-    ```bash
-    pnpm seed:config
-    ```
-*   **Seed Demo Content:** Populate your blog with sample posts and comments.
-    ```bash
-    pnpm seed:posts
-    ```https://github.com/sphildreth/narravo/actions/workflows/ci.yml/badge.svg)](https://github.com/sphildreth/narravo/actions/workflows/ci.yml)
+[![CI](https://github.com/sphildreth/narravo/actions/workflows/ci.yml/badge.svg)](https://github.com/sphildreth/narravo/actions/workflows/ci.yml)    
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.1-61dafb?logo=react&logoColor=white)](https://react.dev/)
@@ -178,6 +156,32 @@ Narravo uses Drizzle ORM for type-safe database interactions and migrations.
     ```
 
 > 📖 **For detailed migration workflows and troubleshooting**, see the [Database Migration Guide](./docs/DATABASE_MIGRATIONS.md).
+
+---
+## 🗄️ Database Management
+
+Navravo uses Drizzle ORM for type-safe database interactions and migrations.
+
+*   **Run Migrations:** Apply pending migrations to your database (production-safe).
+    ```bash
+    pnpm drizzle:migrate
+    ```
+*   **Generate Migrations:** Create new migration files based on schema changes.
+    ```bash
+    pnpm drizzle:generate
+    ```
+*   **Push Schema (Dev Only):** Quickly sync schema during local development.
+    ```bash
+    pnpm drizzle:push
+    ```
+*   **Seed Configuration:** Essential for initial setup and default settings.
+    ```bash
+    pnpm seed:config
+    ```
+*   **Seed Demo Content:** Populate your blog with sample posts and comments.
+    ```bash
+    pnpm seed:posts
+    ```https://github.com/sphildreth/narravo/actions/workflows/ci.yml/badge.svg)](https://github.com/sphildreth/narravo/actions/workflows/ci.yml)
 
 ---
 
