@@ -21,6 +21,36 @@ async function main() {
     
     const db = drizzle(client);
     
+    // Check if we have a migration tracking mismatch
+    const migrationCheck = await client.query(`
+      SELECT COUNT(*) as count 
+      FROM drizzle.__drizzle_migrations
+    `).catch(() => null);
+    
+    const tableCheck = await client.query(`
+      SELECT COUNT(*) as count 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name IN ('users', 'posts', 'comments', 'comment_attachments')
+    `);
+    
+    const trackedMigrations = migrationCheck?.rows[0]?.count ?? 0;
+    const existingTables = parseInt(tableCheck.rows[0]?.count ?? "0");
+    
+    // If we have tables but no tracked migrations, warn the user
+    if (existingTables > 0 && trackedMigrations === 0) {
+      console.error("\n❌ MIGRATION TRACKING ERROR DETECTED");
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      console.error(`Your database has ${existingTables} tables, but no migrations are tracked.`);
+      console.error("This usually happens when migrations were applied via 'drizzle-kit push'");
+      console.error("instead of 'drizzle:migrate'.\n");
+      console.error("To fix this, run the migration sync script:");
+      console.error("  CONFIRM_MIGRATION_SYNC=yes pnpm tsx scripts/sync-migrations.ts\n");
+      console.error("This will mark existing migrations as applied without re-running them.");
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+      process.exit(1);
+    }
+    
     console.log("🚀 Running migrations from ./drizzle/migrations...");
     await migrate(db, { migrationsFolder: "./drizzle/migrations" });
     

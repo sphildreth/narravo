@@ -152,7 +152,19 @@ Narravo uses Drizzle ORM for type-safe database interactions and migrations.
     ```bash
     pnpm drizzle:generate
     ```
-*   **Apply Schema:** Push the current schema to your database.
+*   **Apply Migrations:** Run pending migrations (production-safe).
+    ```bash
+    pnpm drizzle:migrate
+    ```
+*   **Check Migration Status:** Verify which migrations have been applied.
+    ```bash
+    pnpm drizzle:check
+    ```
+*   **Sync Migration Tracking:** Fix migration tracking after using `drizzle:push`.
+    ```bash
+    CONFIRM_MIGRATION_SYNC=yes pnpm drizzle:sync
+    ```
+*   **Push Schema (Dev Only):** Quickly sync schema during local development.
     ```bash
     pnpm drizzle:push
     ```
@@ -164,6 +176,8 @@ Narravo uses Drizzle ORM for type-safe database interactions and migrations.
     ```bash
     pnpm seed:posts
     ```
+
+> 📖 **For detailed migration workflows and troubleshooting**, see the [Database Migration Guide](./docs/DATABASE_MIGRATIONS.md).
 
 ---
 
@@ -201,6 +215,8 @@ A quick reference for common development tasks:
 | `pnpm drizzle:generate`      | Generate new Drizzle migrations                       |
 | `pnpm drizzle:migrate`       | Apply pending migrations (production-safe)            |
 | `pnpm drizzle:push`          | Sync schema directly (development only)               |
+| `pnpm drizzle:check`         | Check migration status and database state             |
+| `pnpm drizzle:sync`          | Fix migration tracking (after push)                   |
 | `pnpm seed:config`           | Seed default configuration values                     |
 | `pnpm seed:posts`            | Seed demo posts and comments                          |
 | `pnpm wxr:import -- path=…`  | Launch the WordPress importer via CLI (supports flags) |
