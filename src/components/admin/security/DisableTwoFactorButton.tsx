@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function DisableTwoFactorButton() {
   const [isDisabling, setIsDisabling] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const router = useRouter();
+  const { update } = useSession();
 
   const handleDisable = async () => {
     setIsDisabling(true);
@@ -22,6 +24,13 @@ export default function DisableTwoFactorButton() {
       }
 
       alert("Two-factor authentication has been disabled.");
+      
+      // Update session to reflect 2FA disabled state
+      await update({});
+      
+      // Wait a moment for the session to fully update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       router.refresh();
     } catch (error) {
       alert("An error occurred while disabling 2FA");

@@ -5,33 +5,23 @@ import { db } from "@/lib/db";
 import { ownerWebAuthnCredential } from "@/drizzle/schema";
 import { verifyWebAuthnRegistration } from "@/lib/2fa/webauthn";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
-import { z } from "zod";
-
-const verifySchema = z.object({
-  response: z.any(),
-  expectedChallenge: z.string(),
-  nickname: z.string().optional(),
-});
+import type { RegistrationResponseJSON } from "@simplewebauthn/server";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAdmin2FA();
     const userId = (session.user as any).id;
 
-    const body = await req.json();
-    const parsed = verifySchema.safeParse(body);
+    const body: RegistrationResponseJSON = await req.json();
 
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request" },
-        { status: 400 }
-      );
-    }
-
-    const { response, expectedChallenge, nickname } = parsed.data;
+    // Extract challenge from clientDataJSON
+    const clientData = JSON.parse(
+      Buffer.from(body.response.clientDataJSON, "base64").toString()
+    );
+    const expectedChallenge = clientData.challenge;
 
     // Verify registration
-    const verification = await verifyWebAuthnRegistration(response, expectedChallenge);
+    const verification = await verifyWebAuthnRegistration(body, expectedChallenge);
 
     if (!verification.verified || !verification.registrationInfo) {
       return NextResponse.json(
@@ -45,16 +35,17 @@ export async function POST(req: NextRequest) {
     // Store credential
     await db.insert(ownerWebAuthnCredential).values({
       userId,
-      credentialId: Buffer.from(credential.id).toString("base64"),
+      credentialId: credential.id,
       publicKey: Buffer.from(credential.publicKey).toString("base64"),
       counter: credential.counter,
-      transports: credential.transports ?? null,
-      aaguid: null,
-      nickname: nickname ?? null,
+      transports: body.response.transports ?? [],
+      nickname: (body as any).nickname ?? null,
     });
 
     // Log activity
-    await logSecurityActivity(userId, "passkey_added", { nickname });
+    await logSecurityActivity(userId, "passkey_added", { 
+      nickname: (body as any).nickname 
+    });
 
     return NextResponse.json({
       success: true,

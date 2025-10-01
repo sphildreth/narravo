@@ -8,13 +8,7 @@ import { verifyWebAuthnAuthentication } from "@/lib/2fa/webauthn";
 import { isRateLimited, resetRateLimit } from "@/lib/2fa/rate-limit";
 import { createTrustedDevice, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/2fa/trusted-device";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
-import { z } from "zod";
-
-const verifySchema = z.object({
-  response: z.any(),
-  expectedChallenge: z.string(),
-  rememberDevice: z.boolean().optional(),
-});
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,17 +23,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
-    const parsed = verifySchema.safeParse(body);
+    const body: AuthenticationResponseJSON & { rememberDevice?: boolean } = await req.json();
+    const { rememberDevice, ...authResponse } = body;
 
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request" },
-        { status: 400 }
-      );
-    }
-
-    const { response, expectedChallenge, rememberDevice } = parsed.data;
+    // Extract challenge from clientDataJSON
+    const clientData = JSON.parse(
+      Buffer.from(authResponse.response.clientDataJSON, "base64").toString()
+    );
+    const expectedChallenge = clientData.challenge;
 
     // Rate limiting
     const rateLimitKey = `2fa:webauthn:${userId}`;
@@ -54,7 +45,7 @@ export async function POST(req: NextRequest) {
     const [credential] = await db
       .select()
       .from(ownerWebAuthnCredential)
-      .where(eq(ownerWebAuthnCredential.credentialId, response.id))
+      .where(eq(ownerWebAuthnCredential.credentialId, authResponse.id))
       .limit(1);
 
     if (!credential) {
@@ -66,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     // Verify authentication
     const verification = await verifyWebAuthnAuthentication(
-      response,
+      authResponse,
       expectedChallenge,
       credential.publicKey,
       credential.counter

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Image from "next/image";
 
 export default function TotpSetupFlow() {
@@ -14,6 +15,7 @@ export default function TotpSetupFlow() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const router = useRouter();
+  const { update } = useSession();
 
   const handleInit = async () => {
     setIsLoading(true);
@@ -74,7 +76,13 @@ export default function TotpSetupFlow() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    // Update session to reflect 2FA enabled state
+    await update({});
+    
+    // Wait a moment for the session to fully update
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     router.push("/admin/security");
     router.refresh();
   };

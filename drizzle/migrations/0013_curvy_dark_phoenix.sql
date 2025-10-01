@@ -1,1 +1,2 @@
+ALTER TABLE "post_daily_views" DROP CONSTRAINT "post_daily_views_pkey";--> statement-breakpoint
 ALTER TABLE "post_daily_views" ADD CONSTRAINT "post_daily_views_day_post_id_pk" PRIMARY KEY("day","post_id");

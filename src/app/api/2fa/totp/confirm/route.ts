@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
         .set({
           twoFactorEnabled: true,
           twoFactorEnforcedAt: now,
+          mfaVerifiedAt: now, // Mark as verified since user just confirmed TOTP
         })
         .where(eq(users.id, userId));
 
