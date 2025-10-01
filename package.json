@@ -1,7 +1,7 @@
 {
   "name": "narravo-next",
   "private": true,
-  "version": "0.6.1",
+  "version": "0.6.2",
   "tiptap-markdown": "0.9.0",
   "license": "Apache-2.0",
   "scripts": {
@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "drizzle:generate": "drizzle-kit generate",
+    "drizzle:migrate": "tsx scripts/migrate.ts",
     "drizzle:push": "drizzle-kit push",
     "seed:config": "tsx scripts/seed-config.ts",
     "seed:posts": "tsx scripts/seed-posts.ts",
