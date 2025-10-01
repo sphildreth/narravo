@@ -19,6 +19,7 @@ Narravo is a sleek, minimal, and feature-rich blog engine designed for developer
 *   **Tailwind CSS Design System:** Utility-first styling with theme tokens, dark mode, and Radix-powered primitives.
 *   **PostgreSQL + Drizzle ORM:** Type-safe queries, migrations, and transactions with first-class PostgreSQL support.
 *   **Auth.js (NextAuth):** GitHub/Google OAuth, admin allowlists, and session management ready to go.
+*   **Two-Factor Authentication (2FA):** TOTP authenticator apps, WebAuthn passkeys (Face ID, Touch ID, YubiKey), recovery codes, and trusted device management.
 *   **Config Service & Feature Flags:** Database-backed settings power runtime toggles (themes, rate limits, UI modules).
 *   **WordPress WXR Import:** Resume-safe imports covering posts, media, redirects, excerpts, and CLI/admin workflows.
 *   **Data Operations Toolkit:** One-command backup/export, selective restore, purging, and manifest verification with audit logs.
@@ -68,10 +69,50 @@ pnpm seed:posts
 # 6) Start the development server
 pnpm dev
 # Open your browser to http://localhost:3000
+
+# 7) (First-time setup) Sign in with OAuth and set up 2FA
+# - Sign in with GitHub or Google (your email must be in ADMIN_EMAILS)
+# - Navigate to /admin/security to enable Two-Factor Authentication
+# - Choose TOTP (authenticator app) or Passkey (biometric/hardware key)
 ```
 
 > 💡 **Manual DB Setup:** If you prefer a manual PostgreSQL instance, update `DATABASE_URL` in your `.env` file and skip the `docker compose up -d db` step.
+> 
+> 🔐 **Admin Access:** Only emails listed in `ADMIN_EMAILS` can access the admin dashboard at `/admin`. After first login, you'll be prompted to set up Two-Factor Authentication for enhanced security.
 
+---
+
+
+## 💾 Data Operations
+
+Navravo ships with first-class data lifecycle tooling powered by Drizzle and S3-compatible manifests, accessible via both CLI scripts and the Admin UI at `/admin/data-operations`.
+
+### Export & Backup
+- **Full Backups:** `pnpm backup` creates a ZIP archive with JSON table exports, manifest hashes, and (optionally) media references.
+- **Audit Friendly:** Commands log counts, checksum data, and skip reasons to aid compliance reviews.
+- **Admin UI:** Export backups directly from the admin dashboard with progress tracking.
+
+### Restore & Import
+- **Selective Restore:** `pnpm restore -- <backup.zip>` supports dry runs, slug/date filters, and skipping users/configuration.
+- **Smart Conflict Handling:** Choose how to handle existing content during restore operations.
+- **Media Awareness:** Manifests capture attachment URLs and hashes so you can verify remote assets before rehydration.
+
+### Purge Operations
+- **Soft Purge:** Remove published posts while preserving drafts, users, and configuration.
+- **Hard Purge:** Complete data reset removing all posts, comments, categories, tags, redirects, and uploaded files.
+- **Confirmation Required:** All destructive operations require explicit confirmation in the UI.
+
+### Audit Logging
+- **Complete Trail:** All data operations (export, restore, purge) are logged with timestamps, user info, and operation details.
+- **Compliance Ready:** Detailed audit logs support security reviews and compliance requirements.
+
+```bash
+# Create a verbose backup without media payloads
+pnpm backup -- --skip-media --verbose
+
+# Preview restore scope for specific slugs before applying changes
+pnpm restore -- backups/blog-2025-09-01.zip --dry-run --slugs my-first-post,second-post
+```
 ---
 
 ## 🚢 Deployment
@@ -88,10 +129,12 @@ For detailed deployment instructions, please refer to the [**Production Deployme
 ## 🧱 Architecture Overview
 
 - **App Router Layout:** The `src/app` tree separates public routes (`(public)`), authentication (`(auth)`), and admin tooling (`(admin)`), leaning on React Server Components by default. Middleware injects route context and handles legacy redirect resolution at the edge.
-- **Domain Modules:** Business logic lives in `src/lib` with clear boundaries for posts, comments, reactions, imports, backups, rate limiting, analytics, and configuration. Server Actions validate input with Zod and revalidate cache tags after mutations.
+- **Domain Modules:** Business logic lives in `src/lib` with clear boundaries for posts, comments, reactions, imports, backups, rate limiting, analytics, 2FA, and configuration. Server Actions validate input with Zod and revalidate cache tags after mutations.
+- **Authentication & Security:** Auth.js handles OAuth sessions with admin allowlists. Two-factor authentication (TOTP/WebAuthn) protects admin routes with 8-hour verification windows, trusted device management, and comprehensive audit logging.
 - **Data & Configuration:** Drizzle ORM drives the schema (`drizzle/schema.ts`) with migrations and transactions. A Config Service exposes database-backed feature flags (banner, theming, rate limits, render badges, etc.) to both server and client code.
 - **Engagement Pipeline:** Comments support nested threads, media attachments, moderation queues, and reaction toggles. Rate limiting, honeypots, media validation, and audit logging protect the workflow.
 - **Content Migration:** The WordPress importer coordinates resumable jobs, media rewriting, redirect creation, and excerpt rebuilding from either the Admin UI or CLI scripts.
+- **Data Operations:** Export, restore, and purge operations with manifest verification, selective filtering, and audit trails accessible via CLI or admin UI.
 - **Observability:** Privacy-aware analytics aggregate daily view counts, power trending widgets, and surface dashboards. Real User Monitoring collects Core Web Vitals, while Server-Timing instrumentation and perf scripts keep regressions in check.
 
 ---
@@ -104,21 +147,37 @@ All environment variables are documented in detail within the `.env.example` fil
 cp .env.example .env
 ```
 
-**Key Variables:**
+**Required Variables:**
 
-*   `DATABASE_URL`: PostgreSQL connection string.
-*   `NEXTAUTH_SECRET`: A strong, random string for session/JWT encryption.
-*   `NEXTAUTH_URL`: Your application's URL (e.g., `http://localhost:3000`).
-*   `ADMIN_EMAILS`: Comma-separated list of emails for admin access.
+*   `DATABASE_URL`: PostgreSQL connection string (e.g., `postgres://user:pass@localhost:5432/narravo`)
+*   `NEXTAUTH_SECRET`: Strong random string for session/JWT encryption (generate with `openssl rand -base64 32`)
+*   `NEXTAUTH_URL`: Your application's URL (e.g., `http://localhost:3000` or `https://yourdomain.com`)
+*   `ADMIN_EMAILS`: Comma-separated list of emails for admin access (case-insensitive)
 
-**Optional Integrations:**
+**Authentication & Security:**
 
-*   **OAuth:** `GITHUB_ID`, `GITHUB_SECRET`, `GOOGLE_ID`, `GOOGLE_SECRET`
-*   **Media Storage:** Configure either `S3_*` (AWS S3) or `R2_*` (Cloudflare R2) variables.
-*   **Analytics & Perf:**
-    * `ANALYTICS_IP_SALT` — salt used to hash IP addresses before persisting view events.
-    * `NEXT_PUBLIC_RUM_SAMPLING_RATE` / `RUM_SAMPLING_RATE` — client/server sampling (defaults to `0.1`).
-    * `PERF_LOG_SLOW_QUERIES` — enable verbose query timing in development/CI.
+*   **OAuth Providers:** `GITHUB_ID`, `GITHUB_SECRET`, `GOOGLE_ID`, `GOOGLE_SECRET` (optional but recommended)
+*   **Analytics Privacy:** `ANALYTICS_IP_SALT` — Salt for hashing IP addresses before persisting view events (strongly recommended)
+
+**Media Storage (Optional):**
+
+Choose one of the following:
+*   **AWS S3:** `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_ENDPOINT` (optional for S3-compatible services)
+*   **Cloudflare R2:** `R2_REGION`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_ENDPOINT`
+
+If neither is configured, media will be stored locally in the `public/uploads` directory.
+
+**Performance & Observability (Optional):**
+
+*   `NEXT_PUBLIC_RUM_SAMPLING_RATE` — Client-side Real User Monitoring sampling rate (default: `0.1` = 10%)
+*   `RUM_SAMPLING_RATE` — Server-side RUM sampling rate (default: `0.1`)
+*   `PERF_LOG_SLOW_QUERIES` — Enable verbose query timing logs in development/CI (default: `false`)
+
+**Content Configuration (Optional):**
+
+*   `EXCERPT_MAX_CHARS` — Maximum characters for auto-generated excerpts (default: varies by algorithm)
+*   `EXCERPT_ELLIPSIS` — Ellipsis string for truncated excerpts (default: `…`)
+*   `EXCERPT_INCLUDE_BLOCK_CODE` — Include code blocks in excerpts (default: `false`)
 
 ---
 
@@ -158,34 +217,8 @@ Narravo uses Drizzle ORM for type-safe database interactions and migrations.
 > 📖 **For detailed migration workflows and troubleshooting**, see the [Database Migration Guide](./docs/DATABASE_MIGRATIONS.md).
 
 ---
-## 🗄️ Database Management
 
-Navravo uses Drizzle ORM for type-safe database interactions and migrations.
-
-*   **Run Migrations:** Apply pending migrations to your database (production-safe).
-    ```bash
-    pnpm drizzle:migrate
-    ```
-*   **Generate Migrations:** Create new migration files based on schema changes.
-    ```bash
-    pnpm drizzle:generate
-    ```
-*   **Push Schema (Dev Only):** Quickly sync schema during local development.
-    ```bash
-    pnpm drizzle:push
-    ```
-*   **Seed Configuration:** Essential for initial setup and default settings.
-    ```bash
-    pnpm seed:config
-    ```
-*   **Seed Demo Content:** Populate your blog with sample posts and comments.
-    ```bash
-    pnpm seed:posts
-    ```https://github.com/sphildreth/narravo/actions/workflows/ci.yml/badge.svg)](https://github.com/sphildreth/narravo/actions/workflows/ci.yml)
-
----
-
-## � Backups & Restore
+## � Data Operations
 
 Narravo ships with first-class data lifecycle tooling powered by Drizzle and S3-compatible manifests.
 
@@ -239,13 +272,20 @@ A quick reference for common development tasks:
 A high-level overview of the project's directory layout:
 
 ```
-src/app/                # Next.js App Router routes (admin, auth, public, api)
-src/components/         # Reusable UI components
-src/lib/                # Server-side services, utilities, and business logic
+src/app/                # Next.js App Router routes
+  ├── (admin)/          # Protected admin routes (posts, users, analytics, security, data-operations)
+  ├── (auth)/           # Authentication routes (signin, 2FA verification)
+  ├── (public)/         # Public-facing pages (posts, archives, search)
+  └── api/              # API routes (2FA, comments, reactions, media uploads)
+src/components/         # Reusable UI components (admin, auth, public)
+src/lib/                # Server-side services and business logic
+  ├── 2fa/              # Two-factor authentication (TOTP, WebAuthn, recovery codes)
+  ├── excerpts/         # Excerpt generation algorithms
+  └── *.ts              # Domain modules (posts, comments, analytics, config, etc.)
 src/types/              # TypeScript types (consolidated)
 drizzle/                # Drizzle ORM schema and database migrations
-scripts/                # Utility scripts (seeding)
-tests/                  # Unit and integration tests
+scripts/                # Utility scripts (seeding, imports, backups, migrations)
+tests/                  # Unit and integration tests (Vitest)
 docs/                   # Project documentation and specifications
 ```
 
@@ -326,21 +366,102 @@ When enabled, the About Me section renders above the Recent posts list.
 - **Rate Limiting & Abuse Controls:** Shared helpers cap comment/reaction/import rates, enforce submission delays, and add honeypots.
 - **Safe Media Handling:** Attachments validate MIME types, file signatures, byte limits, and generate poster images for videos.
 - **Privacy Respecting Analytics:** View tracking dedupes sessions, hashes IPs with `ANALYTICS_IP_SALT`, and honors DNT where possible.
+- **Two-Factor Authentication:** Admin routes protected with 2FA enforcement, with 8-hour verification windows and secure session management.
+
+---
+
+## 🔐 Two-Factor Authentication (2FA)
+
+Navravo includes enterprise-grade two-factor authentication to secure your admin account with multiple authentication methods.
+
+### Authentication Methods
+
+**TOTP (Time-based One-Time Passwords)**
+- Compatible with authenticator apps (Google Authenticator, Authy, 1Password, Bitwarden, etc.)
+- 30-second time windows with ±1 step tolerance for clock skew
+- QR code enrollment with manual entry fallback
+- Replay attack protection via database tracking
+
+**WebAuthn / Passkeys**
+- Platform authenticators: Face ID, Touch ID, Windows Hello
+- Hardware security keys: YubiKey, Titan, Nitrokey, SoloKeys
+- Phishing-resistant authentication
+- Multiple authenticators supported (register backup devices)
+- Counter-based replay detection
+
+**Recovery Codes**
+- 10 single-use backup codes generated during setup
+- SHA-256 hashed at rest for security
+- Regenerate anytime (invalidates previous codes)
+- Copy/download options for safe storage
+
+### Security Features
+
+**Trusted Device Management**
+- "Remember this device" option for 30 days
+- Hashed device tokens and IP addresses
+- User-agent tracking for device identification
+- Individual and bulk revocation via admin UI
+
+**Admin Route Protection**
+- All admin routes require 2FA when enabled
+- 8-hour verification window before re-prompting
+- Graceful degradation for non-2FA users
+- Exempted routes for initial setup
+
+**Rate Limiting & Security**
+- 5 verification attempts per minute per user
+- Automatic lockout on repeated failures
+- Security activity logging for all 2FA events
+- Audit trail for compliance requirements
+
+### Setup & Management
+
+**Initial Setup**
+1. Sign in to admin dashboard at `/admin`
+2. Navigate to **Security** → **Enable Two-Factor Authentication**
+3. Choose TOTP or Passkey method
+4. Follow the setup wizard and save recovery codes
+
+**Admin UI** (`/admin/security`)
+- 2FA status overview and enable/disable controls
+- TOTP authenticator management
+- Passkey registration and deletion
+- Recovery code regeneration
+- Trusted device management
+- Security activity logs
+
+**Additional Resources**
+- Full documentation: [`docs/2FA_IMPLEMENTATION.md`](./docs/2FA_IMPLEMENTATION.md)
+- Requirements spec: [`docs/REQ_2FA.md`](./docs/REQ_2FA.md)
+- Test suite: 32+ tests covering TOTP, rate limiting, and admin enforcement
 
 ---
 
 ## 🧪 Testing
 
-We use [Vitest](https://vitest.dev/) with [Testing Library](https://testing-library.com/) for our test suite.
+Narravo has a comprehensive test suite with 500+ tests covering core functionality, security features, and edge cases.
 
-*   **Run all tests:**
-    ```bash
-    pnpm test
-    ```
-*   **Type checking only:**
-    ```bash
-    pnpm typecheck
-    ```
+**Run Tests:**
+```bash
+pnpm test              # Run all tests
+pnpm test:watch        # Run tests in watch mode
+pnpm typecheck         # Type checking only
+```
+
+**Test Coverage Includes:**
+- **2FA & Security:** TOTP verification, WebAuthn flows, rate limiting, admin enforcement (32+ tests)
+- **Content Management:** Post creation, WordPress imports, markdown processing, excerpt generation
+- **Analytics:** View tracking, deduplication, bot detection, privacy features
+- **Comments & Moderation:** Threading, timing attacks, honeypots, auto-approval
+- **Data Operations:** Backup/restore workflows, manifest verification, purge operations
+- **Configuration:** Feature flags, boolean parsing, system settings
+
+**Test Infrastructure:**
+- [Vitest](https://vitest.dev/) as the test runner
+- [Testing Library](https://testing-library.com/) for component testing
+- In-memory database fallbacks for CI environments
+- No external dependencies required for running tests
 
 ---
 
