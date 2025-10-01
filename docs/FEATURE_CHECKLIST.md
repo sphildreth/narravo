@@ -17,8 +17,6 @@
     - RSS/Atom feeds fully implemented (main and monthly archives); email subscribe not implemented
 - [ ] Social share buttons
 - [X] Pagination or infinite scroll with real URLs implemented will be marked as complete with "X"
-- Items that are partially implemented will be marked as partially complete with "-"
-    - Add a note under the partially implemented item providing some detail to what has been completed and what is pending
 
 ---
 
