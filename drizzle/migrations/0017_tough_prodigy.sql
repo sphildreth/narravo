@@ -1,0 +1,2 @@
+ALTER TABLE "comment_tags" ADD CONSTRAINT "comment_tags_comment_id_tag_id_pk" PRIMARY KEY("comment_id","tag_id");--> statement-breakpoint
+ALTER TABLE "post_tags" ADD CONSTRAINT "post_tags_post_id_tag_id_pk" PRIMARY KEY("post_id","tag_id");
