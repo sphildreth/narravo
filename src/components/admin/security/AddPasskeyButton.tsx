@@ -52,7 +52,10 @@ export default function AddPasskeyButton() {
       const verifyResponse = await fetch("/api/2fa/webauthn/register/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(registrationResponse),
+        body: JSON.stringify({
+          ...registrationResponse,
+          nickname: passkeyName.trim() || undefined,
+        }),
       });
 
       if (!verifyResponse.ok) {

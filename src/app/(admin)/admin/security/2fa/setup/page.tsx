@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { requireAdmin } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import TotpSetupFlow from "@/components/admin/security/TotpSetupFlow";
+import TwoFactorSetupSelector from "@/components/admin/security/TwoFactorSetupSelector";
 
 export default async function SetupTwoFactorPage() {
   const session = await requireAdmin();
@@ -17,11 +17,11 @@ export default async function SetupTwoFactorPage() {
       <div>
         <h1 className="text-2xl font-bold">Set Up Two-Factor Authentication</h1>
         <p className="mt-2 text-muted">
-          Secure your account with an authenticator app like Google Authenticator, Authy, or 1Password.
+          Choose your preferred method to secure your account. We recommend passkeys for the best security and convenience.
         </p>
       </div>
 
-      <TotpSetupFlow />
+      <TwoFactorSetupSelector />
     </div>
   );
 }
