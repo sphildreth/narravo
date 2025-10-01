@@ -1,8 +1,29 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# ![Narravo Logo](./public/images/logo-60x57.png) Narravo: A Modern Next.js Blog Engine 🚀
+# ![Narravo Logo](./public/images/logo-60x57.png) Narravo: A Modern Next.js Blo## 🗄️ Database Management
 
-[![CI](https://github.com/sphildreth/narravo/actions/workflows/ci.yml/badge.svg)](https://github.com/sphildreth/narravo/actions/workflows/ci.yml)
+Navravo uses Drizzle ORM for type-safe database interactions and migrations.
+
+*   **Run Migrations:** Apply pending migrations to your database (production-safe).
+    ```bash
+    pnpm drizzle:migrate
+    ```
+*   **Generate Migrations:** Create new migration files based on schema changes.
+    ```bash
+    pnpm drizzle:generate
+    ```
+*   **Push Schema (Dev Only):** Quickly sync schema during local development.
+    ```bash
+    pnpm drizzle:push
+    ```
+*   **Seed Configuration:** Essential for initial setup and default settings.
+    ```bash
+    pnpm seed:config
+    ```
+*   **Seed Demo Content:** Populate your blog with sample posts and comments.
+    ```bash
+    pnpm seed:posts
+    ```https://github.com/sphildreth/narravo/actions/workflows/ci.yml/badge.svg)](https://github.com/sphildreth/narravo/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.1-61dafb?logo=react&logoColor=white)](https://react.dev/)
@@ -57,8 +78,8 @@ cp .env.example .env
 # IMPORTANT: Ensure DATABASE_URL, NEXTAUTH_SECRET, ADMIN_EMAILS, and ANALYTICS_IP_SALT are set.
 # Adjust NEXTAUTH_URL and OAuth provider IDs as needed for your environment.
 
-# 3) Apply database schema (create tables)
-pnpm drizzle:push
+# 3) Run database migrations (create tables)
+pnpm drizzle:migrate
 
 # 4) Seed essential configuration defaults
 pnpm seed:config
@@ -178,7 +199,8 @@ A quick reference for common development tasks:
 | `pnpm test`                  | Execute the full test suite (Vitest)                  |
 | `pnpm test:watch`            | Run tests in watch mode                               |
 | `pnpm drizzle:generate`      | Generate new Drizzle migrations                       |
-| `pnpm drizzle:push`          | Apply schema changes to the database                  |
+| `pnpm drizzle:migrate`       | Apply pending migrations (production-safe)            |
+| `pnpm drizzle:push`          | Sync schema directly (development only)               |
 | `pnpm seed:config`           | Seed default configuration values                     |
 | `pnpm seed:posts`            | Seed demo posts and comments                          |
 | `pnpm wxr:import -- path=…`  | Launch the WordPress importer via CLI (supports flags) |

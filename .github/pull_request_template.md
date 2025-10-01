@@ -1,27 +1,27 @@
-### Summary
-<!-- What changed and why -->
+<!-- Thanks for your contribution! Please fill out the checklist so reviewers can move fast. -->
 
-### Type of Change
-- [ ] Bug fix (non-breaking change that fixes an issue)
-- [ ] New feature (non-breaking change that adds functionality) 
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
+## Summary
+<!-- What does this PR do in one or two sentences? Why is it needed? -->
 
-### Release note
-- [ ] I ran `pnpm changeset` and added a short note with the appropriate bump type.
-- [ ] If this PR is docs/chore-only, explain why no changeset is needed.
+## Related Issue(s)
+<!-- e.g., Fixes #123, Closes #456. Use “Fixes” to auto-close on merge. -->
 
-### Testing
-- [ ] I have tested this change locally
-- [ ] I have updated tests as needed
-- [ ] All tests pass (`pnpm test`)
+## Changes
+- [ ] Feature
+- [ ] Bug fix
+- [ ] Refactor / tech debt
+- [ ] Docs
+- [ ] CI/CD or tooling
+- [ ] Other (describe):
 
-<!-- 
-For changeset guidance:
-- `patch` for bug fixes, small improvements
-- `minor` for new features, backwards-compatible changes  
-- `major` for breaking changes
+## Screenshots / Demos (if UI)
+<!-- Optional: before/after, GIF, or terminal output -->
 
-Run: pnpm changeset
-Choose the bump type and write a brief description for the changelog.
--->
+## How to Test
+<!-- Step-by-step: commands, flags, sample config, test data. Keep it copy/pasteable. -->
+
+```bash
+pnpm typecheck
+pnpm build
+pnpm test
+```
