@@ -8,6 +8,7 @@ import { getPostViewCounts } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import { unstable_cache as cache } from "next/cache";
+import { PageTracker } from "@/components/analytics/PageTracker";
 
 // This page reads DB-backed config and latest posts; ensure it's not pre-rendered at build time
 export const dynamic = "force-dynamic";
@@ -19,6 +20,9 @@ export default async function Page() {
   const feedCount = await config.getNumber("FEED.LATEST-COUNT");
   const disclaimerEnabled = await config.getBoolean("SITE.DISCLAIMER.ENABLED");
   if (feedCount == null) throw new Error("Missing required config: FEED.LATEST-COUNT");
+  
+  // Get session window for page tracking
+  const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;
 
   const getPosts = cache(
     async () => listPosts({ limit: feedCount, includeViews: true }),
@@ -43,6 +47,7 @@ export default async function Page() {
 
   return (
     <>
+      <PageTracker path="/" sessionWindowMinutes={sessionWindowMinutes} />
       <Header />
       <div className="max-w-screen mx-auto px-3 my-7 grid gap-7 md:grid-cols-[320px_1fr]">
         <div className="order-2 md:order-1">
@@ -64,6 +69,7 @@ export default async function Page() {
         {disclaimerEnabled && (
           <><span className="mx-2">|</span><a href="/disclaimer">Disclaimer</a></>
         )}
+        <span className="mx-2">|</span><a href="/feed.xml">RSS</a>
       </footer>
     </>
   );

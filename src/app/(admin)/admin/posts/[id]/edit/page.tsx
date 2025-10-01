@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { getPostForEdit } from "@/app/(admin)/admin/posts/actions";
 import PostForm from "@/components/admin/posts/PostForm";
 import { notFound } from "next/navigation";
@@ -10,6 +11,8 @@ interface EditPostPageProps {
 }
 
 export default async function EditPostPage({ params }: EditPostPageProps) {
+  await requireAdmin2FA();
+
   const resolvedParams = await params;
   const post = await getPostForEdit(resolvedParams.id);
   

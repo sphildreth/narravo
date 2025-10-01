@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { Suspense } from "react";
 import { getUsersWithFilters, type UsersFilter, type UsersSortOptions } from "./actions";
 import UsersManager from "@/components/admin/users/UsersManager";
@@ -16,6 +17,8 @@ export default async function AdminUsersPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  await requireAdmin2FA();
+  
   const resolvedSearchParams = await searchParams;
   const page = parseInt(resolvedSearchParams.page || "1", 10);
   

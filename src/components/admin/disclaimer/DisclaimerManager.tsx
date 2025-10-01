@@ -28,6 +28,10 @@ export default function DisclaimerManager({ initial }: { initial: DisclaimerStat
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
+  const handleMarkdownChange = React.useCallback((markdown: string) => {
+    setState((s) => ({ ...s, markdown }));
+  }, []);
+
   const save = async () => {
     setMessage(null); setError(null);
     try {
@@ -76,9 +80,7 @@ export default function DisclaimerManager({ initial }: { initial: DisclaimerStat
               <label className="text-xs uppercase tracking-wide text-muted">Text</label>
               <TiptapEditor
                 initialMarkdown={state.markdown}
-                onChange={(markdown) => {
-                  setState((s) => ({ ...s, markdown }));
-                }}
+                onChange={handleMarkdownChange}
               />
             </div>
             

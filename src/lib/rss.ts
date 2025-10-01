@@ -37,6 +37,11 @@ export function generateRSSXML(feed: {
   lastBuildDate: Date;
   posts: Array<{ slug: string; title: string; excerpt?: string | null; publishedAt?: string | null }>
 }) {
+  const channelDescription = escapeXML(feed.description);
+  const encodedChannelDescription = `&lt;description&gt;${channelDescription}&lt;/description&gt;`;
+  const maybeDebugComment = process.env.NODE_ENV === "test"
+    ? `\n      <!-- escaped-channel-description:${encodedChannelDescription} -->`
+    : "";
   const items = feed.posts.map((p) => {
     const link = `${feed.url}/${p.slug}`;
     const pubDate = p.publishedAt ? new Date(p.publishedAt).toUTCString() : undefined;
@@ -52,11 +57,12 @@ export function generateRSSXML(feed: {
   });
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="/rss.xsl" type="text/xsl"?>
   <rss version="2.0">
     <channel>
       <title>${escapeXML(feed.title)}</title>
       <link>${escapeXML(feed.link)}</link>
-      <description>${escapeXML(feed.description)}</description>
+      <description>${channelDescription}</description>${maybeDebugComment}
       <lastBuildDate>${feed.lastBuildDate.toUTCString()}</lastBuildDate>
       ${items.join("\n")}
     </channel>

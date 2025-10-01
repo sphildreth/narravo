@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import PostForm from "@/components/admin/posts/PostForm";
 
-export default function NewPostPage() {
+export default async function NewPostPage() {
+  await requireAdmin2FA();
+
   return (
     <main className="max-w-screen mx-auto px-6 my-7">
       <div className="mb-6">

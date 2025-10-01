@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import AppearanceManager from "@/components/admin/appearance/AppearanceManager";
 
 export default async function AppearancePage() {
+  await requireAdmin2FA();
+
   const config = new ConfigServiceImpl({ db });
   const opts = { bypassCache: true } as const;
   const bannerEnabled = (await config.getBoolean("APPEARANCE.BANNER.ENABLED", opts)) ?? false;

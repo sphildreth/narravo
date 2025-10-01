@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { getUserDetails, getAdminVisibility } from "@/app/(admin)/admin/users/actions";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -13,6 +14,8 @@ interface UserDetailPageProps {
 }
 
 export default async function UserDetailPage({ params }: UserDetailPageProps) {
+  await requireAdmin2FA();
+
   const resolvedParams = await params;
   const [user, adminInfo] = await Promise.all([
     getUserDetails(resolvedParams.id),

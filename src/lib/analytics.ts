@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { db } from "./db";
-import { posts, postDailyViews, postViewEvents } from "@/drizzle/schema";
+import { posts, postDailyViews, postViewEvents, pageViewEvents, pageDailyViews } from "@/drizzle/schema";
 import { sql, eq, gte, desc, and, count, sum, inArray } from "drizzle-orm";
 import { ConfigServiceImpl } from "./config";
 import crypto from "crypto";
@@ -17,10 +17,25 @@ interface RecordViewInput {
   lang?: string;
 }
 
+interface RecordPageViewInput {
+  path: string;
+  sessionId?: string;
+  ip?: string;
+  ua?: string;
+  referer?: string;
+  lang?: string;
+}
+
 interface PostDTO {
   id: string;
   slug: string;
   title: string;
+  viewsLastNDays?: number;
+  totalViews?: number;
+}
+
+interface PageDTO {
+  path: string;
   viewsLastNDays?: number;
   totalViews?: number;
 }
@@ -31,12 +46,18 @@ interface ViewCounts {
   viewsLastNDays: number;
 }
 
+interface PageViewCounts {
+  path: string;
+  totalViews: number;
+  viewsLastNDays: number;
+}
+
 interface SparklineData {
   day: string; // YYYY-MM-DD
   views: number;
 }
 
-// Detect a missing relation/table error (e.g., post_daily_views not created yet)
+// Detect a missing relation/table error (e.g., post_daily_views or page_daily_views not created yet)
 function isMissingDailyViewsRelation(err: unknown): boolean {
   const e = err as any;
   if (!e) return false;
@@ -271,6 +292,167 @@ export async function recordView(input: RecordViewInput): Promise<boolean> {
   }
 }
 
+export async function recordPageView(input: RecordPageViewInput): Promise<boolean> {
+  const { path, sessionId, ip, ua, referer, lang } = input;
+
+  // Check if DNT should be respected
+  const respectDnt = await config.getBoolean("VIEW.RESPECT-DNT");
+  if (respectDnt && process.env.NODE_ENV !== "test") {
+    // DNT check would be handled in the API route
+  }
+
+  // Check if bots should be counted
+  const countBots = await config.getBoolean("VIEW.COUNT-BOTS");
+  const botDetected = isBot(ua, referer);
+  
+  if (!countBots && botDetected) {
+    return false; // Skip counting bots
+  }
+
+  // Get session window for deduplication
+  const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;
+  const windowStart = new Date(Date.now() - sessionWindowMinutes * 60 * 1000);
+
+  // Check for existing view in session window (session-scoped dedupe)
+  if (sessionId) {
+    const existingView = await db
+      .select({ id: pageViewEvents.id })
+      .from(pageViewEvents)
+      .where(
+        and(
+          eq(pageViewEvents.path, path),
+          eq(pageViewEvents.sessionId, sessionId),
+          gte(pageViewEvents.ts, windowStart)
+        )
+      )
+      .limit(1);
+
+    if (existingView.length > 0) {
+      return false; // Skip duplicate view
+    }
+  }
+  
+  // If no sessionId, best-effort dedupe by IP hash within window
+  if (!sessionId && ip) {
+    const ipHashForDedupe = hashIp(ip);
+    if (ipHashForDedupe) {
+      const existingByIp = await db
+        .select({ id: pageViewEvents.id })
+        .from(pageViewEvents)
+        .where(
+          and(
+            eq(pageViewEvents.path, path),
+            eq(pageViewEvents.ipHash, ipHashForDedupe),
+            gte(pageViewEvents.ts, windowStart)
+          )
+        )
+        .limit(1);
+      if (existingByIp.length > 0) {
+        return false;
+      }
+    }
+  }
+
+  const ipHash = ip ? hashIp(ip) : null;
+  const refererParts = parseReferer(referer);
+  const userLang = parseLang(lang);
+  const currentDate = new Date().toISOString().split('T')[0];
+  
+  if (!currentDate) throw new Error("Invalid current date");
+
+  try {
+    await db.transaction(async (tx: any) => {
+      logger.debug("📊 Starting page view transaction");
+      
+      // Insert view event
+      logger.debug("📊 Inserting page view event");
+      await tx.insert(pageViewEvents).values({
+        path,
+        sessionId,
+        ipHash,
+        userAgent: ua,
+        referrerHost: refererParts.host,
+        referrerPath: refererParts.path,
+        userLang,
+        bot: botDetected,
+      });
+      logger.debug("📊 Page view event inserted successfully");
+
+      // Upsert daily views (if table exists). Swallow missing-table errors.
+      try {
+        logger.debug("📊 Processing daily page views update");
+        // Determine if this is considered unique for the day
+        let isUniqueForDay = false;
+        const dayStart = new Date(`${currentDate}T00:00:00.000Z`);
+        const currentTime = new Date();
+        
+        if (sessionId) {
+          const seen = await tx
+            .select({ id: pageViewEvents.id })
+            .from(pageViewEvents)
+            .where(
+              and(
+                eq(pageViewEvents.path, path),
+                eq(pageViewEvents.sessionId, sessionId),
+                gte(pageViewEvents.ts, dayStart),
+                sql`${pageViewEvents.ts} < ${currentTime}`
+              )
+            )
+            .limit(1);
+          isUniqueForDay = seen.length === 0;
+        } else if (ip) {
+          const ipHashForDay = hashIp(ip);
+          if (ipHashForDay) {
+            const seen = await tx
+              .select({ id: pageViewEvents.id })
+              .from(pageViewEvents)
+              .where(
+                and(
+                  eq(pageViewEvents.path, path),
+                  eq(pageViewEvents.ipHash, ipHashForDay),
+                  gte(pageViewEvents.ts, dayStart),
+                  sql`${pageViewEvents.ts} < ${currentTime}`
+                )
+              )
+              .limit(1);
+            isUniqueForDay = seen.length === 0;
+          }
+        }
+
+        logger.debug("📊 Daily page views uniqueness check:", { isUniqueForDay });
+        await tx
+          .insert(pageDailyViews)
+          .values({
+            day: currentDate,
+            path,
+            views: 1,
+            uniques: isUniqueForDay ? 1 : 0,
+          })
+          .onConflictDoUpdate({
+            target: [pageDailyViews.day, pageDailyViews.path],
+            set: {
+              views: sql`${pageDailyViews.views} + 1`,
+              uniques: sql`${pageDailyViews.uniques} + ${isUniqueForDay ? 1 : 0}`,
+            },
+          });
+        logger.debug("📊 Daily page views updated successfully");
+      } catch (err) {
+        logger.debug("📊 Daily page views error (might be expected):", err);
+        if (!isMissingDailyViewsRelation(err)) throw err;
+        // If the table is missing, we simply skip daily aggregation.
+      }
+      
+      logger.debug("📊 Page view transaction completed successfully");
+    });
+
+    logger.debug("📊 recordPageView function returning true");
+    return true;
+  } catch (error) {
+    logger.error("Failed to record page view:", error);
+    return false;
+  }
+}
+
 export async function getTrendingPosts({ days = 7, limit = 10 }: { days?: number; limit?: number }): Promise<PostDTO[]> {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
@@ -428,6 +610,192 @@ export async function getPostSparkline(postId: string, days: number = 30): Promi
   }
 }
 
+export async function getTrendingPages({ days = 7, limit = 10 }: { days?: number; limit?: number }): Promise<PageDTO[]> {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const startDateStr: string = startDate.toISOString().slice(0, 10);
+  
+  if (!startDateStr) throw new Error("Invalid start date");
+
+  try {
+    const trendingPages = await db
+      .select({
+        path: pageDailyViews.path,
+        viewsLastNDays: sum(pageDailyViews.views),
+      })
+      .from(pageDailyViews)
+      .where(
+        and(
+          gte(pageDailyViews.day, startDateStr),
+          sql`${pageDailyViews.path} != '/'` // Exclude the index page
+        )
+      )
+      .groupBy(pageDailyViews.path)
+      .orderBy(desc(sum(pageDailyViews.views)))
+      .limit(limit);
+
+    return trendingPages.map((page: any) => ({
+      path: page.path,
+      viewsLastNDays: Number(page.viewsLastNDays) || 0,
+      totalViews: 0, // We don't have a total views column for pages yet
+    }));
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    // Fallback: if daily views table is missing, return empty array
+    return [];
+  }
+}
+
+export async function getPageViewCounts(paths: string[]): Promise<Map<string, PageViewCounts>> {
+  if (paths.length === 0) return new Map();
+
+  const trendingDays = await config.getNumber("VIEW.TRENDING-DAYS") ?? 7;
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - trendingDays);
+  const startDateStr = startDate.toISOString().split('T')[0];
+  
+  if (!startDateStr) throw new Error("Invalid start date");
+
+  try {
+    const results = await db
+      .select({
+        path: pageDailyViews.path,
+        recentViews: sum(pageDailyViews.views),
+      })
+      .from(pageDailyViews)
+      .where(
+        and(
+          inArray(pageDailyViews.path, paths),
+          gte(pageDailyViews.day, startDateStr)
+        )
+      )
+      .groupBy(pageDailyViews.path);
+
+    const viewCounts = new Map<string, PageViewCounts>();
+
+    for (const result of results) {
+      viewCounts.set(result.path, {
+        path: result.path,
+        totalViews: 0, // We don't have a total views column for pages yet
+        viewsLastNDays: Number(result.recentViews) || 0,
+      });
+    }
+
+    // Ensure all requested paths have an entry
+    for (const path of paths) {
+      if (!viewCounts.has(path)) {
+        viewCounts.set(path, {
+          path,
+          totalViews: 0,
+          viewsLastNDays: 0,
+        });
+      }
+    }
+
+    return viewCounts;
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    // Fallback: no daily table, return zeros for all paths
+    const viewCounts = new Map<string, PageViewCounts>();
+    for (const path of paths) {
+      viewCounts.set(path, { path, totalViews: 0, viewsLastNDays: 0 });
+    }
+    return viewCounts;
+  }
+}
+
+export async function getPageSparkline(path: string, days: number = 30): Promise<SparklineData[]> {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days + 1);
+  
+  const sparklineData: SparklineData[] = [];
+  
+  // Generate all days in range
+  for (let i = 0; i < days; i++) {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + i);
+    const dayStr = date.toISOString().split('T')[0];
+    if (dayStr) {
+      sparklineData.push({
+        day: dayStr,
+        views: 0,
+      });
+    }
+  }
+
+  // Get actual view data
+  const startDateStr = startDate.toISOString().split('T')[0];
+  if (!startDateStr) throw new Error("Invalid start date");
+  
+  try {
+    const viewData = await db
+      .select({
+        day: pageDailyViews.day,
+        views: pageDailyViews.views,
+      })
+      .from(pageDailyViews)
+      .where(
+        and(
+          eq(pageDailyViews.path, path),
+          gte(pageDailyViews.day, startDateStr)
+        )
+      )
+      .orderBy(pageDailyViews.day);
+
+    // Merge actual data with the template
+    const dataMap = new Map<string, number>(viewData.map((item: any) => [item.day as string, Number(item.views)]));
+
+    return sparklineData.map((item: SparklineData) => ({
+      ...item,
+      views: dataMap.get(item.day) ?? 0,
+    }));
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    // Fallback: table missing, return zeros
+    return sparklineData;
+  }
+}
+
+/**
+ * Get total views across all posts and pages on the site
+ */
+export async function getTotalSiteViews(): Promise<{ postViews: number; pageViews: number; totalViews: number }> {
+  try {
+    // Get total post views from the posts table
+    const postViewsResult = await db
+      .select({ totalPostViews: sum(posts.viewsTotal) })
+      .from(posts);
+    
+    const postViews = Number(postViewsResult[0]?.totalPostViews) || 0;
+
+    // Get total page views from page_daily_views table
+    let pageViews = 0;
+    try {
+      const pageViewsResult = await db
+        .select({ totalPageViews: sum(pageDailyViews.views) })
+        .from(pageDailyViews);
+      
+      pageViews = Number(pageViewsResult[0]?.totalPageViews) || 0;
+    } catch (err) {
+      if (!isMissingDailyViewsRelation(err)) throw err;
+      // If page_daily_views doesn't exist, pageViews stays 0
+    }
+
+    return {
+      postViews,
+      pageViews,
+      totalViews: postViews + pageViews,
+    };
+  } catch (err) {
+    logger.error("Error getting total site views:", err);
+    return {
+      postViews: 0,
+      pageViews: 0,
+      totalViews: 0,
+    };
+  }
+}
+
 // Test helpers
 export const __testHelpers__ = {
   isBot,
@@ -442,25 +810,44 @@ export async function getSiteAnalyticsSummary({ days = 7, topN = 5 }: { days?: n
   startDate.setDate(startDate.getDate() - days);
   const startDateStr = startDate.toISOString().split('T')[0];
 
-  // Total views all time
+  // Total post views all time
   const totalRows = await db
     .select({ total: sum(posts.viewsTotal) })
     .from(posts)
     .where(sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`);
-  const totalViewsAllTime = Number(totalRows[0]?.total || 0);
+  const totalPostViewsAllTime = Number(totalRows[0]?.total || 0);
 
-  // Recent views in last N days (sum of daily views)
-  let viewsLastNDays = 0;
+  // Recent post views in last N days (sum of daily views)
+  let postViewsLastNDays = 0;
   try {
     const recentRows = await db
       .select({ total: sum(postDailyViews.views) })
       .from(postDailyViews)
       .where(sql`${postDailyViews.day} >= ${startDateStr}`);
-    viewsLastNDays = Number(recentRows[0]?.total || 0);
+    postViewsLastNDays = Number(recentRows[0]?.total || 0);
   } catch (err) {
     if (!isMissingDailyViewsRelation(err)) throw err;
-    viewsLastNDays = 0;
+    postViewsLastNDays = 0;
   }
+
+  // Recent page views in last N days (sum of daily views)
+  let pageViewsLastNDays = 0;
+  try {
+    const recentPageRows = await db
+      .select({ total: sum(pageDailyViews.views) })
+      .from(pageDailyViews)
+      .where(sql`${pageDailyViews.day} >= ${startDateStr}`);
+    pageViewsLastNDays = Number(recentPageRows[0]?.total || 0);
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    pageViewsLastNDays = 0;
+  }
+
+  // Combined recent views (posts + pages)
+  const viewsLastNDays = postViewsLastNDays + pageViewsLastNDays;
+  
+  // For total views, we only have post totals (pages don't have a total column yet)
+  const totalViewsAllTime = totalPostViewsAllTime;
 
   // Top posts by last N days
   let topPosts: PostDTO[] = [];
@@ -504,5 +891,21 @@ export async function getSiteAnalyticsSummary({ days = 7, topN = 5 }: { days?: n
   topPosts = rows.map((r: any) => ({ id: r.id, slug: r.slug, title: r.title, totalViews: r.totalViews, viewsLastNDays: 0 }));
   }
 
-  return { totalViewsAllTime, viewsLastNDays, topPosts };
+  // Top pages by last N days
+  let topPages: PageDTO[] = [];
+  try {
+    topPages = await getTrendingPages({ days, limit: topN });
+  } catch (err) {
+    if (!isMissingDailyViewsRelation(err)) throw err;
+    topPages = [];
+  }
+
+  return { 
+    totalViewsAllTime, 
+    viewsLastNDays, 
+    postViewsLastNDays,
+    pageViewsLastNDays,
+    topPosts, 
+    topPages 
+  };
 }
