@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { configuration } from "@/drizzle/schema";
 import { asc, isNull } from "drizzle-orm";
 import ConfigManager from "@/components/admin/config/ConfigManager";
 
 export default async function ConfigurationPage() {
+  await requireAdmin2FA();
+
   const rows = await db
     .select({ key: configuration.key, type: configuration.type, value: configuration.value, allowedValues: configuration.allowedValues, required: configuration.required })
     .from(configuration)

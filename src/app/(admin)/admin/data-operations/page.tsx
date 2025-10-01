@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { ExportSection } from "./ExportSection";
 import { RestoreSection } from "./RestoreSection";
 import { PurgeSection } from "./PurgeSection";
 import { AuditLogSection } from "./AuditLogSection";
 
 export default async function DataOperationsPage() {
-  await requireAdmin();
+  await requireAdmin2FA();
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">

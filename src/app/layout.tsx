@@ -9,6 +9,7 @@ import Navbar from "@/components/Navbar";
 import { DEFAULT_DATE_FORMAT } from "@/lib/dateFormat";
 import { DateFormatProvider } from "@/lib/dateFormat.client";
 import { RUMCollector } from "@/components/RUMCollector";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 
 export async function generateMetadata(): Promise<Metadata> {
     try {
@@ -68,13 +69,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <meta name="color-scheme" content="light dark" />
         </head>
         <body>
-            <RUMCollector />
-            <Navbar />
-            <DateFormatProvider value={dateFormat}>
-                <main className="min-h-screen bg-bg text-fg">
-                    {children}
-                </main>
-            </DateFormatProvider>
+            <AuthProvider>
+                <RUMCollector />
+                <Navbar />
+                <DateFormatProvider value={dateFormat}>
+                    <main className="min-h-screen bg-bg text-fg">
+                        {children}
+                    </main>
+                </DateFormatProvider>
+            </AuthProvider>
         </body>
         </html>
     );

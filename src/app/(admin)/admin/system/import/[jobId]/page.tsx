@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { importJobs, importJobErrors } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -11,6 +12,8 @@ interface Props {
 }
 
 export default async function ImportJobDetailsPage({ params }: Props) {
+  await requireAdmin2FA();
+
   const resolvedParams = await params;
   const [job] = await db.select().from(importJobs).where(eq(importJobs.id, resolvedParams.jobId));
   

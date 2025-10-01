@@ -189,8 +189,8 @@ Add strong but simple **two-factor authentication (2FA)** for a **single‑autho
 
 ## 13. Implementation Hints (Stack‑Agnostic)
 
-- **TOTP** libs: Node (`otplib`, `speakeasy`), .NET (`Otp.NET`).  
-- **WebAuthn** libs: Node (`@simplewebauthn/server`), .NET (`fido2-net-lib`).  
+- **TOTP** libs: Node (`otplib`, `speakeasy`).  
+- **WebAuthn** libs: Node (`@simplewebauthn/server`).  
 - Use **httpOnly** cookies and short‑lived JWTs (if any) for `mfaPending`.  
 - Store recovery codes **hashed**; treat like passwords.
 

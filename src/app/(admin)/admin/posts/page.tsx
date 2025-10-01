@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { Suspense } from "react";
 import { getPostsWithFilters, type PostsFilter, type PostsSortOptions } from "./actions";
 import PostsManager from "@/components/admin/posts/PostsManager";
@@ -19,6 +20,8 @@ export default async function AdminPostsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  await requireAdmin2FA();
+  
   const resolvedSearchParams = await searchParams;
   const page = parseInt(resolvedSearchParams.page || "1", 10);
   

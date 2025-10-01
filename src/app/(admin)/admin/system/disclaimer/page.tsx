@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import DisclaimerManager from "@/components/admin/disclaimer/DisclaimerManager";
@@ -8,6 +9,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function DisclaimerPage() {
+  await requireAdmin2FA();
+
   const config = new ConfigServiceImpl({ db });
   const opts = { bypassCache: true } as const;
   const enabled = (await config.getBoolean("SITE.DISCLAIMER.ENABLED", opts)) ?? false;

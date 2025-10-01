@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { Suspense } from "react";
 import { getModerationData } from "./actions";
 import ModerationQueue from "@/components/admin/ModerationQueue";
@@ -14,6 +15,8 @@ export default async function ModerationPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  await requireAdmin2FA();
+  
   const resolvedSearchParams = await searchParams;
   const status = resolvedSearchParams.status;
   const page = parseInt(resolvedSearchParams.page || "1", 10);

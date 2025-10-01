@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import {
   countPendingComments,
   countSpamComments,
@@ -15,6 +16,8 @@ import ServerDetails from "@/components/admin/ServerDetails";
 import AdminActivityWidget from "@/components/admin/analytics/AdminActivityWidget";
 
 export default async function AdminDashboardPage() {
+  await requireAdmin2FA();
+
   const [
     publishedPosts,
     pendingComments,

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { requireAdmin2FA } from "@/lib/auth";
 import { listPosts } from "@/lib/posts";
 import { getPostSparkline, getPostViewCounts, getTrendingPages, getPageSparkline, getPageViewCounts, getTotalSiteViews } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
@@ -8,6 +9,8 @@ import Link from "next/link";
 import { formatDateSafe } from "@/lib/dateFormat";
 
 export default async function AnalyticsPage() {
+  await requireAdmin2FA();
+
   const config = new ConfigServiceImpl({ db });
   const sparklineDays = await config.getNumber("VIEW.ADMIN-SPARKLINE-DAYS") ?? 30;
   const dateFormat = (await config.getString("VIEW.DATE-FORMAT")) ?? "MMMM d, yyyy";

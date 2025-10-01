@@ -54,6 +54,9 @@ export const users = pgTable("users", {
   name: text("name"),
   image: text("image"),
   login: text("login").unique(), // WordPress username for import mapping
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  twoFactorEnforcedAt: timestamp("two_factor_enforced_at", { withTimezone: true }),
+  mfaVerifiedAt: timestamp("mfa_verified_at", { withTimezone: true }), // Last successful 2FA verification
 });
 
 export const comments = pgTable(
@@ -318,4 +321,71 @@ export const dataOperationLogs = pgTable("data_operation_logs", {
   dataOperationLogsUserIdIndex: index("data_operation_logs_user_id_idx").on(table.userId),
   dataOperationLogsTypeIndex: index("data_operation_logs_type_idx").on(table.operationType),
   dataOperationLogsCreatedAtIndex: index("data_operation_logs_created_at_idx").on(table.createdAt),
+}));
+
+// Two-Factor Authentication tables
+
+// Owner TOTP configuration
+export const ownerTotp = pgTable("owner_totp", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  secretBase32: text("secret_base32").notNull(), // Store encrypted in production
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  activatedAt: timestamp("activated_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  lastUsedStep: integer("last_used_step"), // For replay protection
+});
+
+// WebAuthn credentials (passkeys/security keys)
+export const ownerWebAuthnCredential = pgTable("owner_webauthn_credential", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  credentialId: text("credential_id").notNull().unique(),
+  publicKey: text("public_key").notNull(),
+  counter: integer("counter").notNull().default(0),
+  transports: jsonb("transports"), // ["usb", "nfc", "ble", "internal"]
+  aaguid: text("aaguid"),
+  nickname: text("nickname"),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+}, (table) => ({
+  ownerWebAuthnCredentialUserIdIndex: index("owner_webauthn_credential_user_id_idx").on(table.userId),
+}));
+
+// Recovery codes (hashed at rest)
+export const ownerRecoveryCode = pgTable("owner_recovery_code", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  codeHash: text("code_hash").notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  ownerRecoveryCodeUserIdIndex: index("owner_recovery_code_user_id_idx").on(table.userId),
+}));
+
+// Trusted devices for "remember this device" functionality
+export const trustedDevice = pgTable("trusted_device", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  userAgent: text("user_agent"),
+  ipHash: text("ip_hash"),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).default(sql`now()`),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => ({
+  trustedDeviceUserIdIndex: index("trusted_device_user_id_idx").on(table.userId),
+  trustedDeviceTokenHashIndex: index("trusted_device_token_hash_idx").on(table.tokenHash),
+}));
+
+// Security activity log (optional, local only)
+export const securityActivity = pgTable("security_activity", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  event: text("event").notNull(), // "2fa_enabled", "2fa_disabled", "passkey_added", etc.
+  metadata: jsonb("metadata"), // Additional context
+  timestamp: timestamp("timestamp", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  securityActivityUserIdIndex: index("security_activity_user_id_idx").on(table.userId),
+  securityActivityTimestampIndex: index("security_activity_timestamp_idx").on(table.timestamp),
 }));
