@@ -449,4 +449,33 @@ describe("Middleware", () => {
       expect(response.status).toBe(200); // No redirect due to case mismatch
     });
   });
+
+  describe("authentication checks", () => {
+    it("allows admin routes through when no redirect applies", async () => {
+      mockGetRedirectsEdge.mockResolvedValue([]);
+
+      const request = new NextRequest(
+        new URL("http://localhost:3000/admin/dashboard")
+      );
+
+      const response = await middleware(request);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("location")).toBeNull();
+    });
+
+    it("does not modify authenticated requests for protected paths", async () => {
+      mockGetRedirectsEdge.mockResolvedValue([]);
+
+      const request = new NextRequest(
+        new URL("http://localhost:3000/admin/settings"),
+        { headers: { cookie: "next-auth.session-token=token" } }
+      );
+
+      const response = await middleware(request);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("location")).toBeNull();
+    });
+  });
 });

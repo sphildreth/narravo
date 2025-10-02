@@ -170,12 +170,14 @@ async function processFile(file: string): Promise<boolean> {
     }
   }
 
-  // Build new content
-  const insert = header;
-  const prefix = lines.slice(0, idx).join("\n");
-  const suffix = lines.slice(idx).join("\n");
-  const newline = prefix.length > 0 ? "\n" : ""; // avoid leading extra newline if inserting at top
-  const out = `${prefix}${newline}${insert}\n${suffix}`;
+  // Insert header at the computed position while preserving trailing newline semantics
+  const updated = [...lines];
+  updated.splice(idx, 0, header);
+
+  let out = updated.join("\n");
+  if (raw.endsWith("\n") && !out.endsWith("\n")) {
+    out += "\n";
+  }
 
   await fs.writeFile(file, out, "utf8");
   return true;

@@ -4,17 +4,46 @@
  * These tests verify that admin users with 2FA enabled cannot access
  * admin routes without completing 2FA verification.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { db } from "@/lib/db";
 import { users } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+
+const TEST_ADMIN_EMAIL = "test-admin-2fa@example.com";
+const mockUsers: Array<Record<string, any>> = [];
+
+vi.mock("@/lib/db", () => {
+  const insert = vi.fn(() => ({
+    values: (values: Record<string, any>) => ({
+      returning: vi.fn(async () => {
+        const record = {
+          id: `user-${mockUsers.length + 1}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...values,
+        };
+        mockUsers.push(record);
+        return [record];
+      }),
+    }),
+  }));
+
+  const del = vi.fn(() => ({
+    where: vi.fn(async () => {
+      for (let i = mockUsers.length - 1; i >= 0; i--) {
+        if (mockUsers[i]?.email === TEST_ADMIN_EMAIL) {
+          mockUsers.splice(i, 1);
+        }
+      }
+      return { rowCount: 1 };
+    }),
+  }));
+
+  return { db: { insert, delete: del } };
+});
 
 describe("2FA Admin Enforcement", () => {
-  const testAdminEmail = "test-admin-2fa@example.com";
-
-  beforeEach(async () => {
-    // Clean up test user
-    await db.delete(users).where(eq(users.email, testAdminEmail));
+  beforeEach(() => {
+    mockUsers.length = 0;
   });
 
   it("should block admin route access when mfaPending=true", async () => {
@@ -22,7 +51,7 @@ describe("2FA Admin Enforcement", () => {
     const [adminUser] = await db
       .insert(users)
       .values({
-        email: testAdminEmail,
+        email: TEST_ADMIN_EMAIL,
         name: "Test Admin",
         twoFactorEnabled: true,
         mfaVerifiedAt: null, // Not verified
@@ -39,7 +68,7 @@ describe("2FA Admin Enforcement", () => {
     const [adminUser] = await db
       .insert(users)
       .values({
-        email: testAdminEmail,
+        email: TEST_ADMIN_EMAIL,
         name: "Test Admin",
         twoFactorEnabled: true,
         mfaVerifiedAt: new Date(), // Just verified
@@ -57,7 +86,7 @@ describe("2FA Admin Enforcement", () => {
     const [adminUser] = await db
       .insert(users)
       .values({
-        email: testAdminEmail,
+        email: TEST_ADMIN_EMAIL,
         name: "Test Admin",
         twoFactorEnabled: true,
         mfaVerifiedAt: eightHoursAgo,
@@ -80,7 +109,7 @@ describe("2FA Admin Enforcement", () => {
     const [adminUser] = await db
       .insert(users)
       .values({
-        email: testAdminEmail,
+        email: TEST_ADMIN_EMAIL,
         name: "Test Admin",
         twoFactorEnabled: false,
         mfaVerifiedAt: null,
@@ -93,7 +122,7 @@ describe("2FA Admin Enforcement", () => {
 
   it("should verify the 8-hour window calculation", () => {
     const now = Date.now();
-    
+
     // 7 hours ago - should be valid
     const sevenHoursAgo = new Date(now - 7 * 60 * 60 * 1000);
     const isRecentSeven = now - sevenHoursAgo.getTime() < 8 * 60 * 60 * 1000;
