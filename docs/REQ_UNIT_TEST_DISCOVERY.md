@@ -233,14 +233,6 @@ This document identifies gaps in unit test coverage for the Narravo project. The
 
 ### Component Testing - Critical Paths
 
-**STATUS: Optional - Not Prioritized**
-
-The following component tests were initially identified but are marked as optional/lower priority due to:
-1. **High Complexity**: Requires extensive mocking of Next.js 15 client hooks (useRouter, useSession, useSearchParams, etc.)
-2. **Low Value**: These are primarily UI presentation components with logic already tested at the API/server action level
-3. **Better Alternatives**: E2E tests with Playwright would provide better coverage for user interactions
-4. **Maintenance Burden**: Heavy mocking makes tests brittle and difficult to maintain as framework versions change
-
 If component testing becomes critical, consider:
 - Using Playwright for E2E testing instead of unit tests
 - Testing only pure presentation logic without framework dependencies
