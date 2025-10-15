@@ -226,11 +226,29 @@ A quick reference for common development tasks:
 | `pnpm wxr:import -- path=…`  | Launch the WordPress importer via CLI (supports flags) |
 | `pnpm backup`                | Create a manifested ZIP backup (see Backups section)   |
 | `pnpm restore -- <file>`     | Restore or dry run a backup archive                    |
+| `pnpm cleanup:uploads`       | Remove orphaned temporary uploads (see below)          |
 | `pnpm perf:benchmark`        | Run the combined performance benchmark suite           |
 | `pnpm perf:lighthouse`       | Execute Lighthouse CI checks                          |
 | `pnpm perf:loadtest`         | Run Autocannon smoke load testing                      |
 | `pnpm perf:analyze`          | Build with bundle analyzer enabled                     |
 | `pnpm perf:weekly`           | Produce a weekly performance rollup report             |
+
+### Upload Cleanup
+
+Narravo tracks all image/video uploads in the database. When users add images to posts in the editor, they're initially marked as "temporary". Once the post is saved/published, these uploads are committed. The cleanup script removes orphaned temporary uploads:
+
+```bash
+# Dry run - see what would be deleted
+npm run cleanup:uploads -- --dry-run
+
+# Delete temporary uploads older than 24 hours (default)
+npm run cleanup:uploads
+
+# Delete temporary uploads older than 48 hours
+npm run cleanup:uploads -- --age-hours=48
+```
+
+**Recommended:** Set up a cron job to run this cleanup daily or weekly to prevent accumulation of orphaned uploads from abandoned post drafts.
 
 ---
 
