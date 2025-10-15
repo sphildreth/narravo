@@ -4,6 +4,7 @@
 import React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { createPortal } from "react-dom";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import TextAlign from "@tiptap/extension-text-align";
@@ -124,13 +125,24 @@ const AlignedImage = Image.extend({
         default: 'left',
         renderHTML: attributes => ({
           class: `img-align-${attributes.align}`,
+          'data-align': attributes.align,
         }),
+        parseHTML: element => element.getAttribute('data-align') || element.className?.match(/img-align-(\w+)/)?.[1] || 'left',
       },
       width: {
         default: null,
-        renderHTML: attributes => ({
-          style: attributes.width ? `width: ${attributes.width}` : null,
-        }),
+        renderHTML: attributes => {
+          if (!attributes.width) return {};
+          // Handle both pixel values and percentages
+          const widthValue = attributes.width;
+          return {
+            style: widthValue.includes('%') || widthValue.includes('px') 
+              ? `width: ${widthValue}` 
+              : `width: ${widthValue}px`,
+            'data-width': widthValue, // Store for markdown serialization
+          };
+        },
+        parseHTML: element => element.getAttribute('data-width') || element.style.width || null,
       },
       title: {
         default: null,
@@ -143,7 +155,7 @@ const AlignedImage = Image.extend({
 
   renderHTML({ HTMLAttributes }) {
     const { align = 'left', caption, ...imgAttrs } = HTMLAttributes;
-    const figureAttrs = { class: `align-${align}` };
+    const figureAttrs = { class: `align-${align} image-resizable` };
     
     if (caption) {
       return ['figure', figureAttrs, ['img', imgAttrs], ['figcaption', 0, caption]];
@@ -158,11 +170,33 @@ const AlignedImage = Image.extend({
       setImageAlign: (align: 'left' | 'center' | 'right') => ({ commands }: any) => {
         return commands.updateAttributes(this.name, { align });
       },
-      setImageWidth: (width: string) => ({ commands }: any) => {
-        return commands.updateAttributes(this.name, { width });
+      setImageWidth: (width: string | number) => ({ commands }: any) => {
+        const widthStr = typeof width === 'number' ? `${width}px` : width;
+        return commands.updateAttributes(this.name, { width: widthStr });
       },
       setImageCaption: (caption: string) => ({ commands }: any) => {
         return commands.updateAttributes(this.name, { caption });
+      },
+    };
+  },
+  
+  // Add markdown storage for proper serialization
+  addStorage() {
+    return {
+      markdown: {
+        serialize: (state: any, node: any) => {
+          const { src, alt, title, width, align } = node.attrs;
+          // Build HTML img tag with all attributes preserved
+          let html = '<img';
+          if (src) html += ` src="${src}"`;
+          if (alt) html += ` alt="${alt}"`;
+          if (title) html += ` title="${title}"`;
+          if (width) html += ` style="width: ${width}" data-width="${width}"`;
+          if (align && align !== 'left') html += ` class="img-align-${align}" data-align="${align}"`;
+          html += ' />';
+          state.write(html);
+          state.closeBlock(node);
+        },
       },
     };
   },
@@ -201,46 +235,19 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   const expandedMarkdown = expandShortcodes(markdown);
   const previewReadyMarkdown = expandedMarkdown.replace(/<video(?![^>]*data-shortcode-preview)/g, '<video data-shortcode-preview="true"');
   
-    logger.debug('fromMarkdown processing:', {
-    originalMarkdown: markdown,
-    expandedMarkdown,
-    previewReadyMarkdown
-  });
-  
   // Check if we have HTML (expanded shortcodes) vs plain markdown
   const hasHTML = expandedMarkdown !== markdown && expandedMarkdown.includes('<');
   
-  console.log('🔄 [TiptapEditor] Content analysis:', {
-    hasHTML,
-    hasMermaidBlocks: /```mermaid/gi.test(previewReadyMarkdown),
-    mermaidBlockCount: (previewReadyMarkdown.match(/```mermaid/gi) || []).length,
-    markdownLength: markdown.length,
-    expandedLength: expandedMarkdown.length
-  });
-  
   try {
     if (hasHTML) {
-      logger.debug('🔄 [TiptapEditor] Setting expanded HTML content');
       editor.commands.setContent(previewReadyMarkdown);
     } else {
       const mdStorage = (editor.storage as any)?.markdown;
       const parser = mdStorage?.parser;
       if (parser) {
-        logger.debug('🔄 [TiptapEditor] Parsing markdown with tiptap-markdown parser');
-        logger.debug('🔄 [TiptapEditor] Content being parsed:', previewReadyMarkdown.substring(0, 300) + '...');
         const doc = parser.parse(previewReadyMarkdown);
-        console.log('🔄 [TiptapEditor] Parsed document structure:', {
-          nodeType: doc.type?.name,
-          childCount: doc.childCount,
-          content: doc.content?.content?.map((child: any) => ({
-            type: child.type?.name,
-            attrs: child.attrs,
-            textContent: child.textContent?.substring(0, 100) + '...'
-          }))
-        });
         editor.commands.setContent(doc as any);
       } else {
-        logger.debug('🔄 [TiptapEditor] Markdown parser missing, inserting raw markdown as preformatted fallback');
         const escaped = previewReadyMarkdown
           .replace(/&/g, '&amp;')
           .replace(/</g, '&gt;');
@@ -258,7 +265,6 @@ export const fromMarkdown = async (markdown: string, editor?: Editor) => {
   
   // Force a reparse with a small delay to ensure content is set first
   setTimeout(() => {
-    logger.debug('🔄 [TiptapEditor] Running delayed operations after content set');
     reparseLowlight(editor);
     // Note: convertMermaidCodeBlocks is removed - the auto-conversion plugin in MermaidNode.ts handles this
   }, 100);
@@ -302,6 +308,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
   const [showMarkdownView, setShowMarkdownView] = useState(false);
   const [markdownContent, setMarkdownContent] = useState(initialMarkdown);
   const [isToolbarSticky, setIsToolbarSticky] = useState(false);
+  const [imageSelected, setImageSelected] = useState(false);
   
   // Generate a unique session ID for tracking uploads before post creation
   const sessionId = useRef<string>(
@@ -541,6 +548,11 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       } catch (e) {
         // Markdown extraction failed, continue
       }
+    },
+    onSelectionUpdate: ({ editor }) => {
+      // Update image selection state when selection changes
+      const isImageActive = editor.isActive('image');
+      setImageSelected(isImageActive);
     },
     editorProps: {
       attributes: {
@@ -825,8 +837,11 @@ const EditorToolbar = React.memo(({
       const file = ev.target.files?.[0];
       if (!file) return;
       
-      // Prompt for alt text (required for a11y)
-      const altText = prompt('Enter alt text for the image (required):');
+      // Extract filename without extension as default alt text
+      const filenameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+      
+      // Prompt for alt text (required for a11y) with filename as default
+      const altText = prompt('Enter alt text for the image (required):', filenameWithoutExt);
       if (!altText) {
         alert('Alt text is required for accessibility.');
         return;
@@ -1111,6 +1126,235 @@ const EditorToolbar = React.memo(({
 
 EditorToolbar.displayName = 'EditorToolbar';
 
+// Image Bubble Menu component for resizing and alignment
+interface ImageBubbleMenuProps {
+  editor: Editor;
+}
+
+const ImageBubbleMenu = ({ editor }: ImageBubbleMenuProps) => {
+  const [customWidth, setCustomWidth] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0, visible: false });
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure component is mounted (for portal)
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Update position when image selection changes
+  useEffect(() => {
+    if (!editor || !editor.isActive('image')) {
+      setPosition(prev => ({ ...prev, visible: false }));
+      return;
+    }
+
+    const updatePosition = () => {
+      const { view } = editor;
+      const { from, to } = view.state.selection;
+      
+      // Find the image element in the DOM
+      try {
+        const editorElement = view.dom;
+        const images: NodeListOf<HTMLImageElement> = editorElement.querySelectorAll('img');
+        
+        // Find the selected image by checking if cursor position is within image node
+        let selectedImg: HTMLImageElement | null = null;
+        images.forEach((img: HTMLImageElement) => {
+          const pos = view.posAtDOM(img as Node, 0);
+          if (pos >= from && pos <= to) {
+            selectedImg = img;
+          }
+        });
+
+        if (selectedImg !== null) {
+          const imgEl: HTMLImageElement = selectedImg;
+          const rect = imgEl.getBoundingClientRect();
+          
+          // For fixed positioning, use viewport coordinates directly (no scroll offset)
+          const newPosition = {
+            top: rect.top - 110, // Position above the image (110px for menu height + spacing)
+            left: rect.left + rect.width / 2,
+            visible: true,
+          };
+          
+          setPosition(newPosition);
+        } else {
+          setPosition(prev => ({ ...prev, visible: false }));
+        }
+      } catch (err) {
+        console.error('Error positioning bubble menu:', err);
+        setPosition(prev => ({ ...prev, visible: false }));
+      }
+    };
+
+    // Initial position
+    setTimeout(updatePosition, 10);
+    
+    // Update on scroll and resize
+    const handleUpdate = () => {
+      requestAnimationFrame(updatePosition);
+    };
+    
+    window.addEventListener('scroll', handleUpdate, { passive: true });
+    window.addEventListener('resize', handleUpdate);
+    document.addEventListener('scroll', handleUpdate, { passive: true, capture: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleUpdate);
+      window.removeEventListener('resize', handleUpdate);
+      document.removeEventListener('scroll', handleUpdate, true);
+    };
+  }, [editor, editor?.state.selection]);
+
+  if (!editor || !editor.isActive('image') || !position.visible || !mounted) {
+    return null;
+  }
+
+  const currentAttrs = editor.getAttributes('image');
+  const currentWidth = currentAttrs.width;
+  const currentAlign = currentAttrs.align || 'left';
+
+  const setWidth = (width: string | number) => {
+    (editor as any).chain().focus().setImageWidth(width).run();
+    setShowCustomInput(false);
+    setCustomWidth('');
+  };
+
+  const handleCustomWidth = () => {
+    if (customWidth) {
+      // Allow both px and % values
+      const widthValue = customWidth.includes('%') || customWidth.includes('px') 
+        ? customWidth 
+        : `${customWidth}px`;
+      setWidth(widthValue);
+    }
+  };
+
+  const setAlign = (align: 'left' | 'center' | 'right') => {
+    (editor as any).chain().focus().setImageAlign(align).run();
+  };
+
+  const btnClass = (active: boolean) => 
+    `px-2 py-1 text-xs rounded transition-colors ${
+      active 
+        ? 'bg-primary text-primary-foreground' 
+        : 'bg-card text-fg hover:bg-muted/20 border border-border'
+    }`;
+
+  const menu = (
+    <div 
+      ref={menuRef}
+      className="fixed z-[9999] flex flex-col gap-2 p-3 bg-card border-2 border-primary rounded-lg shadow-2xl"
+      style={{
+        top: `${position.top}px`,
+        left: `${position.left}px`,
+        transform: 'translate(-50%, -100%)',
+        minWidth: '400px',
+        pointerEvents: 'auto',
+      }}
+    >
+      {/* Size presets */}
+      <div className="flex gap-1 items-center whitespace-nowrap">
+        <span className="text-xs font-medium mr-2">Size:</span>
+        <button
+          onClick={() => setWidth('25%')}
+          className={btnClass(currentWidth === '25%')}
+          title="Small (25%)"
+        >
+          Small
+        </button>
+        <button
+          onClick={() => setWidth('50%')}
+          className={btnClass(currentWidth === '50%')}
+          title="Medium (50%)"
+        >
+          Medium
+        </button>
+        <button
+          onClick={() => setWidth('75%')}
+          className={btnClass(currentWidth === '75%')}
+          title="Large (75%)"
+        >
+          Large
+        </button>
+        <button
+          onClick={() => setWidth('100%')}
+          className={btnClass(currentWidth === '100%' || !currentWidth)}
+          title="Full Width (100%)"
+        >
+          Full
+        </button>
+        <button
+          onClick={() => setShowCustomInput(!showCustomInput)}
+          className={btnClass(showCustomInput)}
+          title="Custom Size"
+        >
+          Custom
+        </button>
+      </div>
+
+      {/* Custom width input */}
+      {showCustomInput && (
+        <div className="flex gap-1 items-center">
+          <input
+            type="text"
+            value={customWidth}
+            onChange={(e) => setCustomWidth(e.target.value)}
+            placeholder="e.g., 400px or 60%"
+            className="px-2 py-1 text-xs border border-border rounded bg-card flex-1"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleCustomWidth();
+              }
+            }}
+          />
+          <button
+            onClick={handleCustomWidth}
+            className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90"
+          >
+            Apply
+          </button>
+        </div>
+      )}
+
+      {/* Alignment */}
+      <div className="flex gap-1 items-center border-t border-border pt-2">
+        <span className="text-xs font-medium mr-2">Align:</span>
+        <button
+          onClick={() => setAlign('left')}
+          className={btnClass(currentAlign === 'left')}
+          title="Align Left"
+        >
+          ← Left
+        </button>
+        <button
+          onClick={() => setAlign('center')}
+          className={btnClass(currentAlign === 'center')}
+          title="Align Center"
+        >
+          ↔ Center
+        </button>
+        <button
+          onClick={() => setAlign('right')}
+          className={btnClass(currentAlign === 'right')}
+          title="Align Right"
+        >
+          → Right
+        </button>
+      </div>
+    </div>
+  );
+
+  // Render using portal to ensure it's on top of everything
+  return createPortal(menu, document.body);
+};
+
+ImageBubbleMenu.displayName = 'ImageBubbleMenu';
+
   // Handle markdown content changes in markdown view
   const handleMarkdownChange = (newMarkdown: string) => {
     setMarkdownContent(newMarkdown);
@@ -1148,7 +1392,7 @@ EditorToolbar.displayName = 'EditorToolbar';
         showMarkdownView={showMarkdownView}
         setShowMarkdownView={setShowMarkdownView}
       />
-      <div className="border border-border rounded-b-lg bg-card">
+      <div className="border border-border rounded-b-lg bg-card relative">
         {showMarkdownView ? (
           <textarea
             value={markdownContent}
@@ -1158,7 +1402,12 @@ EditorToolbar.displayName = 'EditorToolbar';
             spellCheck={false}
           />
         ) : (
-          <EditorContent editor={editor} />
+          <>
+            <EditorContent editor={editor} />
+            {editor && imageSelected && (
+              <ImageBubbleMenu editor={editor} />
+            )}
+          </>
         )}
       </div>
     </div>

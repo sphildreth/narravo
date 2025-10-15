@@ -4,7 +4,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { posts, uploads } from "@/drizzle/schema";
-import { eq, like, desc, asc, sql, and, isNull, isNotNull, or } from "drizzle-orm";
+import { eq, like, desc, asc, sql, and, isNull, isNotNull, or, inArray } from "drizzle-orm";
 import { revalidateTag, revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import slugify from "slugify";
@@ -70,6 +70,7 @@ async function commitUploadsForPost(postId: string, markdown: string, sessionId?
     }
     
     // Commit these uploads by updating their status and associating with the post
+    const uploadIds = temporaryUploads.map((u: any) => u.id);
     await db
       .update(uploads)
       .set({
@@ -77,9 +78,7 @@ async function commitUploadsForPost(postId: string, markdown: string, sessionId?
         postId: postId,
         committedAt: new Date(),
       })
-      .where(
-        sql`id = ANY(${temporaryUploads.map((u: any) => u.id)})`
-      );
+      .where(inArray(uploads.id, uploadIds));
     
     logger.info(`Committed ${temporaryUploads.length} uploads for post ${postId}`);
   } catch (error) {

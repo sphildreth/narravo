@@ -34,8 +34,18 @@ interface TagPageProps {
 
 export default async function TagPage({ params, searchParams }: TagPageProps) {
   const [resolvedParams, resolvedSearchParams] = await Promise.all([params, searchParams]);
-  const postsResult = await getPostsByTag(resolvedParams.slug);
-  const tag = postsResult.items.length > 0 ? postsResult.items[0]?.tags?.find((t: any) => t.slug === resolvedParams.slug) : null;
+  
+  // Fetch tag details and posts in parallel
+  const [tag, postsResult] = await Promise.all([
+    getTagBySlug(resolvedParams.slug),
+    getPostsByTag(resolvedParams.slug)
+  ]);
+  
+  // If tag doesn't exist, show 404
+  if (!tag) {
+    notFound();
+  }
+  
   const page = parseInt(resolvedSearchParams.page || "1", 10);
 
   return (
@@ -50,7 +60,7 @@ export default async function TagPage({ params, searchParams }: TagPageProps) {
         </nav>
         
         <h1 className="text-4xl font-extrabold text-fg mb-2">
-          Posts tagged with "{tag?.name || resolvedParams.slug}"
+          Posts tagged with "{tag.name}"
         </h1>
         <p className="text-muted">
           {postsResult.items.length} {postsResult.items.length === 1 ? 'post' : 'posts'} found

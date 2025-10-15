@@ -48,10 +48,12 @@ export function sanitizeHtml(html: string): string {
       // Code highlighting attributes - allow class for pre/code tags only
       "class", "data-lang",
       // Task list checkbox attributes
-      "checked", "disabled"
+      "checked", "disabled",
+      // Image styling attributes
+      "style"
     ],
     // Explicitly allow select data attributes used by trusted extensions
-    ADD_ATTR: ["data-mermaid"],
+    ADD_ATTR: ["data-mermaid", "data-width", "data-align"],
     // Additional security options
     ALLOW_DATA_ATTR: false, // No data-* attributes except those explicitly allowed
     ALLOW_UNKNOWN_PROTOCOLS: false, // Only allow known URL protocols

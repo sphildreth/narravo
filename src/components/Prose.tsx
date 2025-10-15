@@ -7,6 +7,7 @@
 import React, { ReactNode, useMemo } from "react";
 import CodeBlock from "./CodeBlock";
 import MermaidDiagram from "./MermaidDiagram";
+import { ImageWithLightbox } from "./ImageLightbox";
 
 const MERMAID_KEYWORDS = new Set(
   [
@@ -163,17 +164,98 @@ export default function Prose({ html, className = "" }: { html: string; classNam
             );
             return;
           }
-          // Non-highlighted pre: render raw
-          out.push(<div key={`rawpre-${segIndex}-${partIndex}`} dangerouslySetInnerHTML={{ __html: part }} />);
+          // Non-highlighted pre: process for images
+          const partWithImages = processImagesInSegment(part, `rawpre-${segIndex}-${partIndex}`);
+          out.push(...partWithImages);
           return;
         }
-        // Plain HTML fragment
-        out.push(<div key={`frag-${segIndex}-${partIndex}`} dangerouslySetInnerHTML={{ __html: part }} />);
+        // Plain HTML fragment - process for images
+        const partWithImages = processImagesInSegment(part, `frag-${segIndex}-${partIndex}`);
+        out.push(...partWithImages);
       });
     });
 
     return out;
   }, [html]);
+
+  // Helper function to extract and replace images with lightbox component
+  function processImagesInSegment(htmlSegment: string, baseKey: string): ReactNode[] {
+    const imageRegex = /<img\s+([^>]*?)>/gi;
+    const result: ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+    let imageIndex = 0;
+
+    while ((match = imageRegex.exec(htmlSegment)) !== null) {
+      // Add HTML before this image
+      if (match.index > lastIndex) {
+        const beforeHtml = htmlSegment.slice(lastIndex, match.index);
+        if (beforeHtml.trim()) {
+          result.push(<div key={`${baseKey}-html-${imageIndex}`} dangerouslySetInnerHTML={{ __html: beforeHtml }} />);
+        }
+      }
+
+      // Parse image attributes
+      const attrs: Record<string, string> = {};
+      const attrRegex = /(\w+(?:-\w+)*)=["']([^"']*?)["']/g;
+      let attrMatch;
+      while ((attrMatch = attrRegex.exec(match[1] || '')) !== null) {
+        attrs[attrMatch[1]!] = attrMatch[2]!;
+      }
+
+      const { src, alt, style, class: imgClassName, 'data-width': dataWidth, 'data-align': dataAlign } = attrs;
+      
+      // Parse inline style
+      let styleObj: React.CSSProperties | undefined = undefined;
+      if (style) {
+        styleObj = {};
+        const styleProps = style.split(';').filter(Boolean);
+        styleProps.forEach(prop => {
+          const [key, value] = prop.split(':').map(s => s.trim());
+          if (key && value) {
+            const camelKey = key.replace(/-([a-z])/g, (g) => g[1]!.toUpperCase());
+            (styleObj as any)[camelKey] = value;
+          }
+        });
+      } else if (dataWidth) {
+        styleObj = { width: dataWidth };
+      }
+
+      // Build className with alignment
+      let finalClassName = imgClassName || '';
+      if (dataAlign && !finalClassName.includes('img-align-')) {
+        finalClassName = `${finalClassName} img-align-${dataAlign}`.trim();
+      }
+
+      result.push(
+        <ImageWithLightbox
+          key={`${baseKey}-img-${imageIndex}`}
+          src={src || ''}
+          alt={alt || undefined}
+          className={finalClassName || undefined}
+          style={styleObj}
+        />
+      );
+
+      lastIndex = match.index + match[0]!.length;
+      imageIndex++;
+    }
+
+    // Add remaining HTML after last image
+    if (lastIndex < htmlSegment.length) {
+      const remainingHtml = htmlSegment.slice(lastIndex);
+      if (remainingHtml.trim()) {
+        result.push(<div key={`${baseKey}-html-end`} dangerouslySetInnerHTML={{ __html: remainingHtml }} />);
+      }
+    }
+
+    // If no images found, return original HTML
+    if (result.length === 0) {
+      return [<div key={baseKey} dangerouslySetInnerHTML={{ __html: htmlSegment }} />];
+    }
+
+    return result;
+  }
 
   return (
     <div className={[

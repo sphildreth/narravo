@@ -183,6 +183,30 @@
 }
 .prose .img-align-right { text-align: right; }
 
+/* Image resizing and selection in TipTap editor */
+.ProseMirror img {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.ProseMirror figure.image-resizable {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.ProseMirror figure.image-resizable img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
 /* Code block styling */
 .prose pre { 
   border: 1px solid var(--border);
