@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import React, { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 /**
  * Client-side guard that redirects to 2FA verification if needed

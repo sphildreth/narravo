@@ -705,28 +705,30 @@ export async function getPageViewCounts(paths: string[]): Promise<Map<string, Pa
 }
 
 export async function getPageSparkline(path: string, days: number = 30): Promise<SparklineData[]> {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days + 1);
-  
-  const sparklineData: SparklineData[] = [];
-  
-  // Generate all days in range
-  for (let i = 0; i < days; i++) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
-    const dayStr = date.toISOString().split('T')[0];
-    if (dayStr) {
-      sparklineData.push({
-        day: dayStr,
-        views: 0,
-      });
-    }
-  }
+  if (days <= 0) return [];
 
-  // Get actual view data
-  const startDateStr = startDate.toISOString().split('T')[0];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const defaultStart = new Date(today);
+  defaultStart.setDate(defaultStart.getDate() - days + 1);
+
+  const buildTemplate = (start: Date): SparklineData[] => {
+    const template: SparklineData[] = [];
+    for (let i = 0; i < days; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      const dayStr = date.toISOString().split('T')[0];
+      if (dayStr) {
+        template.push({ day: dayStr, views: 0 });
+      }
+    }
+    return template;
+  };
+
+  const startDateStr = defaultStart.toISOString().split('T')[0];
   if (!startDateStr) throw new Error("Invalid start date");
-  
+
   try {
     const viewData = await db
       .select({
@@ -742,8 +744,24 @@ export async function getPageSparkline(path: string, days: number = 30): Promise
       )
       .orderBy(pageDailyViews.day);
 
-    // Merge actual data with the template
-    const dataMap = new Map<string, number>(viewData.map((item: any) => [item.day as string, Number(item.views)]));
+    let endDateForTemplate = today;
+    if (viewData.length > 0) {
+      const latestDay = viewData[viewData.length - 1]?.day;
+      if (typeof latestDay === "string") {
+        const parsed = new Date(`${latestDay}T00:00:00Z`);
+        if (!Number.isNaN(parsed.getTime())) {
+          endDateForTemplate = parsed;
+        }
+      }
+    }
+
+    const startForTemplate = new Date(endDateForTemplate);
+    startForTemplate.setDate(endDateForTemplate.getDate() - days + 1);
+
+    const sparklineData = buildTemplate(startForTemplate);
+    const dataMap = new Map<string, number>(
+      viewData.map((item: any) => [item.day as string, Number(item.views)])
+    );
 
     return sparklineData.map((item: SparklineData) => ({
       ...item,
@@ -751,8 +769,7 @@ export async function getPageSparkline(path: string, days: number = 30): Promise
     }));
   } catch (err) {
     if (!isMissingDailyViewsRelation(err)) throw err;
-    // Fallback: table missing, return zeros
-    return sparklineData;
+    return buildTemplate(defaultStart);
   }
 }
 
