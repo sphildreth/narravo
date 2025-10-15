@@ -284,6 +284,32 @@ export const importJobErrors = pgTable("import_job_errors", {
   importJobErrorsTypeIndex: index("import_job_errors_type_idx").on(table.errorType),
 }));
 
+// Upload status enum for tracking temporary uploads
+export const uploadStatus = pgEnum("upload_status", [
+  "temporary",
+  "committed",
+]);
+
+// Uploads table for tracking temporary uploads and cleanup
+export const uploads = pgTable("uploads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  key: text("key").notNull().unique(), // Storage key (e.g., "images/xxx.jpg")
+  url: text("url").notNull(), // Public URL
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  status: uploadStatus("status").notNull().default("temporary"),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }),
+  sessionId: text("session_id"), // For tracking uploads before post creation
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  committedAt: timestamp("committed_at", { withTimezone: true }),
+}, (table) => ({
+  uploadsStatusIndex: index("uploads_status_idx").on(table.status),
+  uploadsCreatedAtIndex: index("uploads_created_at_idx").on(table.createdAt),
+  uploadsPostIdIndex: index("uploads_post_id_idx").on(table.postId),
+  uploadsSessionIdIndex: index("uploads_session_id_idx").on(table.sessionId),
+}));
+
 // Data operation types for audit logging
 export const dataOperationType = pgEnum("data_operation_type", [
   "export",

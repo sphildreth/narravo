@@ -303,6 +303,13 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
   const [markdownContent, setMarkdownContent] = useState(initialMarkdown);
   const [isToolbarSticky, setIsToolbarSticky] = useState(false);
   
+  // Generate a unique session ID for tracking uploads before post creation
+  const sessionId = useRef<string>(
+    typeof window !== 'undefined' 
+      ? `editor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      : ''
+  );
+  
   // Capture initialMarkdown only once to prevent reactive updates
   const stableInitialMarkdown = useRef(initialMarkdown);
   
@@ -359,6 +366,8 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         const fields = (signData.fields ?? {}) as Record<string, string>;
         Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
         formData.append("file", file);
+        // Pass sessionId to track uploads before post creation
+        formData.append("sessionId", sessionId.current);
         const postRes = await fetch(signData.url as string, { method: "POST", body: formData });
         if (!postRes.ok) {
           logger.error("Upload failed", await safeReadText(postRes));

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, getSessionUserId } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { uploads } from "@/drizzle/schema";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -45,6 +47,18 @@ export async function POST(req: NextRequest) {
     await fs.writeFile(absPath, arr);
 
     const publicUrl = `/${relPath}`;
+
+    // Track upload in database as temporary
+    const userId = await getSessionUserId();
+    const key = relPath; // e.g., "uploads/banner/xxx.png"
+    await db.insert(uploads).values({
+      key,
+      url: publicUrl,
+      mimeType: mime,
+      size,
+      status: "temporary",
+      userId: userId || undefined,
+    });
 
     return new Response(JSON.stringify({ ok: true, url: publicUrl }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err) {

@@ -189,6 +189,11 @@ export async function requireSession() {
   return session;
 }
 
+export async function getSessionUserId(): Promise<string | null> {
+  const session = await getSession();
+  return (session?.user as any)?.userId || session?.user?.id || null;
+}
+
 export async function requireAdmin() {
   const session = await requireSession();
   if (!session.user?.isAdmin) throw new Error("Forbidden");

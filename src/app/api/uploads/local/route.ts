@@ -3,7 +3,8 @@ import { NextRequest } from "next/server";
 import { localStorageService } from "@/lib/local-storage";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, getSessionUserId } from "@/lib/auth";
+import { uploads } from "@/drizzle/schema";
 import logger from '@/lib/logger';
 
 function isSafeKey(key: string): boolean {
@@ -12,16 +13,19 @@ function isSafeKey(key: string): boolean {
   if (key.includes("..")) return false;
   if (key.startsWith("/")) return false;
   // Basic allowlist for prefixes
-  if (!(key.startsWith("images/") || key.startsWith("videos/") || key.startsWith("uploads/"))) return false;
+  if (!(key.startsWith("images/") || key.startsWith("videos/") || key.startsWith("uploads/") || key.startsWith("featured/"))) return false;
   return true;
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAdmin();
+    
     const form = await req.formData();
     const file = form.get("file");
     const key = String(form.get("key") || "");
     const overrideCT = form.get("Content-Type");
+    const sessionId = form.get("sessionId") || null;
 
     if (!(file instanceof File)) {
       return new Response(JSON.stringify({ ok: false, error: { code: "NO_FILE", message: "Missing file" } }), {
@@ -109,6 +113,18 @@ export async function POST(req: NextRequest) {
     const buf = new Uint8Array(await file.arrayBuffer());
     await localStorageService.putObject(key, buf, contentType);
     const url = localStorageService.getPublicUrl(key);
+
+    // Track upload in database as temporary
+    const userId = await getSessionUserId();
+    await db.insert(uploads).values({
+      key,
+      url,
+      mimeType: contentType,
+      size,
+      status: "temporary",
+      userId: userId || undefined,
+      sessionId: sessionId ? String(sessionId) : undefined,
+    });
 
     return new Response(JSON.stringify({ ok: true, url, key }), {
       status: 200,

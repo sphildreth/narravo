@@ -3,7 +3,7 @@
 
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { posts } from "@/drizzle/schema";
+import { posts, uploads } from "@/drizzle/schema";
 import { eq, like, desc, asc, sql, and, isNull, isNotNull, or } from "drizzle-orm";
 import { revalidateTag, revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -16,6 +16,77 @@ import { localStorageService } from "@/lib/local-storage";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import logger from '@/lib/logger';
+
+// Helper function to extract image URLs from markdown
+function extractImageUrls(markdown: string): string[] {
+  const urls: string[] = [];
+  
+  // Match markdown images: ![alt](url) and HTML images: <img src="url">
+  const mdImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  const htmlImageRegex = /<img[^>]+src=["']([^"']+)["']/g;
+  
+  let match;
+  while ((match = mdImageRegex.exec(markdown)) !== null) {
+    if (match[2]) urls.push(match[2]);
+  }
+  
+  while ((match = htmlImageRegex.exec(markdown)) !== null) {
+    if (match[1]) urls.push(match[1]);
+  }
+  
+  return urls;
+}
+
+// Helper function to commit temporary uploads for a post
+async function commitUploadsForPost(postId: string, markdown: string, sessionId?: string) {
+  try {
+    // Extract all image URLs from the markdown
+    const imageUrls = extractImageUrls(markdown);
+    
+    if (imageUrls.length === 0) {
+      return;
+    }
+    
+    // Find temporary uploads that match these URLs
+    const conditions = imageUrls.map(url => eq(uploads.url, url));
+    const query = sessionId 
+      ? and(
+          or(...conditions),
+          eq(uploads.status, "temporary"),
+          or(eq(uploads.sessionId, sessionId), isNull(uploads.postId))
+        )
+      : and(
+          or(...conditions),
+          eq(uploads.status, "temporary")
+        );
+    
+    const temporaryUploads = await db
+      .select()
+      .from(uploads)
+      .where(query);
+    
+    if (temporaryUploads.length === 0) {
+      return;
+    }
+    
+    // Commit these uploads by updating their status and associating with the post
+    await db
+      .update(uploads)
+      .set({
+        status: "committed",
+        postId: postId,
+        committedAt: new Date(),
+      })
+      .where(
+        sql`id = ANY(${temporaryUploads.map((u: any) => u.id)})`
+      );
+    
+    logger.info(`Committed ${temporaryUploads.length} uploads for post ${postId}`);
+  } catch (error) {
+    logger.error("Error committing uploads for post:", error);
+    // Don't fail the post creation if upload tracking fails
+  }
+}
 
 // Types for post management
 export interface PostsFilter {
@@ -345,6 +416,9 @@ export async function createPost(formData: FormData) {
       await setPostCategory(newPost.id, categoryName);
     }
     
+    // Commit any temporary uploads referenced in the markdown
+    await commitUploadsForPost(newPost.id, bodyMd || html || "");
+    
     // Revalidate caches
     await revalidateAfterPostChange(newPost.id);
     
@@ -496,6 +570,9 @@ export async function updatePost(formData: FormData) {
       // Clear category if none selected
       await setPostCategory(id);
     }
+    
+    // Commit any new temporary uploads referenced in the markdown
+    await commitUploadsForPost(id, bodyMd || html || "");
     
     // Revalidate caches
     await revalidateAfterPostChange(id);
