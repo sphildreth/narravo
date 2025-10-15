@@ -92,7 +92,7 @@ describe('Upload Tracking System', () => {
       }
 
       // Commit all uploads to the same post
-      const uploadIds = createdUploads.map(u => u!.id);
+      const uploadIds = createdUploads.map((u: any) => u!.id);
       for (const id of uploadIds) {
         await db
           .update(uploads)
@@ -111,7 +111,7 @@ describe('Upload Tracking System', () => {
         .where(eq(uploads.postId, testPostId));
 
       expect(committedUploads).toHaveLength(2);
-      expect(committedUploads.every(u => u.status === 'committed')).toBe(true);
+      expect(committedUploads.every((u: any) => u.status === 'committed')).toBe(true);
     });
   });
 
@@ -199,7 +199,7 @@ More content.
         .where(eq(uploads.sessionId, testSessionId));
 
       // At least one should be old enough
-      const hasOldUpload = oldUploads.some(u => 
+      const hasOldUpload = oldUploads.some((u: any) => 
         u.createdAt && u.createdAt < cutoff
       );
       expect(hasOldUpload).toBe(true);
