@@ -24,6 +24,7 @@
     "backup": "tsx scripts/backup.ts",
     "restore": "tsx scripts/restore.ts",
     "wxr:import": "tsx scripts/import-wxr.ts",
+    "cleanup:uploads": "tsx scripts/cleanup-uploads.ts",
     "perf:lighthouse": "lhci autorun --config=lighthouserc.json",
     "perf:loadtest": "tsx scripts/perf/smoke.autocannon.ts",
     "perf:benchmark": "tsx scripts/perf/report.ts",
