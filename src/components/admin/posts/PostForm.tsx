@@ -317,6 +317,8 @@ export default function PostForm({ post }: PostFormProps) {
   // Also guard against unnecessary state updates when markdown is unchanged.
   const handleEditorChange = useCallback((md: string) => {
     setFormData(prev => prev.bodyMd === md ? prev : { ...prev, bodyMd: md });
+    // Clear bodyMd error when user types in editor
+    setErrors(prev => prev.bodyMd ? { ...prev, bodyMd: "" } : prev);
   }, []);
 
   return (
@@ -338,7 +340,13 @@ export default function PostForm({ post }: PostFormProps) {
             id="title"
             type="text"
             value={formData.title}
-            onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+            onChange={(e) => {
+              setFormData(prev => ({ ...prev, title: e.target.value }));
+              // Clear title error when user types
+              if (errors.title) {
+                setErrors(prev => ({ ...prev, title: "" }));
+              }
+            }}
             onBlur={async () => {
               // Auto-generate slug only for new posts (no existing post ID)
               if (!post && formData.title.trim() && !formData.slug.trim()) {
@@ -384,6 +392,10 @@ export default function PostForm({ post }: PostFormProps) {
                 .replace(/^-+/, '')
                 .replace(/-+$/, '');
               setFormData(prev => ({ ...prev, slug: filtered }));
+              // Clear slug error when user types
+              if (errors.slug) {
+                setErrors(prev => ({ ...prev, slug: "" }));
+              }
             }}
             onBlur={() => {
               // Final normalize (in case user pastes weird unicode)

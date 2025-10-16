@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { nanoid } from "nanoid";
+import logger from "./logger";
 
 /**
  * Local filesystem storage service for development environments without S3/R2
@@ -17,7 +18,9 @@ export class LocalStorageService {
 
   async init(): Promise<void> {
     // Ensure upload directory exists
+    logger.info(`[LocalStorage] Initializing upload directory: ${this.uploadDir}`);
     await fs.mkdir(this.uploadDir, { recursive: true });
+    logger.info(`[LocalStorage] Upload directory ready: ${this.uploadDir}`);
   }
 
   async putObject(key: string, body: Uint8Array, contentType: string): Promise<void> {
@@ -26,11 +29,25 @@ export class LocalStorageService {
     const filePath = path.join(this.uploadDir, key);
     const dir = path.dirname(filePath);
     
-    // Ensure directory exists
-    await fs.mkdir(dir, { recursive: true });
+    logger.info(`[LocalStorage] putObject - key: ${key}, size: ${body.length} bytes, type: ${contentType}`);
+    logger.info(`[LocalStorage] Target file path: ${filePath}`);
     
-    // Write file
-    await fs.writeFile(filePath, body);
+    try {
+      // Ensure directory exists
+      await fs.mkdir(dir, { recursive: true });
+      logger.info(`[LocalStorage] Directory ensured: ${dir}`);
+      
+      // Write file
+      await fs.writeFile(filePath, body);
+      logger.info(`[LocalStorage] File written successfully: ${filePath}`);
+      
+      // Verify file was written
+      const stats = await fs.stat(filePath);
+      logger.info(`[LocalStorage] File verification - size: ${stats.size} bytes, mode: ${stats.mode.toString(8)}`);
+    } catch (error) {
+      logger.error(`[LocalStorage] Error writing file ${filePath}:`, error);
+      throw error;
+    }
   }
 
   getPublicUrl(key: string): string {

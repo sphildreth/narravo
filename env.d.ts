@@ -26,6 +26,8 @@ declare namespace NodeJS {
     EXCERPT_MAX_CHARS?: string; // number as string
     EXCERPT_ELLIPSIS?: string;  // default "…"
     EXCERPT_INCLUDE_BLOCK_CODE?: string; // "true" to keep <pre>
+    // Logging
+    LOG_LEVEL?: string; // 'debug' | 'info' | 'warn' | 'error'
     [key: `NEXT_PUBLIC_${string}`]: string | undefined;
   }
 }

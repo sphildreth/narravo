@@ -21,20 +21,28 @@ export async function POST(req: NextRequest) {
   try {
     await requireAdmin();
     
+    logger.info('[/api/uploads/local] POST request received');
+    
     const form = await req.formData();
     const file = form.get("file");
     const key = String(form.get("key") || "");
     const overrideCT = form.get("Content-Type");
     const sessionId = form.get("sessionId") || null;
 
+    logger.info(`[/api/uploads/local] Processing upload - key: ${key}, sessionId: ${sessionId}`);
+
     if (!(file instanceof File)) {
+      logger.warn('[/api/uploads/local] No file provided in request');
       return new Response(JSON.stringify({ ok: false, error: { code: "NO_FILE", message: "Missing file" } }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
 
+    logger.info(`[/api/uploads/local] File details - name: ${file.name}, size: ${file.size} bytes, type: ${file.type}`);
+
     if (!isSafeKey(key)) {
+      logger.warn(`[/api/uploads/local] Invalid key rejected: ${key}`);
       return new Response(JSON.stringify({ ok: false, error: { code: "INVALID_KEY", message: "Invalid upload key" } }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
@@ -111,11 +119,14 @@ export async function POST(req: NextRequest) {
 
     // Save file to local storage
     const buf = new Uint8Array(await file.arrayBuffer());
+    logger.info(`[/api/uploads/local] Saving file to local storage: ${key}`);
     await localStorageService.putObject(key, buf, contentType);
     const url = localStorageService.getPublicUrl(key);
+    logger.info(`[/api/uploads/local] File saved successfully, URL: ${url}`);
 
     // Track upload in database as temporary
     const userId = await getSessionUserId();
+    logger.info(`[/api/uploads/local] Recording upload in database - userId: ${userId}, sessionId: ${sessionId}`);
     await db.insert(uploads).values({
       key,
       url,
@@ -125,6 +136,7 @@ export async function POST(req: NextRequest) {
       userId: userId || undefined,
       sessionId: sessionId ? String(sessionId) : undefined,
     });
+    logger.info(`[/api/uploads/local] Upload tracked in database successfully`);
 
     return new Response(JSON.stringify({ ok: true, url, key }), {
       status: 200,

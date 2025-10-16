@@ -346,6 +346,7 @@ export async function createPost(formData: FormData) {
     let finalFeaturedUrl: string | null = null;
 
     if (featuredImageFile && featuredImageFile instanceof File && featuredImageFile.size > 0) {
+      logger.info(`[createPost] Processing featured image upload: ${featuredImageFile.name}, size: ${featuredImageFile.size} bytes, type: ${featuredImageFile.type}`);
       // Basic validation
       const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"]; // extend as needed
       if (!allowed.includes(featuredImageFile.type)) {
@@ -370,16 +371,21 @@ export async function createPost(formData: FormData) {
         if (storageService) {
           // Use cloud storage (S3/R2)
           const key = `featured/${randomUUID()}.${ext}`;
+          logger.info(`[createPost] Uploading to cloud storage (S3/R2): ${key}`);
           await storageService.putObject(key, buffer, featuredImageFile.type);
           finalFeaturedUrl = storageService.getPublicUrl(key);
+          logger.info(`[createPost] Cloud upload successful: ${finalFeaturedUrl}`);
         } else {
           // Use local storage service
           const key = `featured/${randomUUID()}.${ext}`;
+          logger.info(`[createPost] Uploading to local storage: ${key}`);
           await localStorageService.putObject(key, buffer, featuredImageFile.type);
           finalFeaturedUrl = localStorageService.getPublicUrl(key);
+          logger.info(`[createPost] Local upload successful: ${finalFeaturedUrl}`);
         }
       } catch (error) {
-        logger.error("Error uploading featured image:", error);
+        logger.error(`[createPost] Error uploading featured image:`, error);
+        logger.error(`[createPost] Featured image details - name: ${featuredImageFile.name}, size: ${featuredImageFile.size}, type: ${featuredImageFile.type}`);
         return { error: "Failed to upload featured image" };
       }
     } else if (featuredImageUrl && featuredImageUrl.trim() !== "") {
@@ -387,6 +393,7 @@ export async function createPost(formData: FormData) {
     }
 
     // Create post
+    logger.info(`[createPost] Creating post with slug: ${finalSlug}, featuredImageUrl: ${finalFeaturedUrl || 'none'}`);
     const [newPost] = await db
       .insert(posts)
       .values({
@@ -405,6 +412,8 @@ export async function createPost(formData: FormData) {
     if (!newPost) {
       throw new Error("Failed to create post");
     }
+    logger.info(`[createPost] Post created successfully with ID: ${newPost.id}`);
+    logger.info(`[createPost] Post created successfully with ID: ${newPost.id}`);
     
     // Add tags and category after post creation
     if (tagNames.length > 0) {
@@ -503,6 +512,7 @@ export async function updatePost(formData: FormData) {
   
     let finalFeaturedUrl: string | null = null;
     if (featuredImageFile && featuredImageFile instanceof File && featuredImageFile.size > 0) {
+      logger.info(`[updatePost] Processing featured image upload for post ${id}: ${featuredImageFile.name}, size: ${featuredImageFile.size} bytes, type: ${featuredImageFile.type}`);
       const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"]; 
       if (!allowed.includes(featuredImageFile.type)) {
         return { error: "Unsupported featured image type" };
@@ -526,16 +536,21 @@ export async function updatePost(formData: FormData) {
         if (storageService) {
           // Use cloud storage (S3/R2)
           const key = `featured/${randomUUID()}.${ext}`;
+          logger.info(`[updatePost] Uploading to cloud storage (S3/R2): ${key}`);
           await storageService.putObject(key, buffer, featuredImageFile.type);
           finalFeaturedUrl = storageService.getPublicUrl(key);
+          logger.info(`[updatePost] Cloud upload successful: ${finalFeaturedUrl}`);
         } else {
           // Use local storage service
           const key = `featured/${randomUUID()}.${ext}`;
+          logger.info(`[updatePost] Uploading to local storage: ${key}`);
           await localStorageService.putObject(key, buffer, featuredImageFile.type);
           finalFeaturedUrl = localStorageService.getPublicUrl(key);
+          logger.info(`[updatePost] Local upload successful: ${finalFeaturedUrl}`);
         }
       } catch (error) {
-        logger.error("Error uploading featured image:", error);
+        logger.error(`[updatePost] Error uploading featured image for post ${id}:`, error);
+        logger.error(`[updatePost] Featured image details - name: ${featuredImageFile.name}, size: ${featuredImageFile.size}, type: ${featuredImageFile.type}`);
         return { error: "Failed to upload featured image" };
       }
     } else if (featuredImageUrl && featuredImageUrl.trim() !== "") {
@@ -543,6 +558,7 @@ export async function updatePost(formData: FormData) {
     }
 
     // Update post
+    logger.info(`[updatePost] Updating post ${id} with slug: ${slug}, featuredImageUrl: ${finalFeaturedUrl || 'none'}`);
     const [updatedPost] = await db
       .update(posts)
       .set({
@@ -559,6 +575,11 @@ export async function updatePost(formData: FormData) {
       })
       .where(eq(posts.id, id))
       .returning();
+    
+    if (!updatedPost) {
+      throw new Error("Failed to update post");
+    }
+    logger.info(`[updatePost] Post ${id} updated successfully`);
     
     // Update tags and category
     await setPostTags(id, tagNames);

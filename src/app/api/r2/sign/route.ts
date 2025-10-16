@@ -8,6 +8,8 @@ import logger from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
   try {
+    logger.info('[/api/r2/sign] POST request received');
+    
     const config = new ConfigServiceImpl({ db });
     
     // Get configuration values
@@ -35,7 +37,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const { filename, mimeType, size, kind } = body;
 
+    logger.info(`[/api/r2/sign] Request - filename: ${filename}, mimeType: ${mimeType}, size: ${size}, kind: ${kind}`);
+
     if (!filename || !mimeType || typeof size !== 'number') {
+      logger.warn('[/api/r2/sign] Invalid request - missing required fields');
       return new Response(
         JSON.stringify({ error: { code: "INVALID_REQUEST", message: "Missing filename, mimeType, or size" } }),
         { status: 400, headers: { "Content-Type": "application/json" } }
@@ -84,6 +89,7 @@ export async function POST(req: NextRequest) {
     // Get S3/R2 configuration
     const s3Config = getS3Config();
     if (!s3Config) {
+      logger.info('[/api/r2/sign] No S3/R2 config found, using local storage');
       // In development/test, return a same-origin local upload policy to avoid CSP/connect-src issues
       const ext = String(filename).split('.').pop() || '';
       const keyPrefix = isImage ? 'images' : 'videos';
@@ -91,6 +97,8 @@ export async function POST(req: NextRequest) {
       const rand = Math.random().toString(36).slice(2);
       const key = `${keyPrefix}/${Date.now()}-${rand}.${ext}`;
       const publicUrl = localStorageService.getPublicUrl(key);
+
+      logger.info(`[/api/r2/sign] Generated local upload policy - key: ${key}, publicUrl: ${publicUrl}`);
 
       return new Response(
         JSON.stringify({ 
@@ -112,6 +120,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    logger.info('[/api/r2/sign] S3/R2 config found, generating presigned URL');
     // Create S3/R2 service and generate presigned URL
     const s3Service = new S3Service(s3Config);
     const presignedData = await s3Service.createPresignedPost(filename, mimeType, {
@@ -121,6 +130,8 @@ export async function POST(req: NextRequest) {
     });
 
     const publicUrl = s3Service.getPublicUrl(presignedData.key);
+
+    logger.info(`[/api/r2/sign] Generated presigned URL - key: ${presignedData.key}, publicUrl: ${publicUrl}`);
 
     return new Response(
       JSON.stringify({
