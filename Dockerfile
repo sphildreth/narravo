@@ -27,5 +27,8 @@ COPY --from=base /app/src ./src
 COPY --from=base /app/app ./app
 COPY deploy/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+# Create upload directory structure with proper permissions
+RUN mkdir -p /app/public/uploads/images /app/public/uploads/videos /app/public/uploads/featured && \
+    chmod -R 755 /app/public/uploads
 EXPOSE 3000
 CMD ["/entrypoint.sh"]

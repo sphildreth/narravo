@@ -12,6 +12,9 @@ services:
       - db
     ports:
       - "3000:3000"
+    volumes:
+      # Persist uploaded files outside the container
+      - narravo_uploads:/app/public/uploads
     restart: unless-stopped
 
   db:
@@ -28,3 +31,4 @@ services:
 
 volumes:
   narravo_pg_data:
+  narravo_uploads:

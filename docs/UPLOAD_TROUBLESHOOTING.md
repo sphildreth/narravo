@@ -147,11 +147,13 @@ chmod -R 755 public/uploads/
 **Symptoms:**
 - Everything works in development
 - Same operations fail in production/Docker
+- Files upload successfully but return 404 when accessed
 
 **Common Causes:**
-- **Volume mounts not configured:** Docker container can't persist files
+- **Volume mounts not configured:** Docker container can't persist files or Next.js can't serve them
 - **Different user/permissions:** Production runs as different user than development
 - **Environment variables missing:** S3/R2 config not set in production
+- **Next.js static file serving:** Uploaded files not accessible to Next.js
 
 **Solutions for Docker:**
 
@@ -162,8 +164,8 @@ services:
   app:
     # ... other config ...
     volumes:
-      # REQUIRED for local storage
-      - ./public/uploads:/app/public/uploads
+      # REQUIRED for local storage - persists uploads and makes them accessible to Next.js
+      - narravo_uploads:/app/public/uploads
     environment:
       # If using S3/R2, ensure these are set
       - S3_ENDPOINT=${S3_ENDPOINT}
@@ -173,7 +175,23 @@ services:
       - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
       # Optional: R2-specific
       - R2_PUBLIC_URL=${R2_PUBLIC_URL}
+
+volumes:
+  narravo_uploads:  # Add this volume definition
 ```
+
+**Why the volume mount is critical:**
+
+1. **Persistence**: Without a volume, uploaded files are lost when the container restarts
+2. **Next.js static serving**: Next.js serves files from `public/` directory at build time. For runtime uploads:
+   - The volume mount makes the directory accessible to the running container
+   - Next.js can then serve files from `/uploads/*` paths
+   - Files written after build time are accessible via the volume
+
+3. **File accessibility**: The volume ensures:
+   - Files written by the app are persisted
+   - Next.js static file server can read them
+   - Files survive container rebuilds/restarts
 
 Check file ownership in container:
 
@@ -197,17 +215,59 @@ chown -R node:node /app/public/uploads/
 - Upload succeeds (no errors)
 - Image URL is saved in database
 - Image doesn't load on published post (404 or broken)
+- Server logs show file written successfully
+- Browser console shows 404 for `/uploads/images/filename.jpg`
 
 **Diagnosis:**
 1. Check the `featuredImageUrl` value in database
 2. Try accessing the URL directly in browser
 3. Check server logs for 404 errors
 4. Inspect HTML source to see actual URL rendered
+5. Verify file exists on filesystem: `ls -la /opt/narravo/public/uploads/images/`
 
 **Common Causes:**
 - **Wrong public URL (S3/R2):** `R2_PUBLIC_URL` or public URL configuration incorrect
 - **File not accessible:** Permissions prevent reading
+- **Next.js production build:** Files created after build not served (see solution below)
 - **CDN/proxy issue:** Reverse proxy not configured to serve `/uploads/`
+
+**Solution for Non-Docker Deployments (systemd/PM2):**
+
+Next.js in production mode (`next start`) serves static files from the build output, not from the source `public/` directory. Files uploaded **after** the build need a custom route handler.
+
+The solution is already implemented in `src/app/uploads/[...path]/route.ts` which serves files from `public/uploads/` at runtime.
+
+**Verify the fix:**
+```bash
+# Check if file exists
+ls -la /opt/narravo/public/uploads/images/
+
+# Test accessing via the API route
+curl -I https://your-domain.com/uploads/images/test-file.jpg
+# Should return: HTTP/1.1 200 OK
+
+# Check recent deployment included the route
+ls -la /opt/narravo/src/app/uploads/\[...path\]/route.ts
+# Should exist
+```
+
+**If route file is missing:**
+```bash
+# Pull latest code
+cd /opt/narravo
+sudo -u narravo git fetch --tags
+sudo -u narravo git checkout main  # or your tag
+sudo -u narravo git pull
+
+# Verify file exists
+ls -la src/app/uploads/\[...path\]/route.ts
+
+# Rebuild and restart
+sudo systemctl stop narravo
+sudo -u narravo pnpm install
+sudo -u narravo pnpm build
+sudo systemctl start narravo
+```
 
 **Solutions:**
 ```bash
@@ -316,6 +376,152 @@ pm2 logs narravo --lines 100
 
 # systemd
 journalctl -u narravo -n 100 -f
+```
+
+## Quick Diagnostic Script
+
+Save this as `scripts/check-uploads.sh`:
+
+```bash
+#!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+
+echo "=== Upload Directory Diagnostic ==="
+echo ""
+
+echo "1. Checking directory structure..."
+ls -la public/uploads/ 2>/dev/null || echo "ERROR: public/uploads/ does not exist!"
+
+echo ""
+echo "2. Checking subdirectories..."
+for dir in images videos featured; do
+  if [ -d "public/uploads/$dir" ]; then
+    echo "✓ public/uploads/$dir exists"
+    ls -ld public/uploads/$dir
+  else
+    echo "✗ public/uploads/$dir MISSING"
+  fi
+done
+
+echo ""
+echo "3. Checking recent uploads..."
+find public/uploads/ -type f -mtime -1 2>/dev/null | head -10 || echo "No recent files or directory not accessible"
+
+echo ""
+echo "4. Checking permissions..."
+echo "Current user: $(whoami) ($(id -u):$(id -g))"
+if command -v stat >/dev/null 2>&1; then
+  stat -c "Owner: %U (%u), Group: %G (%g), Mode: %a" public/uploads/ 2>/dev/null || stat -f "Owner: %Su (%u), Group: %Sg (%g), Mode: %Lp" public/uploads/
+fi
+
+echo ""
+echo "5. Testing write permissions..."
+TEST_FILE="public/uploads/.write-test-$$"
+if touch "$TEST_FILE" 2>/dev/null; then
+  echo "✓ Can write to public/uploads/"
+  rm "$TEST_FILE"
+else
+  echo "✗ CANNOT write to public/uploads/ - PERMISSION DENIED"
+fi
+
+echo ""
+echo "6. Checking disk space..."
+df -h public/uploads/ 2>/dev/null || df -h .
+
+echo ""
+echo "=== End Diagnostic ==="
+```
+
+Run it:
+```bash
+chmod +x scripts/check-uploads.sh
+./scripts/check-uploads.sh
+```
+
+## Deploying the Fix
+
+If you've just added the volume mount to `docker-compose.prod.yml`, follow these steps to deploy:
+
+### Step 1: Rebuild the Docker Image
+
+```bash
+# Pull latest code
+git pull origin main
+
+# Rebuild the image with upload directory structure
+docker-compose -f docker-compose.prod.yml build --no-cache web
+```
+
+### Step 2: Stop and Remove Old Containers
+
+```bash
+# Stop the running containers
+docker-compose -f docker-compose.prod.yml down
+
+# Optional: Clean up old images
+docker image prune -f
+```
+
+### Step 3: Start with New Configuration
+
+```bash
+# Start the services with the new volume mount
+docker-compose -f docker-compose.prod.yml up -d
+
+# Check logs for any errors
+docker-compose -f docker-compose.prod.yml logs -f web
+```
+
+### Step 4: Verify Upload Directory
+
+```bash
+# Enter the container
+docker-compose -f docker-compose.prod.yml exec web sh
+
+# Check if directory structure exists
+ls -la /app/public/uploads/
+
+# Should show:
+# drwxr-xr-x  images/
+# drwxr-xr-x  videos/
+# drwxr-xr-x  featured/
+
+# Test file creation
+touch /app/public/uploads/images/test.txt
+ls -la /app/public/uploads/images/test.txt
+rm /app/public/uploads/images/test.txt
+
+# Exit container
+exit
+```
+
+### Step 5: Test Upload
+
+1. Navigate to admin post editor
+2. Try uploading an image via drag-drop or the Image button
+3. Check browser console for 404 errors (should be resolved)
+4. Verify image appears in the editor
+5. Save the post and view it publicly to ensure image displays
+
+### Troubleshooting After Deploy
+
+If uploads still fail after deployment:
+
+```bash
+# Check if volume was created
+docker volume ls | grep narravo_uploads
+
+# Inspect the volume
+docker volume inspect narravo_uploads
+
+# Check container mounts
+docker-compose -f docker-compose.prod.yml exec web mount | grep uploads
+
+# Verify Next.js can serve the file
+docker-compose -f docker-compose.prod.yml exec web ls -la /app/public/uploads/images/
+
+# Check from host machine using curl
+curl -I https://your-domain.com/uploads/images/test-file.jpg
 ```
 
 ## Quick Diagnostic Script
