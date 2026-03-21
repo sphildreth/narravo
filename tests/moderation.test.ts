@@ -93,8 +93,8 @@ describe('moderation queue functionality', () => {
     
     await revalidateAfterModeration(['post-1', 'post-2']);
 
-    expect(revalidateTag).toHaveBeenCalledWith('post:post-1');
-    expect(revalidateTag).toHaveBeenCalledWith('post:post-2');
-    expect(revalidateTag).toHaveBeenCalledWith('home');
+    expect(revalidateTag).toHaveBeenCalledWith('post:post-1', "default");
+    expect(revalidateTag).toHaveBeenCalledWith('post:post-2', "default");
+    expect(revalidateTag).toHaveBeenCalledWith('home', "default");
   });
 });

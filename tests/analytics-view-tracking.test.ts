@@ -59,7 +59,7 @@ vi.mock('@/lib/db', () => ({
 }));
 
 vi.mock('@/lib/config', () => ({
-  ConfigServiceImpl: vi.fn().mockImplementation(() => ({
+  ConfigServiceImpl: vi.fn().mockImplementation(function() { return {
     getBoolean: vi.fn().mockImplementation((key) => {
       if (key === "VIEW.RESPECT-DNT") return Promise.resolve(false);
       if (key === "VIEW.COUNT-BOTS") return Promise.resolve(true);
@@ -69,7 +69,7 @@ vi.mock('@/lib/config', () => ({
       if (key === "VIEW.SESSION-WINDOW-MINUTES") return Promise.resolve(30);
       return Promise.resolve(0);
     })
-  }))
+  }; })
 }));
 
 // Import after mocking

@@ -7,10 +7,10 @@ import { getArchiveCacheTag } from "./archives";
  */
 export function revalidatePostAndArchives(postId: string, publishedAt?: Date | string | null) {
   // Always revalidate the specific post
-  revalidateTag(`post:${postId}`);
+  revalidateTag(`post:${postId}`, "default" as any);
   
   // Revalidate home page (shows latest posts)
-  revalidateTag("home");
+  revalidateTag("home", "default" as any);
   
   // If post has a published date, revalidate relevant archive pages
   if (publishedAt) {
@@ -20,8 +20,8 @@ export function revalidatePostAndArchives(postId: string, publishedAt?: Date | s
       const month = date.getMonth() + 1;
       
       // Revalidate year and month archive pages
-      revalidateTag(getArchiveCacheTag(year));
-      revalidateTag(getArchiveCacheTag(year, month));
+      revalidateTag(getArchiveCacheTag(year), "default" as any);
+      revalidateTag(getArchiveCacheTag(year, month), "default" as any);
     }
   }
 }
@@ -30,7 +30,7 @@ export function revalidatePostAndArchives(postId: string, publishedAt?: Date | s
  * Revalidate all archive-related tags (useful for bulk operations)
  */
 export function revalidateAllArchives() {
-  revalidateTag("home");
+  revalidateTag("home", "default" as any);
   
   // Note: We can't revalidate all archive tags without knowing which ones exist
   // This would be enhanced in a production system with a registry of active tags
@@ -40,6 +40,6 @@ export function revalidateAllArchives() {
  * Revalidate cache tags when appearance settings change
  */
 export function revalidateAppearance() {
-  revalidateTag("home");
+  revalidateTag("home", "default" as any);
   // Banner appears on home page, so revalidate it when banner settings change
 }

@@ -25,7 +25,7 @@ vi.mock("@/lib/db", () => ({
 
 // Mock the configuration module
 vi.mock("@/lib/config", () => ({
-  ConfigServiceImpl: vi.fn().mockImplementation(() => ({
+  ConfigServiceImpl: vi.fn().mockImplementation(function() { return {
     getBoolean: vi.fn().mockImplementation((key: string) => {
       const config: Record<string, boolean> = {
         "VIEW.RESPECT-DNT": false,
@@ -40,7 +40,7 @@ vi.mock("@/lib/config", () => ({
       };
       return Promise.resolve(config[key] ?? 0);
     }),
-  })),
+  }; }),
 }));
 
 // Mock the logger module

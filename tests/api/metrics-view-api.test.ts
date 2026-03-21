@@ -11,7 +11,7 @@ const mockConfig = {
   getBoolean: mockGetBoolean,
 };
 
-const ConfigServiceImpl = vi.fn(() => mockConfig);
+const ConfigServiceImpl = vi.fn(function() { return mockConfig; });
 
 vi.mock("@/lib/analytics", () => ({
   recordView: (...args: unknown[]) => mockRecordView(...args),
@@ -49,7 +49,7 @@ describe("/api/metrics/view endpoint", () => {
     mockRecordPageView.mockResolvedValue(true);
     mockGetBoolean.mockResolvedValue(false);
     ConfigServiceImpl.mockClear();
-    ConfigServiceImpl.mockImplementation(() => mockConfig);
+    ConfigServiceImpl.mockImplementation(function() { return mockConfig; });
   });
 
   describe("POST - post view tracking", () => {

@@ -34,7 +34,7 @@ describe("lib/db", () => {
     const logSlowQuery = vi.fn();
     const underlyingQuery = vi.fn().mockResolvedValue({ rows: [] });
     const poolInstance = { query: underlyingQuery } as any;
-    const poolCtor = vi.fn(() => poolInstance);
+    const poolCtor = vi.fn(function() { return poolInstance; });
     const drizzleMock = vi.fn(() => ({ execute: vi.fn() }));
 
     vi.doMock("@/lib/performance", () => ({ logSlowQuery }));
@@ -61,7 +61,7 @@ describe("lib/db", () => {
       callback(null, { ok: true });
     });
     const poolInstance = { query: underlyingQuery } as any;
-    const poolCtor = vi.fn(() => poolInstance);
+    const poolCtor = vi.fn(function() { return poolInstance; });
 
     vi.doMock("@/lib/performance", () => ({ logSlowQuery }));
     vi.doMock("pg", () => ({ Pool: poolCtor }));
@@ -84,7 +84,7 @@ describe("lib/db", () => {
     const poolInstance = { query: underlyingQuery } as any;
 
     vi.doMock("@/lib/performance", () => ({ logSlowQuery: vi.fn() }));
-    vi.doMock("pg", () => ({ Pool: vi.fn(() => poolInstance) }));
+    vi.doMock("pg", () => ({ Pool: vi.fn(function() { return poolInstance; }) }));
     vi.doMock("drizzle-orm/node-postgres", () => ({ drizzle: vi.fn(() => ({ execute: vi.fn() })) }));
 
     const { pool } = await import("@/lib/db");

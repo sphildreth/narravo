@@ -17,7 +17,7 @@ let mockConfigInstance: {
   deleteGlobal: ReturnType<typeof vi.fn>;
 };
 
-const ConfigServiceImpl = vi.fn(() => mockConfigInstance);
+const ConfigServiceImpl = vi.fn(function() { return mockConfigInstance; });
 
 vi.mock("@/lib/auth", () => ({
   requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
@@ -47,7 +47,7 @@ describe("admin config routes", () => {
     };
 
     ConfigServiceImpl.mockClear();
-    ConfigServiceImpl.mockImplementation(() => mockConfigInstance);
+    ConfigServiceImpl.mockImplementation(function() { return mockConfigInstance; });
   });
 
   const makeJsonRequest = (body: unknown, init: RequestInit = {}): NextRequest => {

@@ -1,3 +1,5 @@
+/** @vitest-environment jsdom */
+
 // SPDX-License-Identifier: Apache-2.0
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
@@ -18,7 +20,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Mock session data
-let mockSessionData: ReturnType<typeof vi.fn> | null = null;
+let mockSessionData: any = null;
 let mockSessionStatus: "loading" | "authenticated" | "unauthenticated" = "loading";
 
 vi.mock("next-auth/react", () => ({

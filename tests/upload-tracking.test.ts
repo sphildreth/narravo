@@ -1,13 +1,37 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { db } from '../src/lib/db';
-import { uploads, posts } from '../drizzle/schema';
+import { uploads, posts, users } from '../drizzle/schema';
 import { eq } from 'drizzle-orm';
 
 describe('Upload Tracking System', () => {
   const testSessionId = 'test-session-123';
   const testPostId = '00000000-0000-0000-0000-000000000001';
+  const testUserId = '00000000-0000-0000-0000-000000000002';
   
+  beforeAll(async () => {
+    // Create test user
+    await db.insert(users).values({
+      id: testUserId,
+      email: 'upload-tracking-test@example.com',
+      name: 'Upload Test User',
+    });
+    
+    // Create test post
+    await db.insert(posts).values({
+      id: testPostId,
+      slug: 'test-upload-tracking-post',
+      title: 'Test Upload Tracking Post',
+      html: '<p>Test</p>',
+    });
+  });
+
+  afterAll(async () => {
+    // Clean up mock references
+    await db.delete(posts).where(eq(posts.id, testPostId));
+    await db.delete(users).where(eq(users.id, testUserId));
+  });
+
   // Clean up test data
   afterEach(async () => {
     await db.delete(uploads).where(eq(uploads.sessionId, testSessionId));
@@ -30,17 +54,16 @@ describe('Upload Tracking System', () => {
     });
 
     it('should track upload with user ID when provided', async () => {
-      const userId = '00000000-0000-0000-0000-000000000002';
       const upload = await db.insert(uploads).values({
         key: 'images/test-124.jpg',
         url: '/uploads/images/test-124.jpg',
         mimeType: 'image/jpeg',
         size: 54321,
         sessionId: testSessionId,
-        userId: userId,
+        userId: testUserId,
       }).returning();
 
-      expect(upload[0]?.userId).toBe(userId);
+      expect(upload[0]?.userId).toBe(testUserId);
     });
   });
 

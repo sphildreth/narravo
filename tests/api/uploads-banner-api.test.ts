@@ -11,6 +11,7 @@ const mockFs = {
 
 vi.mock("@/lib/auth", () => ({
   requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
+  getSessionUserId: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("node:fs", () => ({
@@ -19,8 +20,9 @@ vi.mock("node:fs", () => ({
   },
 }));
 
+let mockUuidCounter = 0;
 vi.mock("node:crypto", () => ({
-  randomUUID: () => "uuid-test",
+  randomUUID: () => `uuid-test-${Date.now()}-${++mockUuidCounter}`,
 }));
 
 describe("/api/uploads/banner", () => {
@@ -47,9 +49,11 @@ describe("/api/uploads/banner", () => {
     const response = await bannerPost(makeFormRequest(form));
     const payload = await response.json();
 
+    if (response.status !== 200) console.log("BANNER ERROR:", payload);
+
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
-    expect(payload.url).toMatch(/\/uploads\/banner\/uuid-test\./);
+    expect(payload.url).toMatch(/\/uploads\/banner\/uuid-test-\d+-\d+\./);
     expect(mockFs.mkdir).toHaveBeenCalled();
     expect(mockFs.writeFile).toHaveBeenCalled();
   });

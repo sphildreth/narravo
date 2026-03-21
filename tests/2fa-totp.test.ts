@@ -13,7 +13,7 @@ import {
   hashIpAddress,
   getTrustedDeviceExpiration,
 } from "@/lib/2fa/totp";
-import { authenticator } from "otplib";
+import { authenticator } from "@otplib/v12-adapter";
 
 describe("2FA TOTP", () => {
   describe("generateTotpSecret", () => {

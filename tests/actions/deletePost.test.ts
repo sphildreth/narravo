@@ -308,7 +308,7 @@ describe("deletePost.ts - deletePostAction", () => {
       await deletePostAction(formData);
 
       // Assert
-      expect(revalidateTagMock).toHaveBeenCalledWith("home");
+      expect(revalidateTagMock).toHaveBeenCalledWith("home", "default");
     });
 
     it("should revalidate post-specific cache", async () => {
@@ -332,7 +332,7 @@ describe("deletePost.ts - deletePostAction", () => {
       await deletePostAction(formData);
 
       // Assert
-      expect(revalidateTagMock).toHaveBeenCalledWith(`post:${postId}`);
+      expect(revalidateTagMock).toHaveBeenCalledWith(`post:${postId}`, "default");
     });
 
     it("should revalidate admin posts list path", async () => {

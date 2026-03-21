@@ -23,8 +23,8 @@ describe("lib/revalidation", () => {
     const { revalidatePostAndArchives } = await import("@/lib/revalidation");
     revalidatePostAndArchives("123");
 
-    expect(revalidateTag).toHaveBeenCalledWith("post:123");
-    expect(revalidateTag).toHaveBeenCalledWith("home");
+    expect(revalidateTag).toHaveBeenCalledWith("post:123", "default");
+    expect(revalidateTag).toHaveBeenCalledWith("home", "default");
     expect(getArchiveCacheTag).not.toHaveBeenCalled();
   });
 
@@ -34,8 +34,8 @@ describe("lib/revalidation", () => {
 
     expect(getArchiveCacheTag).toHaveBeenCalledWith(2024);
     expect(getArchiveCacheTag).toHaveBeenCalledWith(2024, 3);
-    expect(revalidateTag).toHaveBeenCalledWith("archive:2024");
-    expect(revalidateTag).toHaveBeenCalledWith("archive:2024-03");
+    expect(revalidateTag).toHaveBeenCalledWith("archive:2024", "default");
+    expect(revalidateTag).toHaveBeenCalledWith("archive:2024-03", "default");
   });
 
   it("ignores invalid date inputs", async () => {
@@ -43,18 +43,18 @@ describe("lib/revalidation", () => {
     revalidatePostAndArchives("abc", "invalid-date");
 
     expect(getArchiveCacheTag).not.toHaveBeenCalled();
-    expect(revalidateTag).toHaveBeenCalledWith("home");
+    expect(revalidateTag).toHaveBeenCalledWith("home", "default");
   });
 
   it("revalidates all archives by home tag", async () => {
     const { revalidateAllArchives } = await import("@/lib/revalidation");
     revalidateAllArchives();
-    expect(revalidateTag).toHaveBeenCalledWith("home");
+    expect(revalidateTag).toHaveBeenCalledWith("home", "default");
   });
 
   it("revalidates appearance by home tag", async () => {
     const { revalidateAppearance } = await import("@/lib/revalidation");
     revalidateAppearance();
-    expect(revalidateTag).toHaveBeenCalledWith("home");
+    expect(revalidateTag).toHaveBeenCalledWith("home", "default");
   });
 });

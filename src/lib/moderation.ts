@@ -183,9 +183,9 @@ async function getCommentAttachments(commentIds: string[]): Promise<Record<strin
 export async function revalidateAfterModeration(postIds: string[]) {
   // Revalidate the post pages where comments were moderated
   for (const postId of postIds) {
-    revalidateTag(`post:${postId}`);
+    revalidateTag(`post:${postId}`, "default" as any);
   }
   
   // Also revalidate home page since comment counts may have changed
-  revalidateTag("home");
+  revalidateTag("home", "default" as any);
 }

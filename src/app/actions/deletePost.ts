@@ -52,8 +52,8 @@ export async function deletePostAction(formData: FormData) {
     await db.delete(posts).where(eq(posts.id, id));
     
     // Revalidate caches
-    revalidateTag("home"); // Home page cache
-    revalidateTag(`post:${id}`); // Post-specific cache
+    revalidateTag("home", "default" as any); // Home page cache
+    revalidateTag(`post:${id}`, "default" as any); // Post-specific cache
     revalidatePath("/admin/posts"); // Admin posts list
     revalidatePath(`/${post.slug}`); // Post detail page
     
