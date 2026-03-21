@@ -15,11 +15,9 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const config = new ConfigServiceImpl({ db });
-  const revalidateSeconds = await config.getNumber("PUBLIC.HOME.REVALIDATE-SECONDS");
-  if (revalidateSeconds == null) throw new Error("Missing required config: PUBLIC.HOME.REVALIDATE-SECONDS");
-  const feedCount = await config.getNumber("FEED.LATEST-COUNT");
+  const revalidateSeconds = await config.getNumber("PUBLIC.HOME.REVALIDATE-SECONDS") ?? 60;
+  const feedCount = await config.getNumber("FEED.LATEST-COUNT") ?? 20;
   const disclaimerEnabled = await config.getBoolean("SITE.DISCLAIMER.ENABLED");
-  if (feedCount == null) throw new Error("Missing required config: FEED.LATEST-COUNT");
   
   // Get session window for page tracking
   const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;

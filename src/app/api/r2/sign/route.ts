@@ -13,13 +13,10 @@ export async function POST(req: NextRequest) {
     const config = new ConfigServiceImpl({ db });
     
     // Get configuration values
-    const imageMaxBytes = await config.getNumber("UPLOADS.IMAGE-MAX-BYTES");
-    const videoMaxBytes = await config.getNumber("UPLOADS.VIDEO-MAX-BYTES");
-    const videoMaxDuration = await config.getNumber("UPLOADS.VIDEO-MAX-DURATION-SECONDS");
+    const imageMaxBytes = await config.getNumber("UPLOADS.IMAGE-MAX-BYTES") ?? 5000000;
+    const videoMaxBytes = await config.getNumber("UPLOADS.VIDEO-MAX-BYTES") ?? 50000000;
+    const videoMaxDuration = await config.getNumber("UPLOADS.VIDEO-MAX-DURATION-SECONDS") ?? 90;
     
-    if (imageMaxBytes == null) throw new Error("Missing required config: UPLOADS.IMAGE-MAX-BYTES");
-    if (videoMaxBytes == null) throw new Error("Missing required config: UPLOADS.VIDEO-MAX-BYTES");
-    if (videoMaxDuration == null) throw new Error("Missing required config: UPLOADS.VIDEO-MAX-DURATION-SECONDS");
 
     // Get optional MIME type allowlists
     const allowedImageMimes = await config.getJSON<string[]>("UPLOADS.ALLOWED-MIME-IMAGE") ?? [

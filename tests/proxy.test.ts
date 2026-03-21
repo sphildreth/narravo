@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
-// Mock the redirectsEdge module BEFORE importing middleware
+// Mock the redirectsEdge module BEFORE importing proxy
 vi.mock("@/lib/redirectsEdge", () => ({
   getRedirectsEdge: vi.fn(),
 }));
@@ -19,7 +19,7 @@ vi.mock("@/lib/logger", () => ({
 
 describe("Middleware", () => {
   let mockGetRedirectsEdge: ReturnType<typeof vi.fn>;
-  let middleware: any;
+  let proxy: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -27,9 +27,9 @@ describe("Middleware", () => {
     // Reset modules to clear the cache
     vi.resetModules();
     
-    // Re-import the middleware fresh with cleared cache
-    const middlewareModule = await import("../src/middleware");
-    middleware = middlewareModule.middleware;
+    // Re-import the proxy fresh with cleared cache
+    const proxyModule = await import("../src/proxy");
+    proxy = proxyModule.proxy;
 
     // Import and setup mock
     const redirectsEdge = await import("@/lib/redirectsEdge");
@@ -46,7 +46,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/2024/10/15/my-blog-post")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       expect(response.headers.get("location")).toBe(
@@ -59,7 +59,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/2023/05/20/this-is-a-test-post")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       expect(response.headers.get("location")).toBe(
@@ -72,7 +72,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/2024/01/01/new-year?utm_source=email")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       const location = response.headers.get("location");
@@ -87,7 +87,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/blog/my-post")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
       expect(response.headers.get("location")).toBeNull();
@@ -100,7 +100,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/2024/10/invalid")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
     });
@@ -114,7 +114,7 @@ describe("Middleware", () => {
 
       for (const { path, expected } of testCases) {
         const request = new NextRequest(new URL(`http://localhost:3000${path}`));
-        const response = await middleware(request);
+        const response = await proxy(request);
 
         expect(response.status).toBe(301);
         expect(response.headers.get("location")).toBe(
@@ -134,7 +134,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/old-path")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       expect(response.headers.get("location")).toBe(
@@ -151,7 +151,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/old-path")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       expect(response.headers.get("location")).toBe(
@@ -168,7 +168,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/old-path/")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       // Note: Next.js URL clone() preserves the original trailing slash behavior
@@ -188,7 +188,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/path-2")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       expect(response.headers.get("location")).toBe(
@@ -205,7 +205,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/different-path")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
       expect(response.headers.get("location")).toBeNull();
@@ -218,7 +218,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/any-path")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
     });
@@ -232,7 +232,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/old?param=value&other=123")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       const location = response.headers.get("location");
@@ -250,7 +250,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/old-path-with-special-chars")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       expect(response.headers.get("location")).toBe(
@@ -269,13 +269,13 @@ describe("Middleware", () => {
       const request1 = new NextRequest(
         new URL("http://localhost:3000/cached")
       );
-      await middleware(request1);
+      await proxy(request1);
 
       // Second request within cache duration
       const request2 = new NextRequest(
         new URL("http://localhost:3000/cached")
       );
-      await middleware(request2);
+      await proxy(request2);
 
       // Should only call getRedirectsEdge once due to caching
       expect(mockGetRedirectsEdge).toHaveBeenCalledTimes(1);
@@ -292,7 +292,7 @@ describe("Middleware", () => {
         const request = new NextRequest(
           new URL(`http://localhost:3000${route}`)
         );
-        const response = await middleware(request);
+        const response = await proxy(request);
 
         expect(response.status).toBe(200);
       }
@@ -302,7 +302,7 @@ describe("Middleware", () => {
       mockGetRedirectsEdge.mockResolvedValue([]);
 
       const request = new NextRequest(new URL("http://localhost:3000/"));
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
     });
@@ -313,7 +313,7 @@ describe("Middleware", () => {
       const request = new NextRequest(
         new URL("http://localhost:3000/category/subcategory/post")
       );
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
     });
@@ -329,7 +329,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/2024/10/01/test")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       // Date-based redirect should transform to /test, not /database-target
@@ -344,7 +344,7 @@ describe("Middleware", () => {
       ]);
 
       const request = new NextRequest(new URL("http://localhost:3000/old"));
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
       expect(response.headers.get("location")).toBe(
@@ -362,7 +362,7 @@ describe("Middleware", () => {
       );
 
       // Should not throw, should continue processing
-      await expect(middleware(request)).rejects.toThrow("Database error");
+      await expect(proxy(request)).rejects.toThrow("Database error");
     });
 
     it("should handle null redirects response", async () => {
@@ -372,7 +372,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/test-path")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       // Should continue without redirecting
       expect(response.status).toBe(200);
@@ -387,7 +387,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000//double//slash")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
     });
@@ -400,7 +400,7 @@ describe("Middleware", () => {
         new URL(`http://localhost:3000${longPath}`)
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
     });
@@ -415,7 +415,7 @@ describe("Middleware", () => {
       );
 
       // Note: URL encoding handling depends on implementation
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       // Should either redirect or pass through
       expect([200, 301]).toContain(response.status);
@@ -430,7 +430,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/OldPath")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(301);
     });
@@ -444,7 +444,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/oldpath")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200); // No redirect due to case mismatch
     });
@@ -458,7 +458,7 @@ describe("Middleware", () => {
         new URL("http://localhost:3000/admin/dashboard")
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
       expect(response.headers.get("location")).toBeNull();
@@ -472,7 +472,7 @@ describe("Middleware", () => {
         { headers: { cookie: "next-auth.session-token=token" } }
       );
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response.status).toBe(200);
       expect(response.headers.get("location")).toBeNull();
