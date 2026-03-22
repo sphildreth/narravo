@@ -43,18 +43,22 @@ export async function GET(
       
       if (action === "download") {
         // Serve the file for download
-        const fs = await import("node:fs/promises");
+        const fs = await import("node:fs");
+        const { Readable } = await import("node:stream");
         const filePath = `/tmp/${operation.archiveFilename}`;
         
         try {
-          const buffer = await fs.readFile(filePath);
+          const stat = await fs.promises.stat(filePath);
+          const fileStream = fs.createReadStream(filePath);
+          const webStream = Readable.toWeb(fileStream);
           
-          return new Response(new Uint8Array(buffer), {
+          // @ts-expect-error - Node.js web streams are broadly compatible with Next.js Response body
+          return new Response(webStream, {
             status: 200,
             headers: {
               "Content-Type": "application/zip",
               "Content-Disposition": `attachment; filename="${operation.archiveFilename}"`,
-              "Content-Length": buffer.length.toString(),
+              "Content-Length": stat.size.toString(),
             }
           });
         } catch (fileError) {

@@ -5,6 +5,8 @@ import { POST as exportPost } from "@/app/api/admin/export/route";
 import { GET as exportStatusGet } from "@/app/api/admin/export/[operationId]/route";
 import { POST as restorePost } from "@/app/api/admin/restore/route";
 
+import { Readable } from "node:stream";
+
 const mockRequireAdmin = vi.fn();
 const mockCreateBackup = vi.fn();
 const mockRestoreBackup = vi.fn();
@@ -12,6 +14,12 @@ const mockFs = {
   readFile: vi.fn(),
   writeFile: vi.fn(),
   unlink: vi.fn(),
+  promises: {
+    stat: vi.fn().mockResolvedValue({ size: 123 }),
+    writeFile: vi.fn(),
+    unlink: vi.fn(),
+  },
+  createReadStream: vi.fn(),
 };
 
 const mockDb = {
@@ -33,7 +41,8 @@ vi.mock(new URL("../../scripts/restore.ts", import.meta.url).href, () => ({
   restoreBackup: (...args: unknown[]) => mockRestoreBackup(...args),
 }));
 
-vi.mock("node:fs/promises", () => mockFs);
+vi.mock("node:fs/promises", () => mockFs.promises);
+vi.mock("node:fs", () => mockFs);
 
 vi.mock("@/lib/db", () => ({
   get db() {
@@ -61,6 +70,10 @@ describe("admin data operation routes", () => {
     mockFs.readFile.mockReset();
     mockFs.writeFile.mockReset();
     mockFs.unlink.mockReset();
+    mockFs.promises.writeFile.mockReset();
+    mockFs.promises.unlink.mockReset();
+    mockFs.promises.stat.mockResolvedValue({ size: 123 });
+    mockFs.createReadStream.mockReset();
 
     mockDb.insert.mockReset();
     mockDb.update.mockReset();
@@ -97,12 +110,18 @@ describe("admin data operation routes", () => {
     mockDb.update.mockReturnValue({ set: updateSet });
 
     mockCreateBackup.mockResolvedValue("/tmp/narravo-export.zip");
-    mockFs.readFile.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    mockFs.createReadStream.mockReturnValue({
+      on: vi.fn((event, cb) => {
+        if (event === "data") cb(new Uint8Array([1, 2, 3]));
+        if (event === "end") cb();
+      }),
+    });
 
     const request = makeJsonRequest({ includeMedia: false, dateFrom: "2024-02-01", dateTo: "2024-02-15" });
 
     const response = await exportPost(request);
     const payload = await mockResponseJson(response);
+    if (response.status !== 200) console.log("PAYLOAD:", payload);
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
@@ -113,7 +132,7 @@ describe("admin data operation routes", () => {
       includeMedia: false,
       verbose: false,
     });
-    expect(mockFs.readFile).toHaveBeenCalledWith("/tmp/narravo-export.zip");
+    expect(mockFs.createReadStream).toHaveBeenCalledWith("/tmp/narravo-export.zip");
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({
       status: "completed",
       archiveFilename: expect.stringContaining("narravo-export-20240301-operatio"),
@@ -194,7 +213,8 @@ describe("admin data operation routes", () => {
     }));
 
     const fileBytes = new Uint8Array([10, 20, 30]);
-    mockFs.readFile.mockResolvedValue(fileBytes);
+    mockFs.createReadStream.mockReturnValue(Readable.from([fileBytes]));
+    mockFs.promises.stat.mockResolvedValue({ size: fileBytes.length });
 
     const request = {
       nextUrl: new URL("http://localhost/api/admin/export/operation-123456?action=download"),
@@ -204,7 +224,7 @@ describe("admin data operation routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("application/zip");
-    expect(mockFs.readFile).toHaveBeenCalledWith("/tmp/narravo-export-20240301-operation-1234.zip");
+    expect(mockFs.createReadStream).toHaveBeenCalledWith("/tmp/narravo-export-20240301-operation-1234.zip");
     const buffer = new Uint8Array(await response.arrayBuffer());
     expect(buffer).toEqual(fileBytes);
   });
@@ -239,8 +259,8 @@ describe("admin data operation routes", () => {
       },
     });
 
-    mockFs.writeFile.mockResolvedValue(undefined);
-    mockFs.unlink.mockResolvedValue(undefined);
+    mockFs.promises.writeFile.mockResolvedValue(undefined);
+    mockFs.promises.unlink.mockResolvedValue(undefined);
 
     const buffer = new Uint8Array([1, 2, 3, 4]);
     const file = new File([buffer], "backup.zip", { type: "application/zip" });
@@ -275,6 +295,6 @@ describe("admin data operation routes", () => {
       skipUsers: true,
       dryRun: false,
     }));
-    expect(mockFs.unlink).toHaveBeenCalled();
+    expect(mockFs.promises.unlink).toHaveBeenCalled();
   });
 });

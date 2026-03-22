@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs';
+import { Readable } from 'node:stream';
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
 
@@ -44,10 +45,12 @@ export async function GET(
     };
     const contentType = contentTypeMap[ext] || 'application/octet-stream';
 
-    // Read and return the file
-    const fileBuffer = fs.readFileSync(absolutePath);
+    // Read and return the file as a stream
+    const fileStream = fs.createReadStream(absolutePath);
+    const stream = Readable.toWeb(fileStream);
     
-    return new NextResponse(fileBuffer, {
+    // @ts-expect-error - Node.js web streams are broadly compatible with Next.js Response body
+    return new NextResponse(stream, {
       status: 200,
       headers: {
         'Content-Type': contentType,

@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { dataOperationLogs, posts, comments } from "@/drizzle/schema";
 import { eq, isNull } from "drizzle-orm";
 
+import { Readable } from "node:stream";
+
 // Mock the auth requirement
 vi.mock("@/lib/auth", () => ({
   requireAdmin: vi.fn().mockResolvedValue(true),
@@ -15,10 +17,22 @@ vi.mock("nanoid", () => ({
 }));
 
 // Mock filesystem operations
-vi.mock("node:fs/promises", () => ({
+const mockFsPromises = {
   writeFile: vi.fn().mockResolvedValue(undefined),
   readFile: vi.fn().mockResolvedValue(Buffer.from("test data")),
   unlink: vi.fn().mockResolvedValue(undefined),
+  stat: vi.fn().mockResolvedValue({ size: 100 }),
+};
+
+vi.mock("node:fs/promises", () => mockFsPromises);
+
+vi.mock("node:fs", () => ({
+  default: {
+    promises: mockFsPromises,
+    createReadStream: vi.fn().mockReturnValue(Readable.from([Buffer.from("test data")])),
+  },
+  promises: mockFsPromises,
+  createReadStream: vi.fn().mockReturnValue(Readable.from([Buffer.from("test data")])),
 }));
 
 // Mock the backup script
