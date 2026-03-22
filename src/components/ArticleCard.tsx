@@ -50,7 +50,7 @@ export default function ArticleCard({ post }: { post: ArticleCardPost }) {
       )}
       <div className="p-5">
         <div className="flex items-center gap-3 text-xs text-muted mb-1">
-          {date && <span>{date}</span>}
+          {date && <span suppressHydrationWarning>{date}</span>}
           {post.viewsTotal !== undefined && post.viewsTotal > 0 && (
             <span>• {formatViewCount(post.viewsTotal)} views</span>
           )}

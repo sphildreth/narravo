@@ -7,6 +7,8 @@ import { db } from "./db";
 import { users } from "@/drizzle/schema";
 import { isEmailAdmin } from "./admin";
 import { eq } from "drizzle-orm";
+import { cookies } from "next/headers";
+import { verifyTrustedDevice, TRUSTED_DEVICE_COOKIE_NAME } from "./2fa/trusted-device";
 
 type DbUser = {
   id: string;
@@ -84,19 +86,25 @@ const config: NextAuthConfig = {
         token.image = dbUser.image ?? user.image ?? null;
         token.twoFactorEnabled = dbUser.twoFactorEnabled;
         
-        console.log(`[AUTH] User login: ${dbUser.email}, 2FA enabled: ${dbUser.twoFactorEnabled}, mfaVerifiedAt: ${dbUser.mfaVerifiedAt}`);
-        
-        // Check if 2FA is enabled and recently verified (within 8 hours)
+        // Check if 2FA is enabled
         if (dbUser.twoFactorEnabled) {
-          const isRecentlyVerified = dbUser.mfaVerifiedAt && 
-            (Date.now() - new Date(dbUser.mfaVerifiedAt).getTime() < 8 * 60 * 60 * 1000);
+          // Check for a valid trusted device cookie
+          let isTrustedDevice = false;
+          try {
+            const cookieStore = await cookies();
+            const trustedToken = cookieStore.get(TRUSTED_DEVICE_COOKIE_NAME)?.value;
+            if (trustedToken) {
+              isTrustedDevice = await verifyTrustedDevice(dbUser.id, trustedToken);
+            }
+          } catch (error) {
+            // Ignore cookie read errors
+          }
           
-          console.log(`[AUTH] 2FA check: isRecentlyVerified=${isRecentlyVerified}`);
-          
-          if (isRecentlyVerified) {
+          if (isTrustedDevice) {
             token.mfaPending = false;
             token.mfa = true;
           } else {
+            // Force 2FA on every new login unless it's a trusted device
             token.mfaPending = true;
             token.mfa = false;
           }
@@ -104,14 +112,11 @@ const config: NextAuthConfig = {
           token.mfaPending = false;
           token.mfa = true;
         }
-        
-        console.log(`[AUTH] Token state: mfaPending=${token.mfaPending}, mfa=${token.mfa}`);
       } else if (token?.email) {
         token.isAdmin = isEmailAdmin(token.email);
         
         // Re-check 2FA status on token refresh
         if (trigger === "update" && token.userId) {
-          console.log(`[AUTH] Token update triggered for user ${token.userId}`);
           const [dbUser] = await db
             .select({ 
               twoFactorEnabled: users.twoFactorEnabled,
@@ -128,8 +133,6 @@ const config: NextAuthConfig = {
             const isRecentlyVerified = dbUser.mfaVerifiedAt && 
               (Date.now() - new Date(dbUser.mfaVerifiedAt).getTime() < 8 * 60 * 60 * 1000);
             
-            console.log(`[AUTH] Update: mfaVerifiedAt=${dbUser.mfaVerifiedAt}, isRecentlyVerified=${isRecentlyVerified}`);
-            
             if (dbUser.twoFactorEnabled) {
               if (isRecentlyVerified) {
                 token.mfaPending = false;
@@ -142,8 +145,6 @@ const config: NextAuthConfig = {
               token.mfaPending = false;
               token.mfa = true;
             }
-            
-            console.log(`[AUTH] Updated token state: mfaPending=${token.mfaPending}, mfa=${token.mfa}`);
           }
         }
       }
@@ -164,8 +165,6 @@ const config: NextAuthConfig = {
       // Also set these flags on the session itself for easy access
       session.mfaPending = Boolean(token.mfaPending);
       session.mfa = Boolean(token.mfa);
-      
-      console.log(`[AUTH] Session callback: mfaPending=${session.mfaPending}, mfa=${session.mfa}`);
 
       return session;
     },

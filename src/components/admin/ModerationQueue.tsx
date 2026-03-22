@@ -566,7 +566,7 @@ function CommentCard({
                   <span className="font-medium">User ID:</span> <code className="text-xs">{comment.userId || "—"}</code>
                 </div>
                 <div>
-                  <span className="font-medium">Created:</span> {new Date(comment.createdAt).toLocaleString()}
+                  <span className="font-medium">Created:</span> <span suppressHydrationWarning>{new Date(comment.createdAt).toLocaleString()}</span>
                 </div>
               </div>
             </div>

@@ -15,8 +15,18 @@ import type {
 } from "@simplewebauthn/server";
 
 const RP_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? "Narravo";
-const RP_ID = process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).hostname : "localhost";
-const ORIGIN = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+
+// NextAuth v5 uses AUTH_URL, while older versions use NEXTAUTH_URL. Vercel provides VERCEL_URL.
+const getOrigin = () => {
+  if (process.env.AUTH_URL) return process.env.AUTH_URL;
+  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
+};
+
+const ORIGIN = getOrigin();
+const RP_ID = new URL(ORIGIN).hostname;
 
 /**
  * Generate WebAuthn registration options for enrolling a new credential
