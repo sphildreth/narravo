@@ -39,19 +39,13 @@ export default function TwoFactorVerification() {
         return;
       }
 
-      console.log("[2FA] TOTP verification successful, updating session...");
-      
       // Trigger session update to refresh mfa status
       // Pass empty object to force token refresh
       await update({});
       
-      console.log("[2FA] Session updated, waiting for token refresh...");
-      
       // Wait a moment for the session to fully update
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      console.log("[2FA] Redirecting to home...");
-
       // Success! Redirect to home
       router.push("/");
       router.refresh();
@@ -110,18 +104,12 @@ export default function TwoFactorVerification() {
         return;
       }
 
-      console.log("[2FA] WebAuthn verification successful, updating session...");
-      
       // Trigger session update to refresh mfa status
       await update({});
-      
-      console.log("[2FA] Session updated, waiting for token refresh...");
       
       // Wait a moment for the session to fully update
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      console.log("[2FA] Redirecting to home...");
-
       // Success! Redirect to home
       router.push("/");
       router.refresh();
@@ -154,18 +142,12 @@ export default function TwoFactorVerification() {
         return;
       }
 
-      console.log("[2FA] Recovery code verification successful, updating session...");
-      
       // Trigger session update to refresh mfa status
       await update({});
-      
-      console.log("[2FA] Session updated, waiting for token refresh...");
       
       // Wait a moment for the session to fully update
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      console.log("[2FA] Redirecting to home...");
-
       // Success! Redirect to home
       router.push("/");
       router.refresh();

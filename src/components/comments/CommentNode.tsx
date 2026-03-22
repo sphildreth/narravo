@@ -40,7 +40,7 @@ export default function CommentNode({ node, canReact = false }: CommentNodeProps
         )}
         <span className="font-medium text-fg">{node.author?.name ?? "User"}</span>
         <span>•</span>
-        <time dateTime={node.createdAt}>{created}</time>
+        <time dateTime={node.createdAt} suppressHydrationWarning>{created}</time>
       </header>
       
       <div className="prose" dangerouslySetInnerHTML={{ __html: node.bodyHtml }} />
