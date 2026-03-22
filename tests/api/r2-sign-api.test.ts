@@ -7,7 +7,7 @@ const mockConfigInstance = {
   getNumber: vi.fn(),
   getJSON: vi.fn(),
 };
-const ConfigServiceImpl = vi.fn(() => mockConfigInstance);
+const ConfigServiceImpl = vi.fn(function() { return mockConfigInstance; });
 
 const mockLocalStorage = {
   getPublicUrl: vi.fn(),
@@ -34,12 +34,14 @@ vi.mock("@/lib/local-storage", () => ({
 
 vi.mock("@/lib/s3", () => ({
   getS3Config: (...args: unknown[]) => mockGetS3Config(...args),
-  S3Service: vi.fn(() => mockS3ServicePrototype),
+  S3Service: vi.fn(function() { return mockS3ServicePrototype; }),
 }));
 
 vi.mock("@/lib/logger", () => ({
   default: {
     error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
   },
 }));
 
@@ -83,6 +85,8 @@ describe("/api/r2/sign", () => {
       makeJsonRequest({ filename: "banner.png", mimeType: "image/png", size: 1024, kind: "image" })
     );
     const payload = await response.json();
+
+    if (response.status !== 200) console.log(payload);
 
     expect(response.status).toBe(200);
     expect(payload.url).toBe("/api/uploads/local");

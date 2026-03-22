@@ -11,11 +11,6 @@ export default defineConfig({
     isolate: true,
 
     // Constrain parallelism
-    pool: 'threads', // try 'forks' if you suspect a memory leak crossing worker boundaries
-    poolOptions: {
-      threads: { maxThreads: 4, minThreads: 1 },
-      // forks: { singleFork: false } // alternative if you switch pools
-    },
 
     // Turn off coverage by default (run it separately)
     coverage: { enabled: false },

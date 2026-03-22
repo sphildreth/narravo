@@ -43,10 +43,17 @@ export async function POST(req: NextRequest) {
         verbose: false,
       });
 
-      // Calculate checksum
-      const fs = await import("node:fs/promises");
-      const buffer = await fs.readFile(exportPath);
-      const checksum = crypto.createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+      // Calculate checksum without loading the whole file into memory
+      const fs = await import("node:fs");
+      const stat = await fs.promises.stat(exportPath);
+      
+      const checksum = await new Promise<string>((resolve, reject) => {
+        const hash = crypto.createHash('sha256');
+        const stream = fs.createReadStream(exportPath);
+        stream.on('error', err => reject(err));
+        stream.on('data', chunk => hash.update(chunk));
+        stream.on('end', () => resolve(hash.digest('hex')));
+      });
       
       // Update audit log with completion
       await db.update(dataOperationLogs)
@@ -63,7 +70,7 @@ export async function POST(req: NextRequest) {
         operationId,
         filename,
         checksum,
-        size: buffer.length,
+        size: stat.size,
       }), {
         status: 200,
         headers: { "Content-Type": "application/json" }

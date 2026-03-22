@@ -7,7 +7,7 @@ const mockConfigInstance = {
   getNumber: vi.fn(),
   getJSON: vi.fn(),
 };
-const ConfigServiceImpl = vi.fn(() => mockConfigInstance);
+const ConfigServiceImpl = vi.fn(function() { return mockConfigInstance; });
 
 const mockLocalStorage = {
   putObject: vi.fn(),
@@ -26,9 +26,16 @@ vi.mock("@/lib/local-storage", () => ({
   },
 }));
 
+vi.mock("@/lib/auth", () => ({
+  requireAdmin: vi.fn().mockResolvedValue({ user: { id: "admin" } }),
+  getSessionUserId: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("@/lib/logger", () => ({
   default: {
-    error: vi.fn(),
+    error: (...args: any[]) => console.error("LOGGER ERROR:", ...args),
+    info: vi.fn(),
+    warn: vi.fn(),
   },
 }));
 
@@ -66,17 +73,20 @@ describe("/api/uploads/local", () => {
     const buffer = new Uint8Array([1, 2, 3]);
     const file = new File([buffer], "banner.png", { type: "image/png" });
 
+    const uniqueKey = `images/banner-${Date.now()}-${Math.floor(Math.random() * 1000)}.png`;
     const form = new FormData();
     form.append("file", file);
-    form.append("key", "images/banner.png");
+    form.append("key", uniqueKey);
 
     const response = await uploadsLocalPost(makeFormRequest(form));
     const payload = await response.json();
 
+    if (response.status !== 200) console.log(payload);
+
     expect(response.status).toBe(200);
-    expect(payload).toEqual({ ok: true, url: "/local/images/banner.png", key: "images/banner.png" });
+    expect(payload).toEqual({ ok: true, url: `/local/${uniqueKey}`, key: uniqueKey });
     expect(mockLocalStorage.putObject).toHaveBeenCalledWith(
-      "images/banner.png",
+      uniqueKey,
       expect.any(Uint8Array),
       "image/png"
     );

@@ -26,9 +26,9 @@ vi.mock("@/lib/analytics", () => ({
 
 // Mock the config module
 vi.mock("@/lib/config", () => ({
-  ConfigServiceImpl: vi.fn().mockImplementation(() => ({
+  ConfigServiceImpl: vi.fn().mockImplementation(function() { return {
     getBoolean: vi.fn().mockResolvedValue(false),
-  })),
+  }; }),
 }));
 
 // Mock the logger module
@@ -158,12 +158,12 @@ describe("/api/metrics/view", () => {
       vi.resetModules();
       
       // Mock the ConfigServiceImpl constructor to return an instance with DNT enabled
-      (ConfigServiceImpl as any).mockImplementation(() => ({
+      (ConfigServiceImpl as any).mockImplementation(function() { return {
         getBoolean: vi.fn().mockImplementation((key: string) => {
           if (key === "VIEW.RESPECT-DNT") return Promise.resolve(true);
           return Promise.resolve(false);
         }),
-      }));
+      }; });
 
       const request = makeRequest({
         type: "page",

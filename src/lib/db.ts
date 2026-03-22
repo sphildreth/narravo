@@ -9,10 +9,24 @@ loadEnv();
 const skipDb = process.env.NARRAVO_DISABLE_DB === "true";
 const url = skipDb ? undefined : process.env.DATABASE_URL?.trim();
 
+declare global {
+  var _pgPool: any | undefined;
+  var _queryPatched: boolean | undefined;
+}
+
 let pool: any = null;
 if (url) {
-  pool = new Pool({ connectionString: url });
-  if (process.env.NODE_ENV !== "test") {
+  if (process.env.NODE_ENV === "production") {
+    pool = new Pool({ connectionString: url });
+  } else {
+    if (!global._pgPool) {
+      global._pgPool = new Pool({ connectionString: url });
+    }
+    pool = global._pgPool;
+  }
+
+  if (process.env.NODE_ENV !== "test" && !global._queryPatched) {
+    global._queryPatched = true;
     const originalQuery: typeof pool.query = pool.query.bind(pool);
     // Preserve pg's overloads: (text), (text, values), (text, cb), (text, values, cb)
     pool.query = ((text: any, params?: any, callback?: any) => {

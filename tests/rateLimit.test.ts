@@ -20,9 +20,9 @@ vi.mock("@/lib/db", () => ({
 // Mock the config service
 const mockGetNumber = vi.fn();
 vi.mock("@/lib/config", () => ({
-  ConfigServiceImpl: vi.fn().mockImplementation(() => ({
+  ConfigServiceImpl: vi.fn().mockImplementation(function() { return {
     getNumber: mockGetNumber
-  }))
+  }; })
 }));
 
 describe("InMemoryRateLimiter", () => {

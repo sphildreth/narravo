@@ -4,9 +4,9 @@ import { S3Service, getS3Config, validateFileType } from "@/lib/s3";
 
 // Mock AWS SDK
 vi.mock("@aws-sdk/client-s3", () => ({
-  S3Client: vi.fn().mockImplementation(() => ({
+  S3Client: vi.fn().mockImplementation(function() { return {
     send: vi.fn(),
-  })),
+  }; }),
   PutObjectCommand: vi.fn(),
 }));
 

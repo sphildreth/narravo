@@ -19,11 +19,15 @@ async function getCachedRedirects(request: NextRequest) {
   return redirectsCache;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const startTime = performance.now();
   const pathname = request.nextUrl.pathname;
 
   logger.debug(`Processing: ${pathname}`);
+  
+  // Note: 2FA checking is handled client-side in TwoFactorGuard component
+  // because NextAuth v5 uses encrypted JWE tokens that cannot be decrypted
+  // in Edge Runtime middleware without database access
   
   const redirects = await getCachedRedirects(request);
   logger.debug(`Found ${redirects?.length || 0} redirects in cache`);

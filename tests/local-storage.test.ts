@@ -42,6 +42,7 @@ describe("LocalStorageService", () => {
     it("should write file to correct path", async () => {
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
       vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+      vi.mocked(fs.stat).mockResolvedValue({ size: 3, mode: 0o644 } as any);
       
       const key = "test/file.jpg";
       const body = new Uint8Array([1, 2, 3]);
@@ -51,11 +52,13 @@ describe("LocalStorageService", () => {
       
       expect(fs.mkdir).toHaveBeenCalled();
       expect(fs.writeFile).toHaveBeenCalledWith(expect.any(String), body);
+      expect(fs.stat).toHaveBeenCalledWith(expect.any(String));
     });
 
     it("should create nested directories", async () => {
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
       vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+      vi.mocked(fs.stat).mockResolvedValue({ size: 3, mode: 0o644 } as any);
       
       const key = "nested/path/file.jpg";
       const body = new Uint8Array([1, 2, 3]);
@@ -64,6 +67,7 @@ describe("LocalStorageService", () => {
       
       expect(fs.mkdir).toHaveBeenCalled();
       expect(fs.writeFile).toHaveBeenCalled();
+      expect(fs.stat).toHaveBeenCalledWith(expect.any(String));
     });
   });
 

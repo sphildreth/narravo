@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const setGlobal = vi.fn();
 const service = { setGlobal };
-const ConfigServiceImpl = vi.fn(() => service);
+const ConfigServiceImpl = vi.fn(function() { return service; });
 const db = { execute: vi.fn() };
 const logger = { info: vi.fn(), error: vi.fn() };
 

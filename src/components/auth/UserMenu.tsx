@@ -35,7 +35,7 @@ export default function UserMenu({ user }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 rounded-xl border border-border bg-bg px-2 h-9"
+        className="inline-flex items-center gap-2 rounded-xl border border-border bg-bg text-fg px-2 h-9"
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -46,7 +46,7 @@ export default function UserMenu({ user }: Props) {
         <div role="menu" className="absolute right-0 mt-2 w-48 rounded-xl border border-border bg-card p-1 shadow-soft z-50">
           <button
             role="menuitem"
-            className="w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-muted/20"
+            className="w-full text-left rounded-lg px-3 py-2 text-sm text-card-fg hover:bg-muted/20"
             onClick={() => signOut({ callbackUrl: "/" })}
           >
             Logout

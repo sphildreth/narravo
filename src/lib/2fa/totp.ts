@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { authenticator } from "otplib";
+import { authenticator } from "@otplib/v12-adapter";
 import QRCode from "qrcode";
 import crypto from "crypto";
 

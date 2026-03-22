@@ -9,10 +9,8 @@ import AboutMe from "./about-me/AboutMe";
 
 export default async function Sidebar({ className = "" }: { className?: string }) {
   const config = new ConfigServiceImpl({ db });
-  const monthsSidebar = await config.getNumber("ARCHIVE.MONTHS-SIDEBAR");
-  if (monthsSidebar == null) throw new Error("Missing required config: ARCHIVE.MONTHS-SIDEBAR");
-  const recentCount = await config.getNumber("FEED.LATEST-COUNT");
-  if (recentCount == null) throw new Error("Missing required config: FEED.LATEST-COUNT");
+  const monthsSidebar = await config.getNumber("ARCHIVE.MONTHS-SIDEBAR") ?? 24;
+  const recentCount = await config.getNumber("FEED.LATEST-COUNT") ?? 20;
   const [months, recent] = await Promise.all([getArchiveMonths(monthsSidebar), getRecentPosts(recentCount)]);
 
   return (

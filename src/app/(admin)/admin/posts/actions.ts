@@ -695,10 +695,10 @@ export async function performBulkAction(formData: FormData) {
 // Helper to revalidate caches after post changes
 async function revalidateAfterPostChange(postId: string, slug?: string) {
   // Revalidate post-specific cache
-  revalidateTag(`post:${postId}`);
+  revalidateTag(`post:${postId}`, "default" as any);
   
   // Revalidate home page
-  revalidateTag("home");
+  revalidateTag("home", "default" as any);
   
   // Revalidate posts list
   revalidatePath("/admin/posts");

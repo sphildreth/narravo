@@ -15,10 +15,8 @@ import logger from "@/lib/logger";
 export async function loadReplies(params: { postId: string; parentPath: string | null; already?: number; cursor?: string | null; topLevel?: boolean; }) {
   if (params.topLevel) {
     const config = new ConfigServiceImpl({ db });
-    const topPage = await config.getNumber("COMMENTS.TOP-PAGE-SIZE");
-    if (topPage == null) throw new Error("Missing required config: COMMENTS.TOP-PAGE-SIZE");
-    const repliesPage = await config.getNumber("COMMENTS.REPLIES-PAGE-SIZE");
-    if (repliesPage == null) throw new Error("Missing required config: COMMENTS.REPLIES-PAGE-SIZE");
+    const topPage = await config.getNumber("COMMENTS.TOP-PAGE-SIZE") ?? 10;
+    const repliesPage = await config.getNumber("COMMENTS.REPLIES-PAGE-SIZE") ?? 3;
     const r = await getCommentTreeForPost(params.postId, { cursor: params.cursor ?? null, limitTop: topPage, limitReplies: repliesPage });
     return { nodes: r.top, nextCursor: r.nextCursor };
   }
@@ -69,8 +67,7 @@ export async function createComment(params: {
 
     // Validate config
     const config = new ConfigServiceImpl({ db });
-    const maxDepth = await config.getNumber("COMMENTS.MAX-DEPTH");
-    if (maxDepth == null) throw new Error("Missing required config: COMMENTS.MAX-DEPTH");
+    const maxDepth = await config.getNumber("COMMENTS.MAX-DEPTH") ?? 5;
 
     // Check if comments should be auto-approved
     const autoApprove = await config.getBoolean("COMMENTS.AUTO-APPROVE") ?? false;
@@ -164,7 +161,7 @@ export async function createComment(params: {
     }
 
     // Revalidate the post page to show new comment (when approved)
-    revalidateTag(`post:${params.postId}`);
+    revalidateTag(`post:${params.postId}`, "default" as any);
 
     return { success: true, commentId: result.id };
 

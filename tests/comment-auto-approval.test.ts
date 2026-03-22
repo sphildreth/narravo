@@ -14,10 +14,10 @@ vi.mock('@/lib/auth', () => ({
 }));
 
 vi.mock('@/lib/config', () => ({
-  ConfigServiceImpl: vi.fn().mockImplementation(() => ({
+  ConfigServiceImpl: vi.fn().mockImplementation(function() { return {
     getNumber: vi.fn(),
     getBoolean: vi.fn(),
-  })),
+  }; }),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -90,7 +90,7 @@ describe('Comment Auto-Approval', () => {
       getNumber: vi.fn().mockResolvedValue(5), // MAX-DEPTH
       getBoolean: vi.fn().mockResolvedValue(false), // AUTO-APPROVE off
     };
-    (mockConfigService as any).mockReturnValue(mockConfigInstance);
+    (mockConfigService as any).mockImplementation(function() { return mockConfigInstance; });
 
     let capturedCommentData: any = null;
     mockCreateCommentCore.mockImplementation(async (deps: any, data: any) => {
@@ -127,7 +127,7 @@ describe('Comment Auto-Approval', () => {
       getNumber: vi.fn().mockResolvedValue(5), // MAX-DEPTH
       getBoolean: vi.fn().mockResolvedValue(true), // AUTO-APPROVE on
     };
-    (mockConfigService as any).mockReturnValue(mockConfigInstance);
+    (mockConfigService as any).mockImplementation(function() { return mockConfigInstance; });
 
     mockCreateCommentCore.mockImplementation(async (deps: any, data: any) => {
       // Capture the comment data that would be inserted
@@ -159,7 +159,7 @@ describe('Comment Auto-Approval', () => {
       getNumber: vi.fn().mockResolvedValue(5), // MAX-DEPTH
       getBoolean: vi.fn().mockResolvedValue(false), // AUTO-APPROVE off
     };
-    (mockConfigService as any).mockReturnValue(mockConfigInstance);
+    (mockConfigService as any).mockImplementation(function() { return mockConfigInstance; });
 
     mockCreateCommentCore.mockImplementation(async (deps: any, data: any) => {
       // Capture the comment data that would be inserted

@@ -8,7 +8,7 @@
     ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -28,10 +28,18 @@
     "allowJs": false,
     "baseUrl": ".",
     "paths": {
-      "@/scripts/*": ["./scripts/*"],
-      "@/*": ["./src/*"],
-      "@drizzle/*": ["./drizzle/*"],
-      "@/drizzle/*": ["./drizzle/*"]
+      "@/scripts/*": [
+        "./scripts/*"
+      ],
+      "@/*": [
+        "./src/*"
+      ],
+      "@drizzle/*": [
+        "./drizzle/*"
+      ],
+      "@/drizzle/*": [
+        "./drizzle/*"
+      ]
     },
     "plugins": [
       {
@@ -45,8 +53,10 @@
     "**/*.tsx",
     "src/types/**/*.d.ts",
     "drizzle.config.ts",
-    ".next/types/**/*.ts"
-, "vite.config.mts"  ],
+    ".next/types/**/*.ts",
+    "vite.config.mts",
+    ".next/dev/types/**/*.ts"
+  ],
   "exclude": [
     "node_modules"
   ]

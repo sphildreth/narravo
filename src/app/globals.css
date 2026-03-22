@@ -1,7 +1,23 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+
+@theme {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-brand: var(--brand);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-card: var(--card);
+  --color-card-fg: var(--card-fg);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --radius-xl: var(--radius);
+  --radius-2xl: calc(var(--radius) + 6px);
+  --shadow-soft: var(--shadow);
+  --width-screen: var(--maxw);
+}
 
 :root { --bg:#ffffff; --fg:#0a0a0a; --muted:#6b7280; --border:#e5e7eb; --brand:#0ea5e9; --brand-contrast:#ffffff; --card:#ffffff; --card-fg:#0a0a0a; --accent:#22c55e; --accent-contrast:#052e16; --radius:14px; --shadow:0 10px 30px rgba(0,0,0,.07); --maxw:1400px; --focus:#60a5fa; }
 :root[data-theme="dark"] { --bg:#0b1021; --fg:#e6e6eb; --muted:#9ca3af; --border:#202538; --brand:#6b9cff; --brand-contrast:#0b1021; --card:#11152a; --card-fg:#e6e6eb; --accent:#16a34a; --accent-contrast:#ecfdf5; --shadow:0 16px 40px rgba(0,0,0,.35); }

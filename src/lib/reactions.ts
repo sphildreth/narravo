@@ -177,8 +177,8 @@ export async function getMultipleReactionCounts(
  */
 async function revalidateCache(targetType: TargetType, targetId: string) {
   if (targetType === "post") {
-    revalidateTag(`post:${targetId}`);
-    revalidateTag("home");
+    revalidateTag(`post:${targetId}`, "default" as any);
+    revalidateTag("home", "default" as any);
   } else if (targetType === "comment") {
     // Find the post ID for this comment to revalidate the post page
     const comment = await db
@@ -188,7 +188,7 @@ async function revalidateCache(targetType: TargetType, targetId: string) {
       .limit(1);
     
     if (comment.length > 0 && comment[0]?.postId) {
-      revalidateTag(`post:${comment[0].postId}`);
+      revalidateTag(`post:${comment[0].postId}`, "default" as any);
     }
   }
 }
