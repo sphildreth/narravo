@@ -7,6 +7,9 @@ describe("lib/db", () => {
     vi.resetModules();
     vi.clearAllMocks();
     process.env = { ...BASE_ENV };
+    // Clear globals used for HMR caching in db.ts
+    delete (global as any)._pgPool;
+    delete (global as any)._queryPatched;
   });
 
   afterEach(() => {
