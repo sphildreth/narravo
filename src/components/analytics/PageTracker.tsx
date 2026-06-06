@@ -3,6 +3,7 @@
 
 import { useEffect } from "react";
 import { nanoid } from "nanoid";
+import { shouldSkipClientAnalytics } from "./privacy";
 
 interface PageTrackerProps {
   path: string;
@@ -83,6 +84,10 @@ export function PageTracker({ path, sessionWindowMinutes = 30 }: PageTrackerProp
   useEffect(() => {
     // Don't track in development if in Next.js preview mode
     if (process.env.NODE_ENV === "development" && window.location.search.includes("preview")) {
+      return;
+    }
+
+    if (shouldSkipClientAnalytics()) {
       return;
     }
 

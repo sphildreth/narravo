@@ -1,9 +1,13 @@
 {
   "name": "narravo-next",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tiptap-markdown": "0.9.0",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.13",
+    "pnpm": ">=11.5.2"
+  },
   "scripts": {
     "pretypecheck": "node scripts/write-version.mjs",
     "typecheck": "tsc --noEmit",
