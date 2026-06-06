@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdmin2FA();
     const { key, userId, value } = await req.json();
     if (!key || !userId) return new Response(JSON.stringify({ ok: false, error: { message: "key and userId required" } }), { status: 400 });
     const svc = new ConfigServiceImpl({ db });
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdmin2FA();
     const { key, userId } = await req.json();
     if (!key || !userId) return new Response(JSON.stringify({ ok: false, error: { message: "key and userId required" } }), { status: 400 });
     const svc = new ConfigServiceImpl({ db });

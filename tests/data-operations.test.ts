@@ -9,6 +9,7 @@ import { Readable } from "node:stream";
 // Mock the auth requirement
 vi.mock("@/lib/auth", () => ({
   requireAdmin: vi.fn().mockResolvedValue(true),
+  requireAdmin2FA: vi.fn().mockResolvedValue(true),
 }));
 
 // Mock nanoid

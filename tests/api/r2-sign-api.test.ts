@@ -19,6 +19,7 @@ const mockS3ServicePrototype = {
 };
 
 const mockGetS3Config = vi.fn();
+const mockRequireSession = vi.fn();
 
 vi.mock("@/lib/config", () => ({
   get ConfigServiceImpl() {
@@ -35,6 +36,10 @@ vi.mock("@/lib/local-storage", () => ({
 vi.mock("@/lib/s3", () => ({
   getS3Config: (...args: unknown[]) => mockGetS3Config(...args),
   S3Service: vi.fn(function() { return mockS3ServicePrototype; }),
+}));
+
+vi.mock("@/lib/auth", () => ({
+  requireSession: (...args: unknown[]) => mockRequireSession(...args),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -54,6 +59,8 @@ describe("/api/r2/sign", () => {
     mockS3ServicePrototype.createPresignedPost.mockReset();
     mockS3ServicePrototype.getPublicUrl.mockReset();
     mockGetS3Config.mockReset();
+    mockRequireSession.mockReset();
+    mockRequireSession.mockResolvedValue({ user: { id: "user-1" } });
 
     mockConfigInstance.getNumber.mockImplementation((key: string) => {
       if (key === "UPLOADS.IMAGE-MAX-BYTES") return Promise.resolve(5 * 1024 * 1024);
@@ -113,10 +120,22 @@ describe("/api/r2/sign", () => {
     expect(payload.url).toBe("https://r2.example.com/upload");
     expect(payload.publicUrl).toBe("https://cdn.example.com/images/file.png");
     expect(mockS3ServicePrototype.createPresignedPost).toHaveBeenCalledWith(
-      "file.png",
-      "image/png",
-      { maxBytes: 5 * 1024 * 1024, allowedMimeTypes: ["image/png"], keyPrefix: "images" }
+	      "file.png",
+	      "image/png",
+	      { maxBytes: 5 * 1024 * 1024, allowedMimeTypes: ["image/png"], contentLength: 2048, keyPrefix: "images" }
+	    );
+	  });
+
+  it("requires an authenticated session", async () => {
+    mockRequireSession.mockRejectedValueOnce(new Error("Unauthorized"));
+
+    const response = await r2SignPost(
+      makeJsonRequest({ filename: "file.png", mimeType: "image/png", size: 2048, kind: "image" })
     );
+    const payload = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(payload.error.code).toBe("UNAUTHORIZED");
   });
 
   it("validates required fields", async () => {

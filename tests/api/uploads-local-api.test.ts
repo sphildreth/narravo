@@ -27,8 +27,7 @@ vi.mock("@/lib/local-storage", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({
-  requireAdmin: vi.fn().mockResolvedValue({ user: { id: "admin" } }),
-  getSessionUserId: vi.fn().mockResolvedValue(null),
+  requireSession: vi.fn().mockResolvedValue({ user: {} }),
 }));
 
 vi.mock("@/lib/logger", () => ({

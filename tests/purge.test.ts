@@ -7,7 +7,10 @@ import { dataOperationLogs, posts, comments } from "@/drizzle/schema";
 
 // Mock db and auth
 vi.mock("@/lib/db");
-vi.mock("@/lib/auth", () => ({ requireAdmin: vi.fn().mockResolvedValue({ user: { id: "u1", isAdmin: true } }) }));
+vi.mock("@/lib/auth", () => {
+  const requireAdmin = vi.fn().mockResolvedValue({ user: { id: "u1", isAdmin: true } });
+  return { requireAdmin, requireAdmin2FA: requireAdmin };
+});
 
 const requireAdminMock = requireAdmin as unknown as Mock;
 

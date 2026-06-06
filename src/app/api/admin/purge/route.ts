@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import path from "path";
 import logger from '@/lib/logger';
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dataOperationLogs, posts, comments, commentAttachments } from "@/drizzle/schema";
 import { eq, and, isNull, sql, inArray } from "drizzle-orm";
@@ -44,8 +44,8 @@ type PurgeRequest = z.infer<typeof purgeRequestSchema>;
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAdmin();
-    // Derive a safe user id for audit/deletedBy, even if tests mock requireAdmin() as boolean
+    const session = await requireAdmin2FA();
+    // Derive a safe user id for audit/deletedBy, even if tests mock requireAdmin2FA() as boolean
     const currentUserId = (session && typeof session === "object" && (session as any).user && (session as any).user.id) ? (session as any).user.id : null;
 
     const body = await req.json();

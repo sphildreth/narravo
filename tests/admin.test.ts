@@ -170,8 +170,10 @@ describe("admin.ts utilities", () => {
       expect(result).toBe(false);
     });
 
-    it("should return false when allowlist is undefined", () => {
-      const result = isEmailAdmin("admin@example.com", undefined);
+    it("should return false when the default allowlist is unset", () => {
+      delete process.env.ADMIN_EMAILS;
+
+      const result = isEmailAdmin("admin@example.com");
 
       expect(result).toBe(false);
     });

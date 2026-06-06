@@ -1,7 +1,7 @@
 "use server";
 // SPDX-License-Identifier: Apache-2.0
 
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { posts, uploads } from "@/drizzle/schema";
 import { eq, like, desc, asc, sql, and, isNull, isNotNull, or, inArray } from "drizzle-orm";
@@ -179,7 +179,7 @@ export async function getPostsWithFilters(
   page: number = 1,
   pageSize: number = 20
 ) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   const offset = (page - 1) * pageSize;
   
@@ -271,7 +271,7 @@ export async function getPostsWithFilters(
 
 // Get single post for editing
 export async function getPostForEdit(id: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   const [post] = await db
     .select()
@@ -284,7 +284,7 @@ export async function getPostForEdit(id: string) {
 
 // Create new post
 export async function createPost(formData: FormData) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   // If a file is present we defer storing until after validation of other fields.
   const featuredImageFile = formData.get("featuredImageFile") as File | null;
@@ -439,7 +439,7 @@ export async function createPost(formData: FormData) {
 
 // Update existing post
 export async function updatePost(formData: FormData) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   const featuredImageFile = formData.get("featuredImageFile") as File | null;
   
@@ -606,7 +606,7 @@ export async function updatePost(formData: FormData) {
 
 // Delete post
 export async function deletePost(postId: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   try {
     // Get post info before deletion for revalidation
@@ -635,7 +635,7 @@ export async function deletePost(postId: string) {
 
 // Bulk actions
 export async function performBulkAction(formData: FormData) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   const data = {
     action: formData.get("action") as string,
@@ -714,7 +714,7 @@ async function revalidateAfterPostChange(postId: string, slug?: string) {
 
 // Generate slug from title (utility for frontend)
 export async function generateSlugFromTitle(title: string, excludeId?: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   if (!title.trim()) {
     return { error: "Title is required" };
@@ -730,7 +730,7 @@ export async function generateSlugFromTitle(title: string, excludeId?: string) {
 
 // Check slug availability
 export async function checkSlugAvailability(slug: string, excludeId?: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
     return { available: false, error: "Invalid slug format" };
@@ -751,7 +751,7 @@ export async function checkSlugAvailability(slug: string, excludeId?: string) {
 
 // Toggle post lock status
 export async function togglePostLock(postId: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   if (!postId) {
     return { error: "Post ID is required" };
@@ -795,7 +795,7 @@ export async function togglePostLock(postId: string) {
 
 // Unpublish a single post
 export async function unpublishPost(postId: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   if (!postId) {
     return { error: "Post ID is required" };
@@ -841,7 +841,7 @@ export async function unpublishPost(postId: string) {
 
 // Get all tags for post editor
 export async function getAllTagsAction() {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   try {
     const tags = await getAllTags();
@@ -854,7 +854,7 @@ export async function getAllTagsAction() {
 
 // Get all categories for post editor
 export async function getAllCategoriesAction() {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   try {
     const categories = await getAllCategories();
@@ -867,7 +867,7 @@ export async function getAllCategoriesAction() {
 
 // Get tags for a specific post
 export async function getPostTagsAction(postId: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   try {
     const tags = await getPostTags(postId);
@@ -880,7 +880,7 @@ export async function getPostTagsAction(postId: string) {
 
 // Get category for a specific post
 export async function getPostCategoryAction(categoryId: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   try {
     const category = await getPostCategory(categoryId);

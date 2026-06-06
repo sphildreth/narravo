@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import withBundleAnalyzer from '@next/bundle-analyzer'
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const isDev = process.env.NODE_ENV !== "production";
 
 // Get S3 hostname for CSP
 const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || "";
@@ -14,6 +12,9 @@ const s3Hostname = (() => {
     return "";
   }
 })();
+const awsS3Hostname = !s3Endpoint && process.env.S3_BUCKET && process.env.S3_REGION
+  ? `${process.env.S3_BUCKET}.s3.${process.env.S3_REGION}.amazonaws.com`
+  : "";
 
 const imgSrc = [
   "'self'",
@@ -41,10 +42,14 @@ const frameSrc = ["'self'", ...FRAME_SRC_HOSTS].join(" ");
 const connectSrc = [
   "'self'",
   s3Hostname,
-  "https:",
-  "data:",
-  "blob:",
+  awsS3Hostname,
+  ...(isDev ? ["http:", "https:", "ws:", "data:", "blob:"] : []),
 ].filter(Boolean).join(" ");
+const scriptSrc = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(isDev ? ["'unsafe-eval'"] : []),
+].join(" ");
 
 const securityHeaders = [
   {
@@ -63,7 +68,7 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value:
       `default-src 'self';` +
-      `script-src 'self' 'unsafe-eval' 'unsafe-inline';` + // Next.js needs unsafe-eval/inline for dev/HMR
+      `script-src ${scriptSrc};` +
       `style-src 'self' 'unsafe-inline';` +
       `img-src ${imgSrc};` +
       `media-src ${mediaSrc};` +

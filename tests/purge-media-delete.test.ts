@@ -7,7 +7,10 @@ import { localStorageService } from "@/lib/local-storage";
 
 // Mock db and auth
 vi.mock("@/lib/db");
-vi.mock("@/lib/auth", () => ({ requireAdmin: vi.fn().mockResolvedValue({ user: { id: "admin-1", isAdmin: true } }) }));
+vi.mock("@/lib/auth", () => {
+  const requireAdmin = vi.fn().mockResolvedValue({ user: { id: "admin-1", isAdmin: true } });
+  return { requireAdmin, requireAdmin2FA: requireAdmin };
+});
 
 function makeRequest(payload: unknown): Request {
   return new Request("http://localhost/api/admin/purge", {

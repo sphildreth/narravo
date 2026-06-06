@@ -2,7 +2,7 @@
 
 "use server";
 
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { posts } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -21,7 +21,7 @@ const deletePostSchema = z.object({
 export async function deletePostAction(formData: FormData) {
   try {
     // Verify admin permissions
-    await requireAdmin();
+    await requireAdmin2FA();
     
     // Validate input
     const data = {
@@ -78,7 +78,7 @@ export async function deletePostAction(formData: FormData) {
  */
 export async function canDeletePosts(): Promise<boolean> {
   try {
-    await requireAdmin();
+    await requireAdmin2FA();
     return true;
   } catch {
     return false;

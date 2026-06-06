@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dataOperationLogs } from "@/drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -10,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ operationId: string }> }
 ) {
   try {
-    await requireAdmin();
+    await requireAdmin2FA();
     
     const resolvedParams = await params;
     const { operationId } = resolvedParams;

@@ -2,13 +2,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { GET as importJobsGet } from "@/app/api/import-jobs/route";
 
-const mockAuth = vi.fn();
+const mockRequireAdmin2FA = vi.fn();
 const mockDb = {
   select: vi.fn(),
 };
 
 vi.mock("@/lib/auth", () => ({
-  auth: (...args: unknown[]) => mockAuth(...args),
+  requireAdmin2FA: (...args: unknown[]) => mockRequireAdmin2FA(...args),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -27,19 +27,19 @@ vi.mock("drizzle-orm", () => ({
 
 describe("/api/import-jobs", () => {
   beforeEach(() => {
-    mockAuth.mockReset();
+    mockRequireAdmin2FA.mockReset();
     mockDb.select.mockReset();
   });
 
   it("requires admin access", async () => {
-    mockAuth.mockResolvedValue({ user: { id: "user-1", isAdmin: false } });
+    mockRequireAdmin2FA.mockRejectedValueOnce(new Error("Unauthorized"));
 
     const response = await importJobsGet();
     expect(response.status).toBe(401);
   });
 
   it("returns recent import jobs for administrators", async () => {
-    mockAuth.mockResolvedValue({ user: { id: "admin", isAdmin: true } });
+    mockRequireAdmin2FA.mockResolvedValue({ user: { id: "admin", isAdmin: true } });
 
     mockDb.select.mockReturnValue({
       from: () => ({

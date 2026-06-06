@@ -1,10 +1,9 @@
 #!/usr/bin/env sh
 set -e
 echo "Starting Narravo…"
-echo "DATABASE_URL=$DATABASE_URL"
 if [ -f "./drizzle.config.ts" ] || [ -f "./drizzle.config.js" ]; then
   echo "Running Drizzle migrations…"
-  npm run drizzle:migrate || {
+  pnpm drizzle:migrate || {
     echo "❌ Migration failed!"
     exit 1
   }

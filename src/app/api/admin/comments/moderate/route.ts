@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { moderateComments, type ModerateInput, type ModerationRepo } from "@/lib/adminModeration";
 import { db } from "@/lib/db";
 import { comments, commentAttachments } from "@/drizzle/schema";
@@ -36,7 +36,7 @@ class DrizzleModerationRepo implements ModerationRepo {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdmin2FA();
     const data = await req.json().catch(() => ({}));
     const repo = new DrizzleModerationRepo();
     const result = await moderateComments(repo, data);

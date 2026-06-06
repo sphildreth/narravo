@@ -1,0 +1,28 @@
+packages:
+  - "."
+
+allowBuilds:
+  esbuild: false
+  puppeteer: false
+  sharp: false
+  unrs-resolver: false
+
+minimumReleaseAge: 0
+
+ignoredBuiltDependencies:
+  - esbuild
+  - puppeteer
+  - sharp
+  - unrs-resolver
+
+peerDependencyRules:
+  allowedVersions:
+    "@simplewebauthn/browser": "13"
+    "@simplewebauthn/server": "13"
+    eslint: "10"
+
+overrides:
+  esbuild: ">=0.25.0"
+  prismjs: ">=1.30.0"
+  tmp: ">=0.2.4"
+  vite: "$vite"
