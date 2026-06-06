@@ -4,6 +4,35 @@ This file records notable project changes. It follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format and uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-06-06
+
+### Added
+
+- Added a repo-managed `deploy/deploy-tag.sh` helper for non-Docker hosts that
+  deploy from a Git tag or `origin/main`.
+- Added `.node-version` and package `engines` metadata to document and enforce
+  the Node.js 22.13+ and pnpm 11.5.2 runtime requirements.
+
+### Changed
+
+- Bumped the application version from `1.0.0` to `1.0.1`.
+- Updated LXC deployment documentation from Node.js 20/pnpm 10 to Node.js
+  22/pnpm 11 and replaced production schema push guidance with migration-based
+  deployment.
+- Updated the deploy helper to enable only the pnpm Corepack shim so stale Yarn
+  shims on older hosts do not block deployment.
+
+### Fixed
+
+- Fixed direct LXC deployments after `1.0.0` by adding explicit runtime
+  preflight checks before dependency installation and build steps.
+- Fixed deployment docs and helper flow so database migrations run during
+  non-Docker deploys.
+- Fixed page/post analytics trackers to avoid avoidable client-side requests
+  when the browser advertises Do Not Track or Global Privacy Control.
+- Fixed public page/post tracking to honor existing tracking configuration
+  flags before rendering client analytics trackers.
+
 ## [1.0.0] - 2026-06-06
 
 ### Added

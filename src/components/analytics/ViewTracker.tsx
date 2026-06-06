@@ -3,6 +3,7 @@
 
 import { useEffect } from "react";
 import { nanoid } from "nanoid";
+import { shouldSkipClientAnalytics } from "./privacy";
 
 interface ViewTrackerProps {
   postId: string;
@@ -77,8 +78,12 @@ export function ViewTracker({ postId, sessionWindowMinutes = 30 }: ViewTrackerPr
       return;
     }
 
-  // Get or create session using configured window
-  const sessionId = getOrCreateSession(sessionWindowMinutes);
+    if (shouldSkipClientAnalytics()) {
+      return;
+    }
+
+    // Get or create session using configured window
+    const sessionId = getOrCreateSession(sessionWindowMinutes);
 
     // Track the view
     trackView(postId, sessionId);

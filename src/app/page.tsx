@@ -21,6 +21,8 @@ export default async function Page() {
   
   // Get session window for page tracking
   const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;
+  const trackPageViews = await config.getBoolean("PAGE.TRACK-VIEWS") ?? true;
+  const trackHomepage = await config.getBoolean("PAGE.TRACK-HOMEPAGE") ?? true;
 
   const getPosts = cache(
     async () => listPosts({ limit: feedCount, includeViews: true }),
@@ -45,7 +47,9 @@ export default async function Page() {
 
   return (
     <>
-      <PageTracker path="/" sessionWindowMinutes={sessionWindowMinutes} />
+      {trackPageViews && trackHomepage && (
+        <PageTracker path="/" sessionWindowMinutes={sessionWindowMinutes} />
+      )}
       <Header />
       <div className="max-w-screen mx-auto px-3 my-7 grid gap-7 md:grid-cols-[320px_1fr]">
         <div className="order-2 md:order-1">

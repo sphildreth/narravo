@@ -121,14 +121,15 @@ This option runs Narravo directly on a Debian 13 (trixie) LXC without containers
 	  `host all narravo <app-lxc-ip>/32 scram-sha-256`
 	- Restart PostgreSQL: `sudo systemctl restart postgresql`
 
-3) Install Node.js 20 LTS, pnpm, and git on the app LXC:
+3) Install Node.js 22 LTS, pnpm, and git on the app LXC:
 ```bash
 sudo apt update && sudo apt -y install ca-certificates curl gnupg git
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt -y install nodejs
+node --version
 sudo corepack enable
-corepack enable
-corepack prepare pnpm@10 --activate
+sudo corepack prepare pnpm@11.5.2 --activate
+pnpm --version
 ```
 
 4) Create a dedicated user and clone the repo:
@@ -148,7 +149,7 @@ ADMIN_EMAILS=admin@example.com
 EOF
 
 # Run migrations (one-time, uses DATABASE_URL from the command line)
-sudo -u narravo -H bash -lc "cd /opt/narravo && DATABASE_URL=\"$(grep ^DATABASE_URL= /etc/narravo.env | cut -d= -f2- )\" pnpm -s drizzle:push"
+sudo -u narravo -H bash -lc "cd /opt/narravo && DATABASE_URL=\"$(grep ^DATABASE_URL= /etc/narravo.env | cut -d= -f2- )\" pnpm -s drizzle:migrate"
 ```
 
 6) Build the app:
@@ -218,7 +219,7 @@ sudo -u narravo -H bash -lc "cd /opt/narravo && pnpm -s seed:config && pnpm -s s
 sudo -u narravo -H bash -lc "cd /opt/narravo && pnpm -s backup" > backup-$(date +%F).zip
 
 # Update to latest code and rebuild
-sudo -u narravo -H bash -lc "cd /opt/narravo && git pull && pnpm -s i --frozen-lockfile && pnpm -s build"
+sudo -u narravo -H bash -lc "cd /opt/narravo && git pull && pnpm -s i --frozen-lockfile && pnpm -s drizzle:migrate && pnpm -s build"
 sudo systemctl restart narravo
 
 # Restore (from a local zip file)
@@ -243,7 +244,7 @@ Security notes:
 	 - Optional: `ADMIN_EMAILS`, S3/R2 config, analytics salt
 3) Run migrations once against Neon (from your local dev machine):
 ```bash
-DATABASE_URL="<your-neon-url>" pnpm -s drizzle:push
+DATABASE_URL="<your-neon-url>" pnpm -s drizzle:migrate
 ```
 Vercel will build and serve the app. No container is needed in this setup.
 
@@ -263,9 +264,9 @@ Vercel will build and serve the app. No container is needed in this setup.
 
 ## Notes and troubleshooting
 - Migrations:
-	- Option A (Docker Compose): executed at container start by `deploy/entrypoint.sh`. To manage manually, comment that step and run `pnpm drizzle:push` during deploys.
-	- Option B (Proxmox LXC): run `pnpm drizzle:push` manually (as shown in step 5) and on schema changes.
-	- Option C (Vercel + Neon): run `pnpm drizzle:push` against Neon from a trusted environment (e.g., your local machine or CI).
+	- Option A (Docker Compose): executed at container start by `deploy/entrypoint.sh`. To manage manually, comment that step and run `pnpm drizzle:migrate` during deploys.
+	- Option B (Proxmox LXC): run `pnpm drizzle:migrate` manually (as shown in step 5) and on schema changes.
+	- Option C (Vercel + Neon): run `pnpm drizzle:migrate` against Neon from a trusted environment (e.g., your local machine or CI).
 - Ports and proxies:
 	- Self-hosted (Options A/B) listens on port 3000 by default. Use Caddy/Nginx to expose 80/443 and handle TLS.
 	- Vercel handles ports and TLS automatically.

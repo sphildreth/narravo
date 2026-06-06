@@ -62,6 +62,7 @@ export default async function PostPage({ params }: Props) {
   );
   
   const sessionWindowMinutes = await config.getNumber("VIEW.SESSION-WINDOW-MINUTES") ?? 30;
+  const trackPostViews = await config.getBoolean("PAGE.TRACK-VIEWS") ?? true;
   const showRenderBadge = await config.getBoolean("VIEW.PUBLIC-SHOW-RENDER-BADGE") ?? false;
   
   // Measure session loading
@@ -167,7 +168,9 @@ export default async function PostPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: jsonLd }}
       />
       <main className="max-w-screen mx-auto px-6 my-7 grid gap-7">
-        <ViewTracker postId={post.id} sessionWindowMinutes={sessionWindowMinutes} />
+        {trackPostViews && (
+          <ViewTracker postId={post.id} sessionWindowMinutes={sessionWindowMinutes} />
+        )}
         <div className="order-1 md:order-2 grid gap-6">
             {isAdmin && (
                 <div className="px-6 p-3 bg-amber-50 border border-amber-200 rounded-lg">
