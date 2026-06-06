@@ -74,6 +74,8 @@ This file records notable project changes. It follows the
 - Fixed admin allowlist unit-test isolation when CI provides `ADMIN_EMAILS`.
 - Fixed README drift, duplicate sections, corrupted heading characters, stale
   badge versions, npm command examples, and outdated test-count claims.
+- Fixed the Performance GitHub Actions workflow to use Node.js 22 and
+  Corepack-managed pnpm, matching the main CI runtime.
 
 ### Security
 
@@ -88,12 +90,12 @@ This file records notable project changes. It follows the
   limiting connection targets to configured storage endpoints.
 - Updated vulnerable direct and transitive dependency ranges where current
   package updates could resolve them.
+- Resolved the remaining `pnpm audit` advisories for transitive `yaml`,
+  `postcss`, and `uuid` usage with package overrides and dev-only placement for
+  performance tooling.
 
 ### Noted
 
-- `pnpm audit` still reports moderate transitive advisories for `yaml`,
-  `postcss`, and `uuid`; these remain release-risk decisions rather than fully
-  resolved dependency-security items.
 - GitHub Dependabot alerts may lag behind local dependency changes until the
   branch is pushed and GitHub refreshes the dependency graph.
 - Current backup archives include database JSON exports and media-reference
