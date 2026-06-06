@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -19,7 +19,7 @@ class DrizzleUsersRepo implements UsersRepo {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdmin2FA();
     const { userId, email } = await req.json();
     const repo = new DrizzleUsersRepo();
     const result = await anonymizeUser(repo, { userId, email });

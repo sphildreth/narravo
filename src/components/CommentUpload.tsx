@@ -24,6 +24,8 @@ interface UploadResponse {
   url: string;
   fields: Record<string, string>;
   key: string;
+  method?: "POST" | "PUT";
+  publicUrl?: string;
   policy: {
     kind: "image" | "video";
     limits: {
@@ -94,27 +96,48 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
         return null;
       }
 
-      // Upload file to S3/R2
-      const formData = new FormData();
-      Object.entries(signData.fields).forEach(([key, value]) => {
-        formData.append(key, value);
-      });
-      formData.append('file', file);
+      const method = signData.method?.toUpperCase() === "PUT" ? "PUT" : "POST";
+      let publicUrl = signData.publicUrl || "";
 
-      const uploadResponse = await fetch(signData.url, {
-        method: 'POST',
-        body: formData,
-      });
+      if (method === "PUT") {
+        const uploadResponse = await fetch(signData.url, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
 
-      if (!uploadResponse.ok) {
-        addError(file.name, 'Upload failed');
-        return null;
+        if (!uploadResponse.ok) {
+          addError(file.name, 'Upload failed');
+          return null;
+        }
+      } else {
+        const formData = new FormData();
+        Object.entries(signData.fields).forEach(([key, value]) => {
+          formData.append(key, value);
+        });
+        formData.append('file', file);
+
+        const uploadResponse = await fetch(signData.url, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          addError(file.name, 'Upload failed');
+          return null;
+        }
+
+        const contentType = uploadResponse.headers.get("Content-Type") || "";
+        if (contentType.includes("application/json")) {
+          const uploadData = await uploadResponse.json().catch(() => null);
+          publicUrl = uploadData?.url || uploadData?.publicUrl || publicUrl;
+        }
       }
 
       // Return successful upload info
       return {
         key: signData.key,
-        url: signData.url.replace(/\?.*$/, '') + '/' + signData.key, // Simple URL construction
+        url: publicUrl || `${signData.url.replace(/\?.*$/, '')}/${signData.key}`,
         kind: signData.policy.kind,
         mimeType: file.type,
         size: file.size,

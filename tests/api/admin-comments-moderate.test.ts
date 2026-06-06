@@ -20,6 +20,7 @@ const { mockRequireAdmin, mockModerateComments, mockLogger } = vi.hoisted(() => 
 
 vi.mock("@/lib/auth", () => ({
   requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
+  requireAdmin2FA: (...args: unknown[]) => mockRequireAdmin(...args),
 }));
 
 vi.mock("@/lib/adminModeration", () => ({

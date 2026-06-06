@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dataOperationLogs } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -20,7 +20,7 @@ interface RestoreRequest {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdmin2FA();
     
     const formData = await req.formData();
     const file = formData.get("backupFile") as File;

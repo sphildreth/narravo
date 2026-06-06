@@ -46,7 +46,12 @@ export const posts = pgTable("posts", {
   // Soft delete columns
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
-});
+}, (table) => ({
+  postsPublishedFeedIdx: index("posts_published_feed_idx")
+    .on(table.publishedAt, table.id)
+    .where(sql`${table.deletedAt} is null and ${table.publishedAt} is not null`),
+  postsCategoryIdIdx: index("posts_category_id_idx").on(table.categoryId),
+}));
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -78,6 +83,10 @@ export const comments = pgTable(
   },
   (table) => ({
     parentReference: foreignKey({ columns: [table.parentId], foreignColumns: [table.id] }).onDelete("cascade"),
+    commentsPostTreeIdx: index("comments_post_tree_idx")
+      .on(table.postId, table.status, table.depth, table.path)
+      .where(sql`${table.deletedAt} is null`),
+    commentsParentIdIdx: index("comments_parent_id_idx").on(table.parentId),
   })
 );
 
@@ -92,7 +101,9 @@ export const commentAttachments = pgTable("comment_attachments", {
   // Soft delete columns
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   deletedBy: uuid("deleted_by").references(() => users.id, { onDelete: "set null" }),
-});
+}, (table) => ({
+  commentAttachmentsCommentIdIdx: index("comment_attachments_comment_id_idx").on(table.commentId),
+}));
 
 export const reactions = pgTable("reactions", {
   id: uuid("id").primaryKey().defaultRandom(),

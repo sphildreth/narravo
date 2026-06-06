@@ -26,7 +26,6 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "allowJs": false,
-    "baseUrl": ".",
     "paths": {
       "@/scripts/*": [
         "./scripts/*"

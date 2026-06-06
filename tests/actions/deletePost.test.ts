@@ -3,12 +3,16 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vite
 
 // Mock dependencies before imports
 vi.mock("@/lib/db");
-vi.mock("@/lib/auth", () => ({
-  requireAdmin: vi.fn(),
-  auth: vi.fn(),
-  authGet: vi.fn(),
-  authPost: vi.fn(),
-}));
+vi.mock("@/lib/auth", () => {
+  const requireAdmin = vi.fn();
+  return {
+    requireAdmin,
+    requireAdmin2FA: requireAdmin,
+    auth: vi.fn(),
+    authGet: vi.fn(),
+    authPost: vi.fn(),
+  };
+});
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),

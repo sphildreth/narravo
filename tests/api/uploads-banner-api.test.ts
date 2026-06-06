@@ -3,14 +3,14 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { POST as bannerPost } from "@/app/api/uploads/banner/route";
 
-const mockRequireAdmin = vi.fn();
+const mockRequireAdmin2FA = vi.fn();
 const mockFs = {
   mkdir: vi.fn(),
   writeFile: vi.fn(),
 };
 
 vi.mock("@/lib/auth", () => ({
-  requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
+  requireAdmin2FA: (...args: unknown[]) => mockRequireAdmin2FA(...args),
   getSessionUserId: vi.fn().mockResolvedValue(null),
 }));
 
@@ -27,8 +27,8 @@ vi.mock("node:crypto", () => ({
 
 describe("/api/uploads/banner", () => {
   beforeEach(() => {
-    mockRequireAdmin.mockReset();
-    mockRequireAdmin.mockResolvedValue({ user: { id: "admin" } });
+    mockRequireAdmin2FA.mockReset();
+    mockRequireAdmin2FA.mockResolvedValue({ user: { id: "admin" } });
     mockFs.mkdir.mockReset();
     mockFs.writeFile.mockReset();
     mockFs.mkdir.mockResolvedValue(undefined);
@@ -68,7 +68,7 @@ describe("/api/uploads/banner", () => {
   });
 
   it("propagates authorization errors", async () => {
-    mockRequireAdmin.mockRejectedValueOnce(new Error("Forbidden"));
+    mockRequireAdmin2FA.mockRejectedValueOnce(new Error("Forbidden"));
     const file = new File([new Uint8Array([1])], "header.png", { type: "image/png" });
     const form = new FormData();
     form.append("file", file);

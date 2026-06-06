@@ -1,0 +1,16 @@
+.git
+.github
+.next
+coverage
+dist
+build
+node_modules
+backups
+public/uploads
+*.log
+.env
+.env.*
+!.env.example
+deploy/.env
+deploy/.env.*
+!deploy/.env.example

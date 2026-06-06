@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { localStorageService } from "@/lib/local-storage";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
-import { requireAdmin, getSessionUserId } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { uploads } from "@/drizzle/schema";
 import logger from '@/lib/logger';
 
@@ -19,7 +19,7 @@ function isSafeKey(key: string): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    const session = await requireSession();
     
     logger.info('[/api/uploads/local] POST request received');
     
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     logger.info(`[/api/uploads/local] File saved successfully, URL: ${url}`);
 
     // Track upload in database as temporary
-    const userId = await getSessionUserId();
+    const userId = session.user?.id ?? null;
     logger.info(`[/api/uploads/local] Recording upload in database - userId: ${userId}, sessionId: ${sessionId}`);
     await db.insert(uploads).values({
       key,
@@ -144,8 +144,16 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     logger.error("/api/uploads/local error:", err);
-    return new Response(JSON.stringify({ ok: false, error: { code: "INTERNAL", message: "Upload failed" } }), {
-      status: 500,
+    const message = err instanceof Error ? err.message : "Upload failed";
+    const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
+    return new Response(JSON.stringify({
+      ok: false,
+      error: {
+        code: status === 401 ? "UNAUTHORIZED" : status === 403 ? "FORBIDDEN" : "INTERNAL",
+        message: status === 500 ? "Upload failed" : message,
+      },
+    }), {
+      status,
       headers: { "Content-Type": "application/json" },
     });
   }

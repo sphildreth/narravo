@@ -1,7 +1,7 @@
 "use server";
 // SPDX-License-Identifier: Apache-2.0
 
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users, comments, reactions } from "@/drizzle/schema";
 import { eq, like, desc, asc, sql, and, or, count } from "drizzle-orm";
@@ -59,7 +59,7 @@ export async function getUsersWithFilters(
   page: number = 1,
   pageSize: number = 50
 ) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   const offset = (page - 1) * pageSize;
   
@@ -153,7 +153,7 @@ export async function getUsersWithFilters(
 
 // Get detailed user information
 export async function getUserDetails(userId: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   const [user] = await db
     .select()
@@ -283,7 +283,7 @@ async function getUserStats(userIds: string[]): Promise<Record<string, {
 
 // Anonymize user (delete user record, comments remain but are disassociated)
 export async function anonymizeUser(formData: FormData) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   const data = {
     userId: formData.get("userId") as string,
@@ -347,7 +347,7 @@ export async function anonymizeUser(formData: FormData) {
 
 // Delete user entirely (hard delete)
 export async function deleteUser(formData: FormData) {
-  await requireAdmin();
+  await requireAdmin2FA();
 
   const data = {
     userId: formData.get("userId") as string,
@@ -410,7 +410,7 @@ export async function deleteUser(formData: FormData) {
 
 // Export user data (GDPR compliance)
 export async function exportUserData(userId: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   try {
     // Get user info
@@ -479,7 +479,7 @@ export async function exportUserData(userId: string) {
 
 // Get admin visibility information
 export async function getAdminVisibility() {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   try {
     // Get all admin emails from environment

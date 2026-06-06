@@ -15,10 +15,14 @@ jobs:
       NODE_ENV: test
       NEXT_TELEMETRY_DISABLED: '1'
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/narravo_test
+      NEXTAUTH_SECRET: ci-nextauth-secret-at-least-32-characters
+      NEXTAUTH_URL: http://localhost:3000
+      ADMIN_EMAILS: admin@example.com
+      ANALYTICS_IP_SALT: ci-analytics-salt
     
     services:
       postgres:
-        image: postgres:14
+        image: postgres:16
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
@@ -34,26 +38,25 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install pnpm
-      run: npm install -g pnpm   
-
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
-        cache: 'pnpm'
-        cache-dependency-path: |
-          pnpm-lock.yaml
+        node-version: '22'
     
     - name: Enable Corepack (pnpm)    
       run: corepack enable
+
+    - name: Show tool versions
+      run: |
+        node --version
+        pnpm --version
     
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
     
     - name: Setup database
       run: |
-        pnpm drizzle:push
+        pnpm drizzle:migrate
         pnpm seed:config
     
     - name: Run TypeScript check

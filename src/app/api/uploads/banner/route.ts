@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
-import { requireAdmin, getSessionUserId } from "@/lib/auth";
+import { requireAdmin2FA, getSessionUserId } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { uploads } from "@/drizzle/schema";
 import path from "node:path";
@@ -14,7 +14,7 @@ const DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdmin2FA();
 
     // Accept multipart form data
     const form = await req.formData();

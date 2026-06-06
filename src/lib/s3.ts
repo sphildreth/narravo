@@ -19,6 +19,7 @@ export interface PresignedPostData {
 
 export interface UploadValidationOptions {
   maxBytes: number;
+  contentLength?: number;
   allowedMimeTypes?: string[];
   keyPrefix?: string;
 }
@@ -54,6 +55,13 @@ export class S3Service {
       throw new Error(`MIME type ${mimeType} not allowed`);
     }
 
+    if (
+      typeof options.contentLength === "number" &&
+      (!Number.isFinite(options.contentLength) || options.contentLength <= 0 || options.contentLength > options.maxBytes)
+    ) {
+      throw new Error(`Invalid content length ${options.contentLength}`);
+    }
+
     // Generate unique key
     const ext = filename.split('.').pop() || '';
     const key = `${options.keyPrefix || 'uploads'}/${nanoid()}.${ext}`;
@@ -63,6 +71,7 @@ export class S3Service {
       Bucket: this.bucket,
       Key: key,
       ContentType: mimeType,
+      ...(typeof options.contentLength === "number" ? { ContentLength: options.contentLength } : {}),
     });
 
     const url = await getSignedUrl(this.client, command, { expiresIn: 300 });

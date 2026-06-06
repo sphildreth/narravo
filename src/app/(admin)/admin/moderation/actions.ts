@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { getModerationQueue, revalidateAfterModeration, type ModerationFilter } from "@/lib/moderation";
 import { moderateComments, type ModerateInput, type ModerationRepo } from "@/lib/adminModeration";
 import { db } from "@/lib/db";
@@ -58,7 +58,7 @@ export async function getModerationData(
   filter: EnhancedModerationFilter = {},
   page: number = 1
 ) {
-  await requireAdmin();
+  await requireAdmin2FA();
   
   const config = new ConfigServiceImpl({ db });
   const pageSize = await config.getNumber("MODERATION.PAGE-SIZE");
@@ -76,7 +76,7 @@ export async function getModerationData(
 }
 
 export async function performModerationAction(input: ModerateInput) {
-  await requireAdmin();
+  await requireAdmin2FA();
 
   const repo = new DrizzleModerationRepo();
   const results = await moderateComments(repo, input);
@@ -117,7 +117,7 @@ export async function performModerationAction(input: ModerateInput) {
 
 // Get comment with parent context for detailed view
 export async function getCommentWithContext(commentId: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
 
   const commentQuery = sql`
     SELECT 
@@ -213,7 +213,7 @@ export async function getCommentWithContext(commentId: string) {
 
 // Remove individual attachment
 export async function removeCommentAttachment(attachmentId: string) {
-  await requireAdmin();
+  await requireAdmin2FA();
 
   try {
     // Get comment ID for revalidation before deletion
@@ -247,7 +247,7 @@ export async function removeCommentAttachment(attachmentId: string) {
 
 // Create admin reply to comment
 export async function createAdminReply(formData: FormData) {
-  await requireAdmin();
+  await requireAdmin2FA();
 
   const data = {
     postId: formData.get("postId") as string,
@@ -345,7 +345,7 @@ export async function createAdminReply(formData: FormData) {
 
 // Hard delete comments with confirmation
 export async function hardDeleteComments(commentIds: string[]) {
-  await requireAdmin();
+  await requireAdmin2FA();
 
   if (!commentIds.length) {
     return { error: "No comments selected" };
@@ -384,7 +384,7 @@ export async function hardDeleteComments(commentIds: string[]) {
 
 // Get comment counts by status for moderation dashboard
 export async function getModerationStats() {
-  await requireAdmin();
+  await requireAdmin2FA();
 
   const statsQuery = sql`
     SELECT 

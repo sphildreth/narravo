@@ -31,6 +31,7 @@ const mockDb = {
 
 vi.mock("@/lib/auth", () => ({
   requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
+  requireAdmin2FA: (...args: unknown[]) => mockRequireAdmin(...args),
 }));
 
 vi.mock(new URL("../../scripts/backup.ts", import.meta.url).href, () => ({

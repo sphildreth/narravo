@@ -4,11 +4,13 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { S3Service, getS3Config } from "@/lib/s3";
 import { db } from "@/lib/db";
 import { localStorageService } from "@/lib/local-storage";
+import { requireSession } from "@/lib/auth";
 import logger from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
   try {
     logger.info('[/api/r2/sign] POST request received');
+    await requireSession();
     
     const config = new ConfigServiceImpl({ db });
     
@@ -36,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     logger.info(`[/api/r2/sign] Request - filename: ${filename}, mimeType: ${mimeType}, size: ${size}, kind: ${kind}`);
 
-    if (!filename || !mimeType || typeof size !== 'number') {
+    if (!filename || !mimeType || typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
       logger.warn('[/api/r2/sign] Invalid request - missing required fields');
       return new Response(
         JSON.stringify({ error: { code: "INVALID_REQUEST", message: "Missing filename, mimeType, or size" } }),
@@ -123,6 +125,7 @@ export async function POST(req: NextRequest) {
     const presignedData = await s3Service.createPresignedPost(filename, mimeType, {
       maxBytes,
       allowedMimeTypes: allowedMimes,
+      contentLength: size,
       keyPrefix: isImage ? "images" : "videos",
     });
 
@@ -151,14 +154,16 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     logger.error("Error in /api/r2/sign:", error);
+    const message = error instanceof Error ? error.message : "Internal server error";
+    const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
     return new Response(
       JSON.stringify({ 
         error: { 
-          code: "INTERNAL_ERROR", 
-          message: error instanceof Error ? error.message : "Internal server error" 
+          code: status === 401 ? "UNAUTHORIZED" : status === 403 ? "FORBIDDEN" : "INTERNAL_ERROR",
+          message
         } 
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status, headers: { "Content-Type": "application/json" } }
     );
   }
 }
