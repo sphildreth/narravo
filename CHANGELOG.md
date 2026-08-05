@@ -4,6 +4,28 @@ This file records notable project changes. It follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format and uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-08-04
+
+### Security
+
+- Updated `next` from 16.2.7 to 16.2.11 to resolve 8 CVEs (SSRF in rewrites
+  and Server Actions, middleware/proxy bypass, DoS in Server Actions, cache
+  confusion, unauthenticated Server Function disclosure, and Image Optimization
+  DoS).
+- Updated `next-auth` from 5.0.0-beta.30 to 5.0.0-beta.32 to resolve 4 CVEs
+  (critical auth bypass via fail-open configuration errors, critical email
+  homoglyph bypass, uncaught exception on malformed Bearer tokens, and OAuth
+  state/nonce/PKCE cookies not bound to provider).
+- Updated `@auth/core` from ^0.40.0 to ^0.41.3 to resolve 3 CVEs (critical
+  email homoglyph bypass, uncaught exception on malformed Bearer tokens, and
+  OAuth state/nonce/PKCE cookies not bound to provider).
+- Updated `postcss` from 8.5.15 to 8.5.23 to resolve 2 CVEs (path traversal via
+  sourceMappingURL and incomplete fix follow-up).
+- Updated `dompurify` from ^3.4.11 to ^3.4.12 to resolve a
+  `CUSTOM_ELEMENT_HANDLING` bypass of `afterSanitizeElements`.
+- Updated `@next/bundle-analyzer` and `eslint-config-next` to 16.2.11 to match
+  the Next.js runtime version.
+
 ## [1.0.1] - 2026-06-06
 
 ### Added
