@@ -23,7 +23,7 @@ peerDependencyRules:
 
 overrides:
   esbuild: ">=0.25.0"
-  postcss: "8.5.15"
+  postcss: "8.5.23"
   prismjs: ">=1.30.0"
   tmp: ">=0.2.4"
   vite: "$vite"
