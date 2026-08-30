@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
@@ -11,12 +12,10 @@ export default defineConfig({
     // Keep per-file isolation so garbage can be collected between files
     isolate: true,
 
-    // Constrain parallelism
-
     // Turn off coverage by default (run it separately)
     coverage: { enabled: false },
 
-    // Lower concurrency inside a single file's \`test.concurrent\`
+    // Lower concurrency inside a single file's `test.concurrent`
     maxConcurrency: 4,
 
     // Don't transform huge folders

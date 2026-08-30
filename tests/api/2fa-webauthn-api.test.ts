@@ -8,7 +8,7 @@ import { POST as authenticateVerifyPost } from "@/app/api/2fa/webauthn/authentic
 import { DELETE as credentialsDelete } from "@/app/api/2fa/webauthn/credentials/[id]/route";
 import { POST as confirmPost } from "@/app/api/2fa/webauthn/confirm/route";
 
-const { mockRequireAdmin, mockRequireAdmin2FA, mockRequireSession, mockDb, mockWebauthn, mockTotp, mockRateLimit, mockTrustedDevice, mockSecurityActivity } = vi.hoisted(() => {
+const { mockRequireAdmin, mockRequireAdmin2FA, mockRequireSession, mockDb, mockWebauthn, mockTotp, mockRateLimit, mockTrustedDevice, mockSecurityActivity, mockSessionGrant, mockChallenge } = vi.hoisted(() => {
   return {
     mockRequireAdmin: vi.fn(),
     mockRequireAdmin2FA: vi.fn(),
@@ -41,12 +41,22 @@ const { mockRequireAdmin, mockRequireAdmin2FA, mockRequireSession, mockDb, mockW
     mockSecurityActivity: {
       logSecurityActivity: vi.fn(),
     },
+    mockSessionGrant: {
+      createMfaSessionGrant: vi.fn(),
+    },
+    mockChallenge: {
+      persistWebAuthnChallenge: vi.fn(),
+      getPendingWebAuthnChallenge: vi.fn(),
+      consumePendingWebAuthnChallenge: vi.fn(),
+      extractClientDataChallenge: vi.fn(),
+    },
   };
 });
 
 vi.mock("@/lib/auth", () => ({
   requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
   requireAdmin2FA: (...args: unknown[]) => mockRequireAdmin2FA(...args),
+  requireRecentLogin: vi.fn(),
   requireSession: (...args: unknown[]) => mockRequireSession(...args),
 }));
 
@@ -82,10 +92,31 @@ vi.mock("@/lib/2fa/security-activity", () => ({
   logSecurityActivity: (...args: unknown[]) => mockSecurityActivity.logSecurityActivity(...args),
 }));
 
+vi.mock("@/lib/2fa/session-grant", () => ({
+  createMfaSessionGrant: (...args: unknown[]) => mockSessionGrant.createMfaSessionGrant(...args),
+  getMfaSessionContext: (session: any) => ({ userId: session.user.id, sessionId: session.user.mfaSessionId }),
+}));
+
+vi.mock("@/lib/2fa/webauthn-challenge", () => ({
+  persistWebAuthnChallenge: (...args: unknown[]) => mockChallenge.persistWebAuthnChallenge(...args),
+  getPendingWebAuthnChallenge: (...args: unknown[]) => mockChallenge.getPendingWebAuthnChallenge(...args),
+  consumePendingWebAuthnChallenge: (...args: unknown[]) => mockChallenge.consumePendingWebAuthnChallenge(...args),
+  extractClientDataChallenge: (...args: unknown[]) => mockChallenge.extractClientDataChallenge(...args),
+}));
+
 vi.mock("@/drizzle/schema", () => ({
-  ownerWebAuthnCredential: Symbol("ownerWebAuthnCredential"),
-  ownerRecoveryCode: Symbol("ownerRecoveryCode"),
-  users: Symbol("users"),
+  ownerWebAuthnCredential: {
+    id: Symbol("ownerWebAuthnCredential.id"),
+    userId: Symbol("ownerWebAuthnCredential.userId"),
+    credentialId: Symbol("ownerWebAuthnCredential.credentialId"),
+    transports: Symbol("ownerWebAuthnCredential.transports"),
+    counter: Symbol("ownerWebAuthnCredential.counter"),
+  },
+  ownerRecoveryCode: { userId: Symbol("ownerRecoveryCode.userId") },
+  users: {
+    id: Symbol("users.id"),
+    twoFactorEnabled: Symbol("users.twoFactorEnabled"),
+  },
 }));
 
 const encodeClientData = (challenge: string) =>
@@ -94,13 +125,13 @@ const encodeClientData = (challenge: string) =>
 describe("WebAuthn 2FA endpoints", () => {
   beforeEach(() => {
     mockRequireAdmin.mockReset();
-    mockRequireAdmin.mockResolvedValue({ user: { id: "user-1", email: "admin@example.com", name: "Admin" } });
+    mockRequireAdmin.mockResolvedValue({ user: { id: "user-1", email: "admin@example.com", name: "Admin", mfaSessionId: "session-a" } });
 
     mockRequireAdmin2FA.mockReset();
-    mockRequireAdmin2FA.mockResolvedValue({ user: { id: "user-1" } });
+    mockRequireAdmin2FA.mockResolvedValue({ user: { id: "user-1", mfaSessionId: "session-a" } });
 
     mockRequireSession.mockReset();
-    mockRequireSession.mockResolvedValue({ user: { id: "user-1", mfaPending: true } });
+    mockRequireSession.mockResolvedValue({ user: { id: "user-1", mfaPending: true, mfaSessionId: "session-a" } });
 
     mockDb.select.mockReset();
     mockDb.insert.mockReset();
@@ -121,6 +152,14 @@ describe("WebAuthn 2FA endpoints", () => {
 
     mockTrustedDevice.createTrustedDevice.mockReset();
     mockSecurityActivity.logSecurityActivity.mockReset();
+    mockSessionGrant.createMfaSessionGrant.mockReset();
+    mockChallenge.persistWebAuthnChallenge.mockReset();
+    mockChallenge.getPendingWebAuthnChallenge.mockReset();
+    mockChallenge.consumePendingWebAuthnChallenge.mockReset();
+    mockChallenge.extractClientDataChallenge.mockReset();
+    mockChallenge.extractClientDataChallenge.mockReturnValue("challenge-123");
+    mockChallenge.getPendingWebAuthnChallenge.mockResolvedValue({ id: "challenge-id", challenge: "challenge-123" });
+    mockChallenge.consumePendingWebAuthnChallenge.mockResolvedValue(true);
   });
 
   const makeJsonRequest = (url: string, body: unknown): NextRequest =>
@@ -131,13 +170,21 @@ describe("WebAuthn 2FA endpoints", () => {
     }) as unknown as NextRequest;
 
   it("generates registration options excluding existing credentials", async () => {
-    mockDb.select.mockImplementationOnce(() => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue(Promise.resolve([
-          { credentialId: "cred-1", transports: ["usb"] },
-        ])),
-      }),
-    }));
+    mockDb.select
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([{ twoFactorEnabled: false }]),
+          }),
+        }),
+      }))
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue(Promise.resolve([
+            { credentialId: "cred-1", transports: ["usb"] },
+          ])),
+        }),
+      }));
 
     const options = { challenge: "abc", rp: { name: "Narravo" } };
     mockWebauthn.generateWebAuthnRegistrationOptions.mockResolvedValue(options);
@@ -250,7 +297,9 @@ describe("WebAuthn 2FA endpoints", () => {
 
     mockDb.update
       .mockImplementationOnce(() => ({
-        set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: "internal-cred" }]) }),
+        }),
       }))
       .mockImplementationOnce(() => ({
         set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
@@ -310,6 +359,47 @@ describe("WebAuthn 2FA endpoints", () => {
     expect(response.status).toBe(429);
   });
 
+  it("rejects an assertion whose challenge belongs to another session", async () => {
+    mockRateLimit.isRateLimited.mockReturnValue(false);
+    mockChallenge.getPendingWebAuthnChallenge.mockResolvedValue(null);
+    const authResponse = {
+      id: "cred-1",
+      rawId: "cred-1",
+      type: "public-key",
+      response: { clientDataJSON: encodeClientData("challenge-from-session-b"), authenticatorData: "auth", signature: "sig", userHandle: null },
+      clientExtensionResults: {},
+    };
+
+    const response = await authenticateVerifyPost(
+      makeJsonRequest("http://localhost/api/2fa/webauthn/authenticate/verify", authResponse)
+    );
+    expect(response.status).toBe(400);
+    expect(mockWebauthn.verifyWebAuthnAuthentication).not.toHaveBeenCalled();
+  });
+
+  it("does not authenticate a credential stored for another admin", async () => {
+    mockRateLimit.isRateLimited.mockReturnValue(false);
+    mockDb.select.mockImplementationOnce(() => ({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
+      }),
+    }));
+    const authResponse = {
+      id: "credential-owned-by-other-admin",
+      rawId: "credential-owned-by-other-admin",
+      type: "public-key",
+      response: { clientDataJSON: encodeClientData("challenge-123"), authenticatorData: "auth", signature: "sig", userHandle: null },
+      clientExtensionResults: {},
+    };
+
+    const response = await authenticateVerifyPost(
+      makeJsonRequest("http://localhost/api/2fa/webauthn/authenticate/verify", authResponse)
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("Credential not found");
+    expect(mockWebauthn.verifyWebAuthnAuthentication).not.toHaveBeenCalled();
+  });
+
   it("deletes stored credentials", async () => {
     mockDb.delete.mockReturnValue({
       where: vi.fn().mockReturnValue({
@@ -336,6 +426,14 @@ describe("WebAuthn 2FA endpoints", () => {
 
   it("enables passkey-only 2FA via confirm endpoint", async () => {
     mockRequireAdmin.mockResolvedValue({ user: { id: "user-1", twoFactorEnabled: false } });
+
+    mockDb.select.mockImplementationOnce(() => ({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([{ twoFactorEnabled: false }]),
+        }),
+      }),
+    }));
 
     const clientData = encodeClientData("challenge-999");
     const passkeyResponse = {
@@ -366,7 +464,13 @@ describe("WebAuthn 2FA endpoints", () => {
 
     mockDb.transaction.mockImplementation(async (fn: (tx: any) => Promise<void>) => {
       await fn({
-        update: () => ({ set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }) }),
+        update: () => ({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: "user-1" }]),
+            }),
+          }),
+        }),
         insert: () => ({ values: vi.fn().mockResolvedValue(undefined) }),
       });
     });
@@ -378,5 +482,33 @@ describe("WebAuthn 2FA endpoints", () => {
     expect(payload.recoveryCodes).toEqual(["code-1", "code-2"]);
     expect(mockSecurityActivity.logSecurityActivity).toHaveBeenCalledWith("user-1", "2fa_enabled");
     expect(mockSecurityActivity.logSecurityActivity).toHaveBeenCalledWith("user-1", "passkey_added");
+  });
+
+  it("rejects a concurrent passkey-only enrollment", async () => {
+    mockRequireAdmin.mockResolvedValue({ user: { id: "user-1", mfaSessionId: "session-a" } });
+    mockDb.select.mockImplementationOnce(() => ({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([{ twoFactorEnabled: false }]) }),
+      }),
+    }));
+    mockWebauthn.verifyWebAuthnRegistration.mockResolvedValue({
+      verified: true,
+      registrationInfo: { credential: { id: "cred-4", publicKey: Buffer.from("public"), counter: 0 } },
+    });
+    mockTotp.generateRecoveryCodes.mockReturnValue(["code-1"]);
+    mockDb.transaction.mockImplementation(async (fn: (tx: any) => Promise<void>) => fn({
+      update: () => ({ set: () => ({ where: () => ({ returning: vi.fn().mockResolvedValue([]) }) }) }),
+      insert: () => ({ values: vi.fn() }),
+    }));
+    const response = await confirmPost(makeJsonRequest("http://localhost/api/2fa/webauthn/confirm", {
+      id: "cred-4",
+      rawId: "cred-4",
+      type: "public-key",
+      response: { clientDataJSON: encodeClientData("challenge-123"), attestationObject: "attestation" },
+      clientExtensionResults: {},
+    }));
+
+    expect(response.status).toBe(409);
+    expect(mockSessionGrant.createMfaSessionGrant).not.toHaveBeenCalled();
   });
 });

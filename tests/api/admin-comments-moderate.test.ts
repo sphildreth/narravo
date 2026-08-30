@@ -91,7 +91,7 @@ describe("/api/admin/comments/moderate", () => {
 
     expect(response.status).toBe(400);
     expect(payload.ok).toBe(false);
-    expect(payload.error.message).toBe("invalid action");
+    expect(payload.error.message).toBe("Invalid moderation request");
     expect(mockLogger.error).toHaveBeenCalled();
   });
 });

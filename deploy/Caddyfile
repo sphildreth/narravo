@@ -1,4 +1,8 @@
 your-domain.com {
   encode zstd gzip
+  request_body {
+    # 100 MiB restore archive plus multipart framing (Caddy's MB is decimal).
+    max_size 106MB
+  }
   reverse_proxy web:3000
 }

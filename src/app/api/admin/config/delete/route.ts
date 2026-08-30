@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { requireAdmin2FA } from "@/lib/auth";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
+import { safeApiError } from "@/lib/api-error";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,9 +14,7 @@ export async function POST(req: NextRequest) {
     await svc.deleteGlobal(String(key));
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal error";
-    const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 400;
-    return new Response(JSON.stringify({ ok: false, error: { message } }), { status, headers: { "Content-Type": "application/json" } });
+    const publicError = safeApiError(err, "Invalid configuration request", 400);
+    return new Response(JSON.stringify({ ok: false, error: { message: publicError.message } }), { status: publicError.status, headers: { "Content-Type": "application/json" } });
   }
 }
-

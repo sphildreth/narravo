@@ -7,6 +7,11 @@ import { eq } from "drizzle-orm";
 import { restoreBackup } from "../../../../../scripts/restore";
 import { nanoid } from "nanoid";
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import logger from "@/lib/logger";
+
+const MAX_BACKUP_BYTES = 100 * 1024 * 1024;
+const MAX_MULTIPART_BYTES = MAX_BACKUP_BYTES + 1024 * 1024;
 
 interface RestoreRequest {
   dryRun?: boolean;
@@ -20,7 +25,14 @@ interface RestoreRequest {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin2FA();
+    const declaredLength = req.headers.get("content-length");
+    if (declaredLength && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > MAX_MULTIPART_BYTES)) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: { message: "Restore request is too large" },
+      }), { status: 413, headers: { "Content-Type": "application/json" } });
+    }
+    const session = await requireAdmin2FA();
     
     const formData = await req.formData();
     const file = formData.get("backupFile") as File;
@@ -48,12 +60,18 @@ export async function POST(req: NextRequest) {
         headers: { "Content-Type": "application/json" }
       });
     }
+    if (!(file instanceof File) || file.size <= 0 || file.size > MAX_BACKUP_BYTES) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: { message: `Backup must be a ZIP no larger than ${MAX_BACKUP_BYTES} bytes` },
+      }), { status: 413, headers: { "Content-Type": "application/json" } });
+    }
 
     // Create audit log entry
     const operationId = nanoid();
     const logEntry = await db.insert(dataOperationLogs).values({
       operationType: "restore",
-      userId: null, // TODO: Get from session when auth is implemented
+      userId: session.user?.id ?? null,
       details: { 
         ...options, 
         operationId,
@@ -71,7 +89,6 @@ export async function POST(req: NextRequest) {
       const tempFilename = `restore-${operationId}.zip`;
       const tempPath = `/tmp/${tempFilename}`;
       
-      const fs = await import("node:fs/promises");
       await fs.writeFile(tempPath, new Uint8Array(buffer));
 
       // Verify checksum if provided
@@ -134,13 +151,6 @@ export async function POST(req: NextRequest) {
         })
         .where(eq(dataOperationLogs.id, logEntry[0]!.id));
 
-      // Clean up temp file
-      try {
-        await fs.unlink(tempPath);
-      } catch {
-        // Ignore cleanup errors
-      }
-
       return new Response(JSON.stringify({
         ok: true,
         operationId,
@@ -163,15 +173,22 @@ export async function POST(req: NextRequest) {
         .where(eq(dataOperationLogs.id, logEntry[0]!.id));
 
       throw error;
+    } finally {
+      try {
+        await fs.unlink(`/tmp/restore-${operationId}.zip`);
+      } catch {
+        // Best-effort cleanup of a non-sensitive temporary archive.
+      }
     }
 
   } catch (err) {
+    logger.error("Restore API failed", err);
     const message = err instanceof Error ? err.message : "Internal error";
     const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 500;
     
     return new Response(JSON.stringify({
       ok: false,
-      error: { message }
+      error: { message: status === 500 ? "Restore failed" : message }
     }), {
       status,
       headers: { "Content-Type": "application/json" }

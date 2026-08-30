@@ -359,7 +359,18 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
           logger.error("Upload failed", await safeReadText(putRes));
           return null;
         }
-        publicUrl = (signData.publicUrl as string | undefined) || null;
+        if (signData.completionUrl && signData.uploadToken) {
+          const completeRes = await fetch(signData.completionUrl as string, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: signData.key, uploadToken: signData.uploadToken }),
+          });
+          const completeData = await completeRes.json().catch(() => ({}));
+          if (!completeRes.ok || !completeData.url) return null;
+          publicUrl = completeData.url as string;
+        } else {
+          publicUrl = (signData.publicUrl as string | undefined) || null;
+        }
         if (!publicUrl) {
           // Fallback best-effort: derive from key or strip query
           if (signData.key && typeof signData.url === "string") {

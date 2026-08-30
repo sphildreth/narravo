@@ -67,12 +67,25 @@ export default function AppearanceManager({ initial }: { initial: AppearanceStat
       if (method === "PUT") {
         const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
         if (!putRes.ok) throw new Error(`Upload failed with ${putRes.status}`);
+        if (data.completionUrl && data.uploadToken) {
+          const completeRes = await fetch(data.completionUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: data.key, uploadToken: data.uploadToken }),
+          });
+          const completeData = await completeRes.json().catch(() => ({}));
+          if (!completeRes.ok || !completeData.url) throw new Error("Upload validation failed");
+          data.publicUrl = completeData.url;
+        }
       } else if (data.fields) {
         const formData = new FormData();
         for (const [k, v] of Object.entries<string>(data.fields)) formData.append(k, v);
         formData.append("file", file);
         const upRes = await fetch(uploadUrl, { method: "POST", body: formData });
         if (!upRes.ok) throw new Error(`Upload failed with ${upRes.status}`);
+        const upData = await upRes.json().catch(() => ({}));
+        if (!upData?.url) throw new Error("Upload validation failed");
+        data.publicUrl = upData.url;
       } else {
         throw new Error("Unsupported upload method");
       }

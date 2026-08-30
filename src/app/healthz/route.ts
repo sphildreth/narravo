@@ -11,9 +11,9 @@ export async function GET() {
     // A simple query is the recommended way to check health.
     await db.execute(sql`select 1`);
     return new Response("OK", { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error("/healthz error:", error);
-    return new Response(`DB health check failed: ${error.message}`, {
+    return new Response("DB health check failed", {
       status: 503, // Service Unavailable
     });
   }

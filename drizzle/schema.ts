@@ -186,6 +186,7 @@ export const postViewEvents = pgTable(
   },
   (table) => ({
     postIdTsIndex: index("post_view_events_post_id_ts_idx").on(table.postId, table.ts),
+    postViewEventsTsIndex: index("post_view_events_ts_idx").on(table.ts),
   })
 );
 
@@ -365,7 +366,7 @@ export const dataOperationLogs = pgTable("data_operation_logs", {
 // Owner TOTP configuration
 export const ownerTotp = pgTable("owner_totp", {
   userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
-  secretBase32: text("secret_base32").notNull(), // Store encrypted in production
+  secretBase32: text("secret_base32").notNull(), // AES-256-GCM envelope; legacy plaintext is migrated at startup
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   activatedAt: timestamp("activated_at", { withTimezone: true }),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
@@ -386,6 +387,63 @@ export const ownerWebAuthnCredential = pgTable("owner_webauthn_credential", {
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
 }, (table) => ({
   ownerWebAuthnCredentialUserIdIndex: index("owner_webauthn_credential_user_id_idx").on(table.userId),
+}));
+
+// Server-side WebAuthn ceremony challenges. A challenge is tied to the exact
+// login session that requested it and is consumed atomically during verify.
+export const webauthnCeremony = pgEnum("webauthn_ceremony", [
+  "registration",
+  "authentication",
+]);
+
+export const webauthnChallenge = pgTable("webauthn_challenge", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  challenge: text("challenge").notNull(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  sessionId: text("session_id").notNull(),
+  ceremony: webauthnCeremony("ceremony").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  webauthnChallengeLookupIndex: index("webauthn_challenge_lookup_idx").on(
+    table.userId, table.sessionId, table.ceremony, table.challenge
+  ),
+  webauthnChallengeSessionCeremonyUnique: uniqueIndex("webauthn_challenge_session_ceremony_unique").on(
+    table.userId, table.sessionId, table.ceremony
+  ),
+  webauthnChallengeExpiryIndex: index("webauthn_challenge_expiry_idx").on(table.expiresAt),
+}));
+
+// A short-lived, single-use grant created only after a second factor has
+// succeeded. The Auth.js JWT callback consumes it using its own signed
+// per-login session identifier; request-body flags are never consulted.
+export const mfaSessionGrant = pgTable("mfa_session_grant", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  sessionId: text("session_id").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  mfaSessionGrantLookupIndex: index("mfa_session_grant_lookup_idx").on(
+    table.userId, table.sessionId, table.expiresAt
+  ),
+  mfaSessionGrantSessionUnique: uniqueIndex("mfa_session_grant_session_unique").on(
+    table.userId, table.sessionId
+  ),
+}));
+
+// Shared fixed-window buckets used for authentication and abuse controls.
+// Keys are SHA-256 digests so attacker-controlled input cannot inflate row or
+// index sizes. Expired rows are safe to replace in place.
+export const rateLimitBucket = pgTable("rate_limit_bucket", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+  rateLimitBucketExpiryIndex: index("rate_limit_bucket_expiry_idx").on(table.expiresAt),
 }));
 
 // Recovery codes (hashed at rest)

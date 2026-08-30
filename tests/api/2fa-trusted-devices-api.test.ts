@@ -34,6 +34,7 @@ describe("2FA trusted devices", () => {
 
     mockTrustedLib.getTrustedDevices.mockReset();
     mockTrustedLib.revokeTrustedDevice.mockReset();
+    mockTrustedLib.revokeTrustedDevice.mockResolvedValue(true);
     mockTrustedLib.revokeAllTrustedDevices.mockReset();
     mockSecurityActivity.logSecurityActivity.mockReset();
   });
@@ -70,7 +71,7 @@ describe("2FA trusted devices", () => {
 
     expect(response.status).toBe(200);
     expect(payload.message).toBe("Device revoked");
-    expect(mockTrustedLib.revokeTrustedDevice).toHaveBeenCalledWith("td-1");
+    expect(mockTrustedLib.revokeTrustedDevice).toHaveBeenCalledWith("td-1", "user-1");
     expect(mockSecurityActivity.logSecurityActivity).toHaveBeenCalledWith(
       "user-1",
       "trusted_device_revoked",

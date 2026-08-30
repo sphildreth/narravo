@@ -10,17 +10,17 @@ import { Readable } from "node:stream";
 const mockRequireAdmin = vi.fn();
 const mockCreateBackup = vi.fn();
 const mockRestoreBackup = vi.fn();
-const mockFs = {
+const mockFs = vi.hoisted(() => ({
   readFile: vi.fn(),
   writeFile: vi.fn(),
   unlink: vi.fn(),
   promises: {
-    stat: vi.fn().mockResolvedValue({ size: 123 }),
+    stat: vi.fn(),
     writeFile: vi.fn(),
     unlink: vi.fn(),
   },
   createReadStream: vi.fn(),
-};
+}));
 
 const mockDb = {
   insert: vi.fn(),
@@ -42,8 +42,8 @@ vi.mock(new URL("../../scripts/restore.ts", import.meta.url).href, () => ({
   restoreBackup: (...args: unknown[]) => mockRestoreBackup(...args),
 }));
 
-vi.mock("node:fs/promises", () => mockFs.promises);
-vi.mock("node:fs", () => mockFs);
+vi.mock("node:fs/promises", () => ({ default: mockFs.promises, ...mockFs.promises }));
+vi.mock("node:fs", () => ({ default: mockFs, ...mockFs }));
 
 vi.mock("@/lib/db", () => ({
   get db() {
@@ -64,6 +64,7 @@ const mockResponseJson = async (response: Response) => {
 
 describe("admin data operation routes", () => {
   beforeEach(() => {
+    mockRequireAdmin.mockReset();
     mockRequireAdmin.mockResolvedValue({ user: { id: "admin-1" } });
 
     mockCreateBackup.mockReset();
@@ -242,6 +243,18 @@ describe("admin data operation routes", () => {
 
     expect(response.status).toBe(400);
     expect(payload).toEqual({ ok: false, error: { message: "Backup file is required" } });
+  });
+
+  it("rejects oversized restore bodies before authentication or parsing", async () => {
+    const request = new Request("http://localhost/api/admin/restore", {
+      method: "POST",
+      headers: { "content-length": String(102 * 1024 * 1024) },
+      body: "x",
+    });
+
+    const response = await restorePost(request as unknown as NextRequest);
+    expect(response.status).toBe(413);
+    expect(mockRequireAdmin).not.toHaveBeenCalled();
   });
 
   it("restores backups and returns summary", async () => {

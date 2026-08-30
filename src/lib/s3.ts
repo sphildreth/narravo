@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand, DeleteObjectCommand, ListObjectsV2CommandOutput, _Object } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectsCommand, DeleteObjectCommand, ListObjectsV2CommandOutput, _Object } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { nanoid } from "nanoid";
+import { getSafeUploadTypeByMime } from "./upload-validation";
 
 export interface S3Config {
   region: string;
@@ -50,6 +51,11 @@ export class S3Service {
     mimeType: string,
     options: UploadValidationOptions
   ): Promise<PresignedPostData> {
+    const detected = getSafeUploadTypeByMime(mimeType);
+    if (!detected) {
+      throw new Error(`MIME type ${mimeType} is not supported`);
+    }
+
     // Validate MIME type
     if (options.allowedMimeTypes && !options.allowedMimeTypes.includes(mimeType)) {
       throw new Error(`MIME type ${mimeType} not allowed`);
@@ -63,14 +69,14 @@ export class S3Service {
     }
 
     // Generate unique key
-    const ext = filename.split('.').pop() || '';
-    const key = `${options.keyPrefix || 'uploads'}/${nanoid()}.${ext}`;
+    const keyPrefix = options.keyPrefix === "videos" ? "videos" : options.keyPrefix === "featured" ? "featured" : "images";
+    const key = `${keyPrefix}/${nanoid()}.${detected.extension}`;
     
     // Create presigned URL for PUT
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
-      ContentType: mimeType,
+      ContentType: detected.mimeType,
       ...(typeof options.contentLength === "number" ? { ContentLength: options.contentLength } : {}),
     });
 
@@ -79,7 +85,7 @@ export class S3Service {
     return {
       url,
       fields: {
-        'Content-Type': mimeType,
+        'Content-Type': detected.mimeType,
       },
       key,
     };
@@ -96,14 +102,45 @@ export class S3Service {
     await this.client.send(command);
   }
 
-  // New: delete a single object by key (best-effort)
-  async deleteObject(key: string): Promise<void> {
-    try {
-      const cmd = new DeleteObjectCommand({ Bucket: this.bucket, Key: key });
-      await this.client.send(cmd);
-    } catch (err) {
-      // swallow errors for idempotency; callers may ignore missing keys
+  async getObjectBytes(key: string, maxBytes: number): Promise<Uint8Array> {
+    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    if (typeof result.ContentLength === "number" && result.ContentLength > maxBytes) {
+      throw new Error("Stored object exceeds upload limit");
     }
+    if (!result.Body) throw new Error("Stored object has no body");
+    const body = result.Body as any;
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    if (typeof body[Symbol.asyncIterator] === "function") {
+      for await (const chunk of body as AsyncIterable<Uint8Array>) {
+        const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+        total += bytes.byteLength;
+        if (total > maxBytes) throw new Error("Stored object exceeds upload limit");
+        chunks.push(bytes);
+      }
+    } else if (typeof body.transformToByteArray === "function") {
+      // SDK mocks and non-streaming adapters may only expose this method. The
+      // declared length was checked above; retain a post-read guard too.
+      const bytes = new Uint8Array(await body.transformToByteArray());
+      if (bytes.byteLength > maxBytes) throw new Error("Stored object exceeds upload limit");
+      return bytes;
+    } else {
+      throw new Error("Stored object body is not readable");
+    }
+    const output = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      output.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return output;
+  }
+
+  // Delete a single object. S3 deletion is idempotent for missing keys, while
+  // transport/permission failures must remain observable to callers.
+  async deleteObject(key: string): Promise<void> {
+    const cmd = new DeleteObjectCommand({ Bucket: this.bucket, Key: key });
+    await this.client.send(cmd);
   }
 
   // New: delete all objects under a given prefix (handles pagination, batches up to 1000 per call)
@@ -178,42 +215,4 @@ export function getStorageService(): S3Service | null {
   return null; // Use local storage fallback in import script
 }
 
-// Helper function to validate file size from magic numbers
-export function validateFileType(buffer: ArrayBuffer, expectedMime: string): boolean {
-  const bytes = new Uint8Array(buffer.slice(0, 16));
-  
-  // Common image formats
-  if (expectedMime.startsWith('image/')) {
-    // PNG
-    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
-      return expectedMime === 'image/png';
-    }
-    // JPEG
-    if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
-      return expectedMime === 'image/jpeg';
-    }
-    // GIF
-    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
-      return expectedMime === 'image/gif';
-    }
-    // WebP
-    if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
-      return expectedMime === 'image/webp';
-    }
-  }
-  
-  // Common video formats
-  if (expectedMime.startsWith('video/')) {
-    // MP4
-    if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
-      return expectedMime === 'video/mp4';
-    }
-    // WebM
-    if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) {
-      return expectedMime === 'video/webm';
-    }
-  }
-  
-  return false;
-}
+export { validateFileType } from "./upload-validation";

@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { logSlowQuery } from "./performance";
 
-loadEnv();
+loadEnv({ quiet: true });
 
 const skipDb = process.env.NARRAVO_DISABLE_DB === "true";
 const url = skipDb ? undefined : process.env.DATABASE_URL?.trim();
@@ -61,14 +61,25 @@ if (url) {
   }
 }
 
-// When DATABASE_URL is missing, export a proxy that throws on use.
+function databaseUnavailable(): never {
+  throw new Error("Database is not configured (DATABASE_URL missing)");
+}
+
+// Keep the no-database path fail-fast while exposing the same callable surface
+// as Drizzle. This lets unit tests replace individual methods without a Proxy
+// throwing during Vitest's module inspection/automocking phase.
+const unavailableDb = {
+  execute: databaseUnavailable,
+  select: databaseUnavailable,
+  insert: databaseUnavailable,
+  update: databaseUnavailable,
+  delete: databaseUnavailable,
+  transaction: databaseUnavailable,
+};
+
 const dbOrProxy: any = pool
   ? drizzle(pool)
-  : new Proxy({}, {
-      get() {
-        throw new Error("Database is not configured (DATABASE_URL missing)");
-      }
-    });
+  : unavailableDb;
 
 export { pool };
 export const db = dbOrProxy;

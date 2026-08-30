@@ -34,6 +34,8 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/comments', () => ({
   createCommentCore: vi.fn(),
+  sanitizeMarkdown: vi.fn((value: string) => value),
+  CommentError: class CommentError extends Error {},
 }));
 
 vi.mock('@/lib/rateLimit', () => ({
@@ -177,5 +179,70 @@ describe('Comment Auto-Approval', () => {
 
     expect(result.success).toBe(true);
     expect(mockCreateCommentCore).toHaveBeenCalled();
+  });
+
+  it('rejects active-content attachment metadata supplied by the caller', async () => {
+    mockRequireSession.mockResolvedValue({
+      user: { id: 'regular-user-id', isAdmin: false },
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    });
+    const mockConfigInstance = {
+      getNumber: vi.fn().mockResolvedValue(5),
+      getBoolean: vi.fn().mockResolvedValue(false),
+    };
+    (mockConfigService as any).mockImplementation(function() { return mockConfigInstance; });
+
+    const result = await createComment({
+      postId: 'test-post-id',
+      parentId: null,
+      bodyMd: 'Comment with forged attachment',
+      attachments: [{
+        key: 'images/caller-selected.svg',
+        url: '/uploads/images/caller-selected.svg',
+        kind: 'image',
+        mimeType: 'image/svg+xml',
+        size: 100,
+        name: 'caller-selected.svg',
+      }],
+      submitStartTime: Date.now() - 3000,
+      honeypot: '',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Invalid attachment');
+    expect(mockCreateCommentCore).not.toHaveBeenCalled();
+  });
+
+  it('rejects an attachment that is not an upload owned by the caller', async () => {
+    mockRequireSession.mockResolvedValue({
+      user: { id: 'regular-user-id', isAdmin: false },
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    });
+    const mockConfigInstance = {
+      getNumber: vi.fn().mockResolvedValue(5),
+      getBoolean: vi.fn().mockResolvedValue(false),
+    };
+    (mockConfigService as any).mockImplementation(function() { return mockConfigInstance; });
+    vi.mocked(db).select().from().where().limit.mockResolvedValue([]);
+
+    const result = await createComment({
+      postId: 'test-post-id',
+      parentId: null,
+      bodyMd: 'Comment with an unowned attachment',
+      attachments: [{
+        key: 'images/owned-by-someone-else.jpg',
+        url: '/uploads/images/owned-by-someone-else.jpg',
+        kind: 'image',
+        mimeType: 'image/jpeg',
+        size: 100,
+        name: 'photo.jpg',
+      }],
+      submitStartTime: Date.now() - 3000,
+      honeypot: '',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Attachment is not a valid upload for this user');
+    expect(mockCreateCommentCore).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { importWxr } from "../scripts/import-wxr";
 
+const { mockDownloadRemoteBytes } = vi.hoisted(() => ({ mockDownloadRemoteBytes: vi.fn() }));
+vi.mock("@/lib/safe-remote-fetch", () => ({
+  normalizeAllowedHosts: (hosts: string[]) => hosts.map((host) => new URL(/^[a-z]+:\/\//i.test(host) ? host : `http://${host}`).hostname),
+  downloadRemoteBytes: (...args: unknown[]) => mockDownloadRemoteBytes(...args),
+}));
+
 // Mock fs to return a WXR with one published post containing a single <img> with the provided URL
 const SAMPLE_WXR = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
@@ -105,6 +111,14 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 describe("WXR Import single image handling", () => {
   beforeEach(() => {
     putCalls.length = 0;
+    mockDownloadRemoteBytes.mockReset();
+    mockDownloadRemoteBytes.mockImplementation(async (url: string, allowedHosts: string[]) => {
+      const host = new URL(url).hostname;
+      if (!allowedHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
+        throw new Error("Host is not in the allowlist");
+      }
+      return new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    });
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => {
@@ -128,8 +142,8 @@ describe("WXR Import single image handling", () => {
     expect(newUrl.startsWith("https://storage.example.com/mock-bucket/imported-media/")).toBe(true);
     
     // The fetch should have been called with the original URL, not the dimensioned one
-    expect(fetchMock).toHaveBeenCalledWith(ORIGINAL_IMAGE_URL, expect.any(Object));
-    expect(fetchMock).not.toHaveBeenCalledWith(DIMENSIONED_IMAGE_URL, expect.any(Object));
+    expect(mockDownloadRemoteBytes).toHaveBeenCalledWith(ORIGINAL_IMAGE_URL, ["www.shildreth.com"], expect.any(Number));
+    expect(mockDownloadRemoteBytes).not.toHaveBeenCalledWith(DIMENSIONED_IMAGE_URL, expect.anything(), expect.anything());
   });
 
   it("downloads image when allowedHosts includes scheme and path (normalization)", async () => {

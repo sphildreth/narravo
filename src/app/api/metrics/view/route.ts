@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { recordView, recordPageView } from "@/lib/analytics";
+import { recordView, recordPageView, pruneViewEvents } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
 import logger from '@/lib/logger';
+import { consumeSharedRateLimit, pruneExpiredRateLimitBuckets } from "@/lib/shared-rate-limit";
 
 const postViewSchema = z.object({
   postId: z.string().uuid(),
@@ -12,7 +14,7 @@ const postViewSchema = z.object({
 
 const pageViewSchema = z.object({
   type: z.literal("page"),
-  path: z.string().min(1).max(255),
+  path: z.string().min(1).max(255).refine((path) => path.startsWith("/") && !path.startsWith("//")),
   sessionId: z.string().min(1).max(128).optional(),
 });
 
@@ -27,7 +29,7 @@ const bodySchema = z.union([
   legacyPostViewSchema,
 ]);
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     logger.debug("📊 View tracking API called");
     // Parse body
@@ -39,6 +41,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
     logger.debug("📊 Validation successful:", parsed.data);
+
+    const fetchSite = req.headers.get("sec-fetch-site");
+    if (fetchSite && !["same-origin", "same-site", "none"].includes(fetchSite)) {
+      return new NextResponse(null, { status: 204 });
+    }
+
+    const globalLimit = await consumeSharedRateLimit("analytics:view:global", 3000, 60 * 1000);
+    if (globalLimit.limited) return new NextResponse(null, { status: 204 });
+    const cookieName = process.env.NODE_ENV === "production" ? "__Host-viewSession" : "viewSession";
+    const existingSession = (req as NextRequest).cookies?.get(cookieName)?.value;
+    const hasValidExistingSession = !!existingSession && /^[a-f\d-]{36}$/i.test(existingSession);
+    const serverSessionId = hasValidExistingSession ? existingSession : randomUUID();
+    const sessionLimit = await consumeSharedRateLimit(`analytics:view:${serverSessionId}`, 60, 60 * 1000);
+    if (sessionLimit.limited) return new NextResponse(null, { status: 204 });
 
     // Respect DNT if configured
     const config = new ConfigServiceImpl();
@@ -68,7 +84,7 @@ export async function POST(req: Request) {
       // Page view tracking
       const payload = {
         path: parsed.data.path,
-        ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}),
+        sessionId: serverSessionId,
         ...(ip ? { ip } : {}),
         ...(ua ? { ua } : {}),
         ...(referer ? { referer } : {}),
@@ -82,7 +98,7 @@ export async function POST(req: Request) {
       const postData = parsed.data as { postId: string; sessionId?: string };
       const payload = {
         postId: postData.postId,
-        ...(postData.sessionId ? { sessionId: postData.sessionId } : {}),
+        sessionId: serverSessionId,
         ...(ip ? { ip } : {}),
         ...(ua ? { ua } : {}),
         ...(referer ? { referer } : {}),
@@ -95,8 +111,31 @@ export async function POST(req: Request) {
     
     logger.debug("📊 Record view result:", result);
 
-    // Always return 204 to avoid leaking details to clients
-    return new NextResponse(null, { status: 204 });
+    const cleanupLimit = await consumeSharedRateLimit("maintenance:analytics-retention", 1, 24 * 60 * 60 * 1000);
+    if (!cleanupLimit.limited) {
+      try { await pruneViewEvents(90); } catch (error) { logger.error("Analytics retention cleanup failed", error); }
+    }
+    // The public endpoint can legitimately create one short-lived bucket per
+    // browser. Clean at least as quickly as the global admission budget can
+    // create expired rows so attacker-chosen cookie values cannot grow this
+    // table without bound.
+    const rateLimitCleanup = await consumeSharedRateLimit("maintenance:rate-limit-retention", 1, 60 * 1000);
+    if (!rateLimitCleanup.limited) {
+      try { await pruneExpiredRateLimitBuckets(10_000); } catch (error) { logger.error("Rate-limit retention cleanup failed", error); }
+    }
+
+    // Always return 204 to avoid leaking details to clients.
+    const response = new NextResponse(null, { status: 204 });
+    if (!hasValidExistingSession) {
+      response.cookies.set(cookieName, serverSessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 365 * 24 * 60 * 60,
+      });
+    }
+    return response;
   } catch (error) {
     // Never throw; just return 204 to avoid impacting UX
     logger.error("📊 Error in view tracking API:", error);

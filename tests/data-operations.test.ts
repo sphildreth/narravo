@@ -25,7 +25,10 @@ const mockFsPromises = {
   stat: vi.fn().mockResolvedValue({ size: 100 }),
 };
 
-vi.mock("node:fs/promises", () => mockFsPromises);
+vi.mock("node:fs/promises", () => ({
+  default: mockFsPromises,
+  ...mockFsPromises,
+}));
 
 vi.mock("node:fs", () => ({
   default: {
@@ -135,7 +138,8 @@ describe("Data Operations API", () => {
 
       expect(response.status).toBe(500);
       expect(result.ok).toBe(false);
-      expect(result.error.message).toBe("Backup failed");
+      // Internal backup errors must not be reflected to API clients.
+      expect(result.error.message).toBe("Export failed");
     });
   });
 
@@ -236,11 +240,11 @@ describe("Data Operations API", () => {
     it("should handle restore with dry run", async () => {
       const { POST } = await import("@/app/api/admin/restore/route");
       
-      const mockFile = {
-        name: "test-backup.zip",
-        size: 1024,
-        arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(1024)),
-      };
+      const mockFile = new File(
+        [new Uint8Array(1024)],
+        "test-backup.zip",
+        { type: "application/zip" },
+      );
 
       const mockFormData = {
         get: vi.fn((key: string) => {
@@ -283,11 +287,11 @@ describe("Data Operations API", () => {
     it("should verify checksum when provided", async () => {
       const { POST } = await import("@/app/api/admin/restore/route");
       
-      const mockFile = {
-        name: "test-backup.zip",
-        size: 1024,
-        arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(1024)),
-      };
+      const mockFile = new File(
+        [new Uint8Array(1024)],
+        "test-backup.zip",
+        { type: "application/zip" },
+      );
 
       const mockFormData = {
         get: vi.fn((key: string) => {

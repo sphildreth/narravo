@@ -1,0 +1,1 @@
+CREATE INDEX "post_view_events_ts_idx" ON "post_view_events" USING btree ("ts");

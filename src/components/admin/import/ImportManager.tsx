@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Upload, Play, Square, RotateCcw, FileText, AlertTriangle, CheckCircle, XCircle, Trash2 } from "lucide-react";
-import { startImportJob, cancelImportJob, retryImportJob, deleteImportJob } from "@/app/actions/import";
+import { cancelImportJob, retryImportJob, deleteImportJob } from "@/app/actions/import";
 import { useRouter } from "next/navigation";
 import type { importJobs } from "@/drizzle/schema";
 import { Modal } from "@/components/admin/config/Modal";
@@ -112,7 +112,12 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
         allowedHosts: allowedHostsInput.split('\n').map(h => h.trim()).filter(Boolean),
       }));
 
-      const result = await startImportJob(formData);
+      const response = await fetch("/api/import-jobs", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await response.json().catch(() => ({ error: "Failed to start import" }));
+      if (!response.ok && !result.error) result.error = "Failed to start import";
       if (result.error) {
         setUploadError(result.error);
       } else if (result.job) {
@@ -310,7 +315,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
 
             <div>
               <label htmlFor="allowedHosts" className="block text-sm font-medium mb-2">
-                Allowed Media Hosts (one per line, empty = allow all)
+                Allowed Media Hosts (one per line; required when importing media)
               </label>
               <textarea
                 id="allowedHosts"

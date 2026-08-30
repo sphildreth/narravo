@@ -2,10 +2,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 
 // Mock dependencies before imports
-vi.mock("@/lib/db");
+const mockDb = {
+  insert: vi.fn(),
+  select: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+};
+vi.mock("@/lib/db", () => ({ get db() { return mockDb; } }));
 vi.mock("@/lib/auth", () => ({
   requireAdmin: vi.fn(),
-  auth: vi.fn(),
+  requireAdmin2FA: vi.fn(),
   authGet: vi.fn(),
   authPost: vi.fn(),
 }));
@@ -27,12 +33,12 @@ vi.mock("../../../scripts/import-wxr", () => ({
 
 import { startImportJob, cancelImportJob, retryImportJob, deleteImportJob } from "@/app/actions/import";
 import { db } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import fs from "node:fs/promises";
 import logger from "@/lib/logger";
 
-const authMock = auth as Mock;
+const authMock = requireAdmin2FA as Mock;
 const revalidatePathMock = revalidatePath as Mock;
 const fsMock = fs as any;
 const loggerErrorMock = logger.error as Mock;
@@ -70,7 +76,7 @@ describe("import.ts - startImportJob", () => {
   describe("authorization", () => {
     it("should require authenticated user", async () => {
       // Arrange
-      authMock.mockResolvedValueOnce(null);
+      authMock.mockRejectedValueOnce(new Error("Unauthorized"));
       const formData = makeFormData({
         file: createMockFile("test.xml", "<xml/>"),
         options: JSON.stringify({ dryRun: true }),
@@ -86,9 +92,7 @@ describe("import.ts - startImportJob", () => {
 
     it("should require admin user", async () => {
       // Arrange
-      authMock.mockResolvedValueOnce({
-        user: { id: "user-1", isAdmin: false },
-      });
+      authMock.mockRejectedValueOnce(new Error("Unauthorized"));
       const formData = makeFormData({
         file: createMockFile("test.xml", "<xml/>"),
         options: JSON.stringify({ dryRun: true }),
@@ -243,8 +247,8 @@ describe("import.ts - startImportJob", () => {
       // Arrange
       const options = {
         dryRun: true,
-        skipExisting: true,
-        author: "admin",
+        skipMedia: true,
+        allowedStatuses: ["publish"],
       };
 
       const formData = makeFormData({
@@ -255,7 +259,7 @@ describe("import.ts - startImportJob", () => {
       (db as any).insert = vi.fn(() => ({
         values: vi.fn((values: any) => {
           // Verify options are parsed correctly
-          expect(values.options).toEqual(options);
+          expect(values.options).toEqual(expect.objectContaining(options));
           return {
             returning: vi.fn().mockResolvedValue([{ id: "job-1" }]),
           };
@@ -288,6 +292,19 @@ describe("import.ts - startImportJob", () => {
       await startImportJob(formData);
 
       // Assert - verified in mock callback
+    });
+
+    it("rejects hidden local-path importer options", async () => {
+      const formData = makeFormData({
+        file: createMockFile("test.xml", "<xml/>"),
+        options: JSON.stringify({ dryRun: true, uploads: "/etc", root: ".*" }),
+      });
+
+      const result = await startImportJob(formData);
+
+      expect(result.error).toBe("Invalid options format");
+      expect(fsMock.writeFile).not.toHaveBeenCalled();
+      expect(mockDb.insert).not.toHaveBeenCalled();
     });
   });
 
@@ -378,7 +395,7 @@ describe("import.ts - startImportJob", () => {
       // Assert
       expect(fsMock.writeFile).toHaveBeenCalled();
       const writeCall = fsMock.writeFile.mock.calls[0];
-      expect(writeCall[0]).toMatch(/\/tmp\/narravo-imports\/.+-export\.xml/);
+      expect(writeCall[0]).toMatch(/\/tmp\/narravo-imports\/.+\.xml/);
     });
 
     it("should clean up temporary file after dry run", async () => {
@@ -391,7 +408,7 @@ describe("import.ts - startImportJob", () => {
       (db as any).insert = vi.fn(() => ({
         values: vi.fn(() => ({
           returning: vi.fn().mockResolvedValue([
-            { id: "job-1", filePath: "/tmp/test.xml" },
+            { id: "job-1", filePath: "/tmp/narravo-imports/test.xml" },
           ]),
         })),
       }));
@@ -606,7 +623,7 @@ describe("import.ts - startImportJob", () => {
 
       // Assert
       expect(loggerErrorMock).toHaveBeenCalledWith("Start import job error:", testError);
-      expect(result.error).toBe("Test error");
+      expect(result.error).toBe("Failed to start import job");
     });
 
     it("should return generic error message for non-Error objects", async () => {
@@ -639,7 +656,7 @@ describe("import.ts - cancelImportJob", () => {
 
   it("should require admin authorization", async () => {
     // Arrange
-    authMock.mockResolvedValueOnce(null);
+    authMock.mockRejectedValueOnce(new Error("Unauthorized"));
 
     // Act
     const result = await cancelImportJob("job-1");
@@ -693,7 +710,7 @@ describe("import.ts - retryImportJob", () => {
 
   it("should require admin authorization", async () => {
     // Arrange
-    authMock.mockResolvedValueOnce(null);
+    authMock.mockRejectedValueOnce(new Error("Unauthorized"));
 
     // Act
     const result = await retryImportJob("job-1");
@@ -724,7 +741,7 @@ describe("import.ts - retryImportJob", () => {
         where: vi.fn().mockResolvedValue([
           {
             id: "job-1",
-            filePath: "/tmp/missing.xml",
+            filePath: "/tmp/narravo-imports/missing.xml",
             options: { dryRun: false },
           },
         ]),
@@ -747,7 +764,7 @@ describe("import.ts - retryImportJob", () => {
         where: vi.fn().mockResolvedValue([
           {
             id: "job-1",
-            filePath: "/tmp/test.xml",
+            filePath: "/tmp/narravo-imports/test.xml",
             options: { dryRun: false },
           },
         ]),
@@ -787,7 +804,7 @@ describe("import.ts - deleteImportJob", () => {
 
   it("should require admin authorization", async () => {
     // Arrange
-    authMock.mockResolvedValueOnce(null);
+    authMock.mockRejectedValueOnce(new Error("Unauthorized"));
 
     // Act
     const result = await deleteImportJob("job-1");
@@ -844,7 +861,7 @@ describe("import.ts - deleteImportJob", () => {
         where: vi.fn().mockResolvedValue([
           {
             id: "job-1",
-            filePath: "/tmp/test.xml",
+            filePath: "/tmp/narravo-imports/test.xml",
           },
         ]),
       })),
@@ -869,7 +886,7 @@ describe("import.ts - deleteImportJob", () => {
         where: vi.fn().mockResolvedValue([
           {
             id: "job-1",
-            filePath: "/tmp/test.xml",
+            filePath: "/tmp/narravo-imports/test.xml",
           },
         ]),
       })),
@@ -887,5 +904,25 @@ describe("import.ts - deleteImportJob", () => {
     // Assert - Should still succeed even if file cleanup fails
     expect(result.error).toBeUndefined();
     expect(result.job).toBeDefined();
+  });
+});
+
+describe("import actions require completed MFA", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authMock.mockRejectedValue(new Error("2FA verification required"));
+  });
+
+  it("rejects an MFA-pending session from every import action", async () => {
+    const startResult = await startImportJob(new FormData());
+    const cancelResult = await cancelImportJob("job-1");
+    const retryResult = await retryImportJob("job-1");
+    const deleteResult = await deleteImportJob("job-1");
+
+    expect(startResult.error).toBe("2FA verification required");
+    expect(cancelResult.error).toBe("2FA verification required");
+    expect(retryResult.error).toBe("2FA verification required");
+    expect(deleteResult.error).toBe("2FA verification required");
+    expect(authMock).toHaveBeenCalledTimes(4);
   });
 });

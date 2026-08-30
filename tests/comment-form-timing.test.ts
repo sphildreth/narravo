@@ -7,6 +7,21 @@ vi.mock("@/lib/db", () => ({
   db: {}
 }));
 
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: vi.fn().mockResolvedValue({
+    limited: false,
+    remaining: 4,
+    retryAfter: 0,
+    resetTime: Date.now() + 60_000,
+  }),
+  peekSharedRateLimit: vi.fn().mockResolvedValue({
+    limited: false,
+    remaining: 5,
+    retryAfter: 0,
+    resetTime: Date.now() + 60_000,
+  }),
+}));
+
 // Mock the config service
 const mockGetNumber = vi.fn();
 vi.mock("@/lib/config", () => ({

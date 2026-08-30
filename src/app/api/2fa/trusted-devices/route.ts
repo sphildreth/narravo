@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin2FA } from "@/lib/auth";
 import { getTrustedDevices, revokeTrustedDevice, revokeAllTrustedDevices } from "@/lib/2fa/trusted-device";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
+import { safeApiError } from "@/lib/api-error";
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,12 +21,10 @@ export async function GET(req: NextRequest) {
         expiresAt: d.expiresAt,
       })),
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error fetching trusted devices:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to fetch trusted devices" },
-      { status: 500 }
-    );
+    const publicError = safeApiError(error, "Failed to fetch trusted devices");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }
 
@@ -39,7 +38,10 @@ export async function DELETE(req: NextRequest) {
 
     if (deviceId) {
       // Revoke specific device
-      await revokeTrustedDevice(deviceId);
+      const revoked = await revokeTrustedDevice(deviceId, userId);
+      if (!revoked) {
+        return NextResponse.json({ error: "Trusted device not found" }, { status: 404 });
+      }
       await logSecurityActivity(userId, "trusted_device_revoked", {
         deviceId,
       });
@@ -53,11 +55,9 @@ export async function DELETE(req: NextRequest) {
       success: true,
       message: deviceId ? "Device revoked" : "All devices revoked",
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error revoking trusted device:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to revoke trusted device" },
-      { status: 500 }
-    );
+    const publicError = safeApiError(error, "Failed to revoke trusted device");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

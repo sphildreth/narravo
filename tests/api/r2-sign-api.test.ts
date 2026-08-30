@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { afterAll, describe, it, expect, beforeEach, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { POST as r2SignPost } from "@/app/api/r2/sign/route";
 
@@ -42,6 +42,10 @@ vi.mock("@/lib/auth", () => ({
   requireSession: (...args: unknown[]) => mockRequireSession(...args),
 }));
 
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: vi.fn().mockResolvedValue({ limited: false, remaining: 29, retryAfter: 0, resetTime: Date.now() + 60_000 }),
+}));
+
 vi.mock("@/lib/logger", () => ({
   default: {
     error: vi.fn(),
@@ -52,6 +56,7 @@ vi.mock("@/lib/logger", () => ({
 
 describe("/api/r2/sign", () => {
   beforeEach(() => {
+    process.env.NEXTAUTH_SECRET = "test-upload-signing-secret";
     ConfigServiceImpl.mockClear();
     mockConfigInstance.getNumber.mockReset();
     mockConfigInstance.getJSON.mockReset();
@@ -98,7 +103,8 @@ describe("/api/r2/sign", () => {
     expect(response.status).toBe(200);
     expect(payload.url).toBe("/api/uploads/local");
     expect(payload.policy.kind).toBe("image");
-    expect(payload.key).toMatch(/^images\//);
+    expect(payload.key).toBeNull();
+    expect(payload.fields).toEqual({ kind: "image" });
   });
 
   it("returns presigned S3 upload information when configured", async () => {
@@ -109,7 +115,6 @@ describe("/api/r2/sign", () => {
       fields: { key: "images/file.png" },
       key: "images/file.png",
     });
-    mockS3ServicePrototype.getPublicUrl.mockReturnValue("https://cdn.example.com/images/file.png");
 
     const response = await r2SignPost(
       makeJsonRequest({ filename: "file.png", mimeType: "image/png", size: 2048, kind: "image" })
@@ -118,7 +123,9 @@ describe("/api/r2/sign", () => {
 
     expect(response.status).toBe(200);
     expect(payload.url).toBe("https://r2.example.com/upload");
-    expect(payload.publicUrl).toBe("https://cdn.example.com/images/file.png");
+    expect(payload.publicUrl).toBeNull();
+    expect(payload.completionUrl).toBe("/api/r2/complete");
+    expect(payload.uploadToken).toEqual(expect.any(String));
     expect(mockS3ServicePrototype.createPresignedPost).toHaveBeenCalledWith(
 	      "file.png",
 	      "image/png",
@@ -142,4 +149,8 @@ describe("/api/r2/sign", () => {
     const response = await r2SignPost(makeJsonRequest({ filename: "file.png" }));
     expect(response.status).toBe(400);
   });
+});
+
+afterAll(() => {
+  delete process.env.NEXTAUTH_SECRET;
 });

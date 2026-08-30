@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { createBackup } from "../../../../../scripts/backup";
 import crypto from "node:crypto";
 import { nanoid } from "nanoid";
+import { safeApiError } from "@/lib/api-error";
 
 interface ExportRequest {
   includeMedia?: boolean;
@@ -90,14 +91,13 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal error";
-    const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 500;
+    const publicError = safeApiError(err, "Export failed");
     
     return new Response(JSON.stringify({
       ok: false,
-      error: { message }
+      error: { message: publicError.message }
     }), {
-      status,
+      status: publicError.status,
       headers: { "Content-Type": "application/json" }
     });
   }

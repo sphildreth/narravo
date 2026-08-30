@@ -281,9 +281,9 @@ describe("2FA Trusted Device", () => {
 
   describe("revokeTrustedDevice", () => {
     it("should revoke a specific trusted device", async () => {
-      mockUpdateWhere.mockResolvedValue(undefined);
+      mockUpdateWhere.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: testDeviceId }]) });
 
-      await revokeTrustedDevice(testDeviceId);
+      await revokeTrustedDevice(testDeviceId, testUserId);
 
       expect(mockUpdateSet).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -293,10 +293,10 @@ describe("2FA Trusted Device", () => {
     });
 
     it("should set revokedAt to current timestamp", async () => {
-      mockUpdateWhere.mockResolvedValue(undefined);
+      mockUpdateWhere.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: testDeviceId }]) });
       const beforeRevoke = Date.now();
 
-      await revokeTrustedDevice(testDeviceId);
+      await revokeTrustedDevice(testDeviceId, testUserId);
 
       // Verify revokedAt was set to a Date object
       expect(mockUpdateSet).toHaveBeenCalledWith(

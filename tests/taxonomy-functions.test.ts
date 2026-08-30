@@ -3,7 +3,13 @@
  * Simple tests for taxonomy functions
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// These are export-shape tests; authentication behavior is covered by the
+// action/API suites and should not pull NextAuth's runtime adapter into Node.
+vi.mock('@/lib/auth', () => ({
+  requireAdmin2FA: vi.fn(),
+}));
 
 describe('Taxonomy Functions', () => {
   it('should have expected export structure', async () => {
@@ -29,7 +35,7 @@ describe('Taxonomy Functions', () => {
 
 // Test for PostForm component structure
 describe('PostForm Component', () => {
-  it.skip('should export PostForm as default (skipped due to next-auth module resolution)', async () => {
+  it('should export PostForm as default', async () => {
     const PostFormModule = await import('../src/components/admin/posts/PostForm');
     expect(typeof PostFormModule.default).toBe('function');
   });
@@ -37,7 +43,7 @@ describe('PostForm Component', () => {
 
 // Test for post actions
 describe('Post Actions', () => {
-  it.skip('should export server actions (skipped due to next-auth module resolution)', async () => {
+  it('should export server actions', async () => {
     const actions = await import('../src/app/(admin)/admin/posts/actions');
     
     expect(typeof actions.createPost).toBe('function');

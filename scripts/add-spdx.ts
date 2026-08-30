@@ -8,9 +8,9 @@
 
 import { promises as fs } from "fs";
 import path from "path";
+import { pathToFileURL } from "node:url";
 import logger from "@/lib/logger";
 
-const ROOT = process.cwd();
 const SPDX_TEXT = "SPDX-License-Identifier: Apache-2.0";
 
 // Directories to skip
@@ -183,8 +183,8 @@ async function processFile(file: string): Promise<boolean> {
   return true;
 }
 
-async function main() {
-  const all = await walk(ROOT);
+export async function addSpdxHeaders(root = process.cwd()): Promise<{ scanned: number; changed: number }> {
+  const all = await walk(root);
   let changed = 0;
   for (const f of all) {
     try {
@@ -196,9 +196,13 @@ async function main() {
     }
   }
   logger.info(`SPDX: processed ${all.length} files, added header to ${changed} files.`);
+  return { scanned: all.length, changed };
 }
 
-main().catch((e) => {
-  logger.error(e);
-  process.exit(1);
-});
+const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : "";
+if (import.meta.url === invokedPath) {
+  addSpdxHeaders().catch((e) => {
+    logger.error(e);
+    process.exit(1);
+  });
+}

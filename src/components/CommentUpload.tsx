@@ -26,6 +26,8 @@ interface UploadResponse {
   key: string;
   method?: "POST" | "PUT";
   publicUrl?: string;
+  completionUrl?: string;
+  uploadToken?: string;
   policy: {
     kind: "image" | "video";
     limits: {
@@ -110,6 +112,22 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
           addError(file.name, 'Upload failed');
           return null;
         }
+        if (signData.completionUrl && signData.uploadToken) {
+          const completeResponse = await fetch(signData.completionUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: signData.key, uploadToken: signData.uploadToken }),
+          });
+          const completeData = await completeResponse.json().catch(() => ({}));
+          if (!completeResponse.ok || !completeData.url) {
+            addError(file.name, "Upload validation failed");
+            return null;
+          }
+          publicUrl = completeData.url;
+          if (completeData.key) (signData as any).key = completeData.key;
+          (signData as any).mimeType = completeData.mimeType;
+          (signData as any).size = completeData.size;
+        }
       } else {
         const formData = new FormData();
         Object.entries(signData.fields).forEach(([key, value]) => {
@@ -131,6 +149,9 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
         if (contentType.includes("application/json")) {
           const uploadData = await uploadResponse.json().catch(() => null);
           publicUrl = uploadData?.url || uploadData?.publicUrl || publicUrl;
+          if (uploadData?.key) (signData as any).key = uploadData.key;
+          if (uploadData?.mimeType) (signData as any).mimeType = uploadData.mimeType;
+          if (typeof uploadData?.size === "number") (signData as any).size = uploadData.size;
         }
       }
 
@@ -139,8 +160,8 @@ export default function CommentUpload({ onFilesChange, maxFiles = 3, disabled }:
         key: signData.key,
         url: publicUrl || `${signData.url.replace(/\?.*$/, '')}/${signData.key}`,
         kind: signData.policy.kind,
-        mimeType: file.type,
-        size: file.size,
+        mimeType: (signData as any).mimeType || file.type,
+        size: (signData as any).size || file.size,
         name: file.name,
       };
 

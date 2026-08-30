@@ -5,11 +5,18 @@ import { db } from "@/lib/db";
 import { ownerWebAuthnCredential } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { generateWebAuthnAuthenticationOptions } from "@/lib/2fa/webauthn";
+import { getMfaSessionContext } from "@/lib/2fa/session-grant";
+import { persistWebAuthnChallenge } from "@/lib/2fa/webauthn-challenge";
+import { safeApiError } from "@/lib/api-error";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await requireSession();
-    const userId = (session.user as any).id;
+    const context = getMfaSessionContext(session);
+    if (!context) {
+      return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
+    }
+    const { userId } = context;
 
     // Check if user has mfaPending status
     if (!(session.user as any).mfaPending) {
@@ -42,12 +49,12 @@ export async function POST(req: NextRequest) {
       }))
     );
 
+    await persistWebAuthnChallenge(userId, context.sessionId, "authentication", options.challenge);
+
     return NextResponse.json(options);
-  } catch (error: any) {
-    console.error("Error generating WebAuthn authentication options:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to generate authentication options" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Error generating WebAuthn authentication options");
+    const publicError = safeApiError(error, "Failed to generate authentication options");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

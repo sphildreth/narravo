@@ -6,15 +6,24 @@ declare module "next-auth" {
     user?: DefaultSession["user"] & {
       id: string;
       isAdmin?: boolean;
+      mfaSessionId?: string;
+      mfaEnforcedAt?: string | null;
+      loginIssuedAt?: number;
     };
     mfaPending?: boolean;
     mfa?: boolean;
+    mfaSessionId?: string;
+    mfaEnforcedAt?: string | null;
+    loginIssuedAt?: number;
   }
 
   interface User {
     id: string;
     isAdmin?: boolean;
     twoFactorEnabled?: boolean;
+    mfaSessionId?: string;
+    mfaEnforcedAt?: string | null;
+    loginIssuedAt?: number;
   }
 }
 
@@ -25,5 +34,8 @@ declare module "next-auth/jwt" {
     mfaPending?: boolean;
     mfa?: boolean;
     twoFactorEnabled?: boolean;
+    mfaSessionId?: string;
+    mfaEnforcedAt?: string | null;
+    loginIssuedAt?: number;
   }
 }

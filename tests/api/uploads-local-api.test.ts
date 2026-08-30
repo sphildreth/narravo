@@ -12,7 +12,10 @@ const ConfigServiceImpl = vi.fn(function() { return mockConfigInstance; });
 const mockLocalStorage = {
   putObject: vi.fn(),
   getPublicUrl: vi.fn(),
+  deleteObject: vi.fn(),
 };
+const mockConsumeSharedRateLimit = vi.fn();
+const mockDb = { insert: vi.fn() };
 
 vi.mock("@/lib/config", () => ({
   get ConfigServiceImpl() {
@@ -27,7 +30,13 @@ vi.mock("@/lib/local-storage", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({
-  requireSession: vi.fn().mockResolvedValue({ user: {} }),
+  requireSession: vi.fn().mockResolvedValue({ user: { id: "user-1" } }),
+}));
+
+vi.mock("@/lib/db", () => ({ get db() { return mockDb; } }));
+
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: (...args: unknown[]) => mockConsumeSharedRateLimit(...args),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -45,6 +54,9 @@ describe("/api/uploads/local", () => {
     mockConfigInstance.getJSON.mockReset();
     mockLocalStorage.putObject.mockReset();
     mockLocalStorage.getPublicUrl.mockReset();
+    mockLocalStorage.deleteObject.mockReset();
+    mockDb.insert.mockReset();
+    mockConsumeSharedRateLimit.mockReset();
 
     mockConfigInstance.getNumber.mockImplementation((key: string) => {
       if (key === "UPLOADS.IMAGE-MAX-BYTES") return Promise.resolve(5 * 1024 * 1024);
@@ -59,7 +71,10 @@ describe("/api/uploads/local", () => {
     });
 
     mockLocalStorage.putObject.mockResolvedValue(undefined);
+    mockLocalStorage.deleteObject.mockResolvedValue(undefined);
     mockLocalStorage.getPublicUrl.mockImplementation((key: string) => `/local/${key}`);
+    mockDb.insert.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
+    mockConsumeSharedRateLimit.mockResolvedValue({ limited: false, remaining: 29, resetAt: new Date() });
   });
 
   const makeFormRequest = (form: FormData): NextRequest =>
@@ -69,13 +84,12 @@ describe("/api/uploads/local", () => {
     }) as unknown as NextRequest;
 
   it("stores uploaded images and returns public url", async () => {
-    const buffer = new Uint8Array([1, 2, 3]);
+    const buffer = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     const file = new File([buffer], "banner.png", { type: "image/png" });
 
-    const uniqueKey = `images/banner-${Date.now()}-${Math.floor(Math.random() * 1000)}.png`;
     const form = new FormData();
     form.append("file", file);
-    form.append("key", uniqueKey);
+    form.append("key", "images/caller-selected.png");
 
     const response = await uploadsLocalPost(makeFormRequest(form));
     const payload = await response.json();
@@ -83,18 +97,31 @@ describe("/api/uploads/local", () => {
     if (response.status !== 200) console.log(payload);
 
     expect(response.status).toBe(200);
-    expect(payload).toEqual({ ok: true, url: `/local/${uniqueKey}`, key: uniqueKey });
+    expect(payload.ok).toBe(true);
+    expect(payload.key).toMatch(/^images\/[0-9a-f-]+\.png$/);
+    expect(payload.url).toBe(`/local/${payload.key}`);
     expect(mockLocalStorage.putObject).toHaveBeenCalledWith(
-      uniqueKey,
+      expect.stringMatching(/^images\/[0-9a-f-]+\.png$/),
       expect.any(Uint8Array),
-      "image/png"
+      "image/png",
     );
   });
 
-  it("rejects unsafe keys", async () => {
+  it("ignores caller-selected SVG and traversal-like keys", async () => {
     const form = new FormData();
-    form.append("file", new File(["data"], "note.txt", { type: "text/plain" }));
-    form.append("key", "../secret.txt");
+    form.append("file", new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "note.svg", { type: "image/jpeg" }));
+    form.append("key", "../../secret.svg");
+
+    const response = await uploadsLocalPost(makeFormRequest(form));
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload.key).toMatch(/^images\/[0-9a-f-]+\.png$/);
+    expect(payload.key).not.toContain("svg");
+  });
+
+  it("rejects SVG bytes even when they claim to be JPEG", async () => {
+    const form = new FormData();
+    form.append("file", new File(["<svg xmlns='http://www.w3.org/2000/svg'></svg>"], "image.jpg", { type: "image/jpeg" }));
 
     const response = await uploadsLocalPost(makeFormRequest(form));
     expect(response.status).toBe(400);
@@ -102,6 +129,7 @@ describe("/api/uploads/local", () => {
 
   it("enforces size limits", async () => {
     const large = new Uint8Array(6 * 1024 * 1024);
+    large.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     const file = new File([large], "huge.png", { type: "image/png" });
 
     const form = new FormData();
@@ -110,5 +138,16 @@ describe("/api/uploads/local", () => {
 
     const response = await uploadsLocalPost(makeFormRequest(form));
     expect(response.status).toBe(400);
+  });
+
+  it("rejects oversized declared bodies before multipart parsing", async () => {
+    const request = new Request("http://localhost/api/uploads/local", {
+      method: "POST",
+      headers: { "content-length": String(102 * 1024 * 1024) },
+      body: "x",
+    }) as unknown as NextRequest;
+
+    const response = await uploadsLocalPost(request);
+    expect(response.status).toBe(413);
   });
 });

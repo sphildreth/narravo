@@ -6,6 +6,30 @@ import fs from "node:fs/promises";
 import { eq, and, sql, between } from "drizzle-orm";
 import logger from "@/lib/logger";
 import type { BackupManifest } from "./backup";
+import { sanitizeHtml } from "@/lib/sanitize";
+
+const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
+const MAX_UNCOMPRESSED_BYTES = 250 * 1024 * 1024;
+const MAX_ENTRY_BYTES = 50 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES = 100;
+
+function assertSafeArchive(zip: JSZip, archiveBytes: number): void {
+  if (archiveBytes <= 0 || archiveBytes > MAX_ARCHIVE_BYTES) {
+    throw new Error("Backup archive exceeds the compressed size limit");
+  }
+  const entries = Object.values(zip.files);
+  if (entries.length > MAX_ARCHIVE_ENTRIES) throw new Error("Backup archive contains too many entries");
+  let total = 0;
+  for (const entry of entries) {
+    if (entry.dir) continue;
+    const size = Number((entry as unknown as { _data?: { uncompressedSize?: unknown } })._data?.uncompressedSize);
+    if (!Number.isSafeInteger(size) || size < 0 || size > MAX_ENTRY_BYTES) {
+      throw new Error("Backup archive entry exceeds the uncompressed size limit");
+    }
+    total += size;
+    if (total > MAX_UNCOMPRESSED_BYTES) throw new Error("Backup archive exceeds the expansion limit");
+  }
+}
 
 export interface RestoreOptions {
   backupPath: string;
@@ -51,6 +75,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
   // Read and parse zip file
   const zipBuffer = await fs.readFile(backupPath);
   const zip = await JSZip.loadAsync(new Uint8Array(zipBuffer));
+  assertSafeArchive(zip, zipBuffer.byteLength);
 
   // Read manifest
   const manifestFile = zip.file("manifest.json");
@@ -112,6 +137,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
     if (!dryRun) {
       for (const post of filteredPostsData) {
         try {
+          const sanitizedBody = sanitizeHtml(String(post.bodyHtml ?? post.html ?? ""));
           // Check if post exists by GUID or slug
           const existing = await db
             .select()
@@ -131,8 +157,10 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
                 .update(posts)
                 .set({
                   title: post.title,
-                  html: post.html,
-                  excerpt: post.excerpt,
+                  html: sanitizedBody,
+                  bodyHtml: sanitizedBody,
+                  bodyMd: typeof post.bodyMd === "string" ? post.bodyMd : null,
+                  excerpt: typeof post.excerpt === "string" ? sanitizeHtml(post.excerpt) : null,
                   publishedAt: post.publishedAt ? new Date(post.publishedAt) : null,
                   updatedAt: new Date(),
                 })
@@ -145,6 +173,10 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
             // Insert new post
             await db.insert(posts).values({
               ...post,
+              html: sanitizedBody,
+              bodyHtml: sanitizedBody,
+              bodyMd: typeof post.bodyMd === "string" ? post.bodyMd : null,
+              excerpt: typeof post.excerpt === "string" ? sanitizeHtml(post.excerpt) : null,
               id: post.id, // Preserve original ID if possible
               publishedAt: post.publishedAt ? new Date(post.publishedAt) : null,
               createdAt: post.createdAt ? new Date(post.createdAt) : new Date(),
@@ -211,15 +243,15 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
                   .where(eq(users.id, existingUser.id));
                 
                 preview.tables.users.toUpdate++;
-                if (verbose) logger.info(`Updated user: ${user.email}`);
+                if (verbose) logger.info("Updated a user record");
               }
             } else {
               await db.insert(users).values(user);
               preview.tables.users.toInsert++;
-              if (verbose) logger.info(`Inserted user: ${user.email}`);
+              if (verbose) logger.info("Inserted a user record");
             }
           } catch (error) {
-            if (verbose) logger.warn(`Failed to restore user ${user.email}:`, error);
+            if (verbose) logger.warn("Failed to restore a user record", error);
             preview.tables.users.toSkip++;
           }
         }
@@ -253,6 +285,16 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
       if (!dryRun) {
         for (const config of configData) {
           try {
+            // Arbitrary restored CSS can create same-origin phishing overlays.
+            // The legacy setting remains editable for compatibility but is no
+            // longer rendered and is not accepted from an archive.
+            if (config.key === "SITE.DISCLAIMER.STYLE") {
+              preview.tables.configuration.toSkip++;
+              continue;
+            }
+            const restoredValue = config.key === "SITE.DISCLAIMER.TEXT" && typeof config.value === "string"
+              ? sanitizeHtml(config.value)
+              : config.value;
             const existing = await db
               .select()
               .from(configuration)
@@ -270,7 +312,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
                 await db
                   .update(configuration)
                   .set({
-                    value: config.value,
+                    value: restoredValue,
                     type: config.type,
                     allowedValues: config.allowedValues,
                     required: config.required,
@@ -284,6 +326,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
             } else {
               await db.insert(configuration).values({
                 ...config,
+                value: restoredValue,
                 createdAt: config.createdAt ? new Date(config.createdAt) : new Date(),
                 updatedAt: config.updatedAt ? new Date(config.updatedAt) : new Date(),
               });

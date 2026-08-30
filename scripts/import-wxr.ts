@@ -16,6 +16,18 @@ import { sql, eq } from "drizzle-orm";
 import { expandShortcodes } from "@/lib/markdown";
 import { generateExcerpt } from "@/lib/excerpts/ExcerptService";
 import logger from "@/lib/logger";
+import { detectSafeUploadType } from "@/lib/upload-validation";
+import { downloadRemoteBytes, normalizeAllowedHosts } from "@/lib/safe-remote-fetch";
+
+function positiveLimit(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+const MAX_SINGLE_MEDIA_BYTES = positiveLimit("IMPORT_MEDIA_MAX_BYTES", 50_000_000);
+const MAX_IMAGE_MEDIA_BYTES = positiveLimit("IMPORT_IMAGE_MAX_BYTES", 5_000_000);
+const MAX_TOTAL_MEDIA_BYTES = positiveLimit("IMPORT_TOTAL_MEDIA_BYTES", 500_000_000);
+const MAX_MEDIA_DOWNLOADS = positiveLimit("IMPORT_MAX_MEDIA_DOWNLOADS", 200);
 
 /**
  * Represents the structure of an <item> element in a WordPress WXR export file.
@@ -237,26 +249,6 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
 }
 
 /**
- * Guesses the MIME type of a file based on its URL's extension.
- * @param url The URL of the file.
- * @param fallback The content type to return if no match is found.
- * @returns The guessed MIME type string.
- */
-function guessContentType(url: string, fallback: string = 'application/octet-stream'): string {
-  const lower = url.toLowerCase();
-  if (lower.endsWith('.png')) return 'image/png';
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
-  if (lower.endsWith('.gif')) return 'image/gif';
-  if (lower.endsWith('.webp')) return 'image/webp';
-  if (lower.endsWith('.svg')) return 'image/svg+xml';
-  if (lower.endsWith('.avif')) return 'image/avif';
-  if (lower.endsWith('.mp4')) return 'video/mp4';
-  if (lower.endsWith('.webm')) return 'video/webm';
-  if (lower.endsWith('.mov')) return 'video/quicktime';
-  return fallback;
-}
-
-/**
  * Extracts the file extension from a URL.
  * @param url The URL to parse.
  * @returns The file extension in lowercase, or "bin" as a fallback.
@@ -350,19 +342,69 @@ async function handleLocalMedia(
     return { isLocal: true, url: null };
   }
 
-  const sourcePath = path.join(uploadsPath, relativePath);
-  const destinationKey = path.join("imported-media", relativePath).replace(/\\/g, "/");
+  let decodedRelativePath: string;
+  try {
+    decodedRelativePath = decodeURIComponent(relativePath);
+  } catch {
+    return { isLocal: true, url: null };
+  }
+  const sourceRoot = path.resolve(uploadsPath);
+  const sourcePath = path.resolve(sourceRoot, decodedRelativePath);
+  const sourceRelative = path.relative(sourceRoot, sourcePath);
+  if (!sourceRelative || sourceRelative === ".." || sourceRelative.startsWith(`..${path.sep}`) || path.isAbsolute(sourceRelative)) {
+    if (verbose) logger.warn("  ⚠️ Unsafe local media path, skipping.");
+    return { isLocal: true, url: null };
+  }
 
   if (verbose) {
     logger.info(`  -> Relative path: ${relativePath}`);
     logger.info(`  -> Source file: ${sourcePath}`);
-    logger.info(`  -> Destination key: ${destinationKey}`);
   }
 
   if (!fs.existsSync(sourcePath)) {
     if (verbose) logger.warn(`  ❌ Source file not found, skipping.`);
     return { isLocal: true, url: null }; // Handled, but file missing
   }
+
+  // Lexical containment alone does not stop a symlink inside the uploads tree
+  // from pointing at a file elsewhere on the host. Resolve both sides before
+  // reading and require a regular, bounded file.
+  let realSourcePath: string;
+  try {
+    const realSourceRoot = fs.realpathSync(sourceRoot);
+    realSourcePath = fs.realpathSync(sourcePath);
+    const realRelative = path.relative(realSourceRoot, realSourcePath);
+    if (!realRelative || realRelative === ".." || realRelative.startsWith(`..${path.sep}`) || path.isAbsolute(realRelative)) {
+      if (verbose) logger.warn("  ⚠️ Local media symlink escapes the upload root, skipping.");
+      return { isLocal: true, url: null };
+    }
+    const stat = fs.statSync(realSourcePath);
+    if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_SINGLE_MEDIA_BYTES) {
+      if (verbose) logger.warn("  ⚠️ Local media file exceeds the size limit, skipping.");
+      return { isLocal: true, url: null };
+    }
+  } catch {
+    return { isLocal: true, url: null };
+  }
+
+  let localBuffer: Buffer;
+  try {
+    localBuffer = fs.readFileSync(realSourcePath);
+  } catch {
+    return { isLocal: true, url: null };
+  }
+  const detectedLocal = detectSafeUploadType(localBuffer);
+  if (!detectedLocal) {
+    if (verbose) logger.warn("  ⚠️ Unsupported local media bytes, skipping.");
+    return { isLocal: true, url: null };
+  }
+  if (detectedLocal.kind === "image" && localBuffer.byteLength > MAX_IMAGE_MEDIA_BYTES) {
+    if (verbose) logger.warn("  ⚠️ Local image exceeds the size limit, skipping.");
+    return { isLocal: true, url: null };
+  }
+  const localHash = crypto.createHash("sha256").update(localBuffer).digest("hex");
+  const destinationKey = `imported-media/${localHash}.${detectedLocal.extension}`;
+  if (verbose) logger.info(`  -> Destination key: ${destinationKey}`);
 
   if (dryRun) {
     if (verbose) logger.info(`  ⏩ Dry-run: Would copy to ${destinationKey}`);
@@ -376,9 +418,7 @@ async function handleLocalMedia(
   }
 
   try {
-    const buffer = fs.readFileSync(sourcePath);
-    const contentType = guessContentType(sourcePath);
-    await localService.putObject(destinationKey, buffer, contentType);
+    await localService.putObject(destinationKey, localBuffer, detectedLocal.mimeType);
     const publicUrl = localService.getPublicUrl(destinationKey);
 
     if (verbose) {
@@ -393,7 +433,7 @@ async function handleLocalMedia(
   }
 }
 
-async function downloadMedia(
+export async function downloadMedia(
   url: string,
   s3Service: S3Service | null,
   localService: LocalStorageService | null,
@@ -403,9 +443,10 @@ async function downloadMedia(
     verbose?: boolean;
     uploadsPath?: string;
     rootUrlPattern?: string;
+    budget?: { downloads: number; totalBytes: number; maxDownloads: number; maxBytes: number };
   }
 ): Promise<string | null> {
-  const { dryRun = false, verbose = false, uploadsPath, rootUrlPattern } = opts ?? {};
+  const { dryRun = false, verbose = false, uploadsPath, rootUrlPattern, budget } = opts ?? {};
 
   if (uploadsPath && rootUrlPattern) {
     const localResult = await handleLocalMedia(url, uploadsPath, rootUrlPattern, localService, { dryRun, verbose });
@@ -425,61 +466,43 @@ async function downloadMedia(
   }
 
   try {
-    // Check if URL is allowed
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase();
-    const hostAllowed = (hosts: string[], host: string): boolean => {
-      if (hosts.length === 0) return true;
-      for (const raw of hosts) {
-        const a = raw.trim().toLowerCase().replace(/^\.+/, "");
-        if (!a) continue;
-        if (host === a) return true;
-        if (host.endsWith(`.${a}`)) return true; // allow subdomains of an allowed registrable domain
-      }
-      return false;
-    };
-    if (!hostAllowed(allowedHosts, hostname)) {
-      throw new Error(`Host ${hostname} not in allowlist`);
+    if (budget) {
+      if (budget.downloads >= budget.maxDownloads) throw new Error("Import media download limit reached");
+      budget.downloads++;
     }
 
     if (verbose) {
       logger.info(`📥 Downloading media: ${url}`);
     }
 
-    // Download file
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Narravo-WXR-Importer/1.0'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const remainingBudget = budget ? budget.maxBytes - budget.totalBytes : MAX_SINGLE_MEDIA_BYTES;
+    if (remainingBudget <= 0) throw new Error("Import media byte limit reached");
+    const buffer = await downloadRemoteBytes(url, allowedHosts, Math.min(MAX_SINGLE_MEDIA_BYTES, remainingBudget));
+    if (budget) {
+      if (budget.totalBytes + buffer.byteLength > budget.maxBytes) throw new Error("Import media byte limit reached");
+      budget.totalBytes += buffer.byteLength;
     }
-
-    const buffer = new Uint8Array(await response.arrayBuffer());
+    const detected = detectSafeUploadType(buffer);
+    if (!detected) throw new Error("Downloaded media is not a supported raster image or video");
+    if (detected.kind === "image" && buffer.byteLength > MAX_IMAGE_MEDIA_BYTES) throw new Error("Downloaded image exceeds the size limit");
     const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
     // Use hash as key to avoid duplicates
-    const extension = getExtensionFromUrl(url);
-    const key = `imported-media/${hash}.${extension}`;
-    
-    // Upload to S3 or local storage
-    const contentType = response.headers.get('content-type') || guessContentType(url);
+    const key = `imported-media/${hash}.${detected.extension}`;
     
     if (verbose) {
-      logger.info(`💾 Uploading ${buffer.length} bytes as ${key} (${contentType})`);
+      logger.info(`💾 Uploading ${buffer.length} bytes as ${key} (${detected.mimeType})`);
     }
     
     if (s3Service) {
-      await s3Service.putObject(key, buffer, contentType);
+      await s3Service.putObject(key, buffer, detected.mimeType);
       const publicUrl = s3Service.getPublicUrl(key);
       if (verbose) {
         logger.info(`✅ Successfully uploaded to S3: ${url} -> ${publicUrl}`);
       }
       return publicUrl;
     } else if (localService) {
-      await localService.putObject(key, buffer, contentType);
+      await localService.putObject(key, buffer, detected.mimeType);
       const publicUrl = localService.getPublicUrl(key);
       if (verbose) {
         logger.info(`✅ Successfully uploaded to local storage: ${url} -> ${publicUrl}`);
@@ -1207,21 +1230,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     root: rootUrlPattern,
   } = options;
   
-  // Normalize allowedHosts to accept user-provided values like https://example.com/ or with paths
-  const normalizedAllowedHosts = allowedHosts
-    .map(h => {
-      if (!h) return "";
-      let s = h.trim().toLowerCase();
-      // Remove protocol
-      s = s.replace(/^https?:\/\//, "");
-      // Drop everything after first slash (paths)
-      const slashIdx = s.indexOf("/");
-      if (slashIdx !== -1) s = s.slice(0, slashIdx);
-      // Drop leading dots
-      s = s.replace(/^\.+/, "");
-      return s;
-    })
-    .filter(Boolean);
+  const normalizedAllowedHosts = normalizeAllowedHosts(allowedHosts);
 
   const result: ImportResult = {
     summary: {
@@ -1234,6 +1243,12 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     errors: [],
     dryRun,
     mediaUrls: new Map(),
+  };
+  const mediaBudget = {
+    downloads: 0,
+    totalBytes: 0,
+    maxDownloads: Math.max(1, MAX_MEDIA_DOWNLOADS),
+    maxBytes: Math.max(1, MAX_TOTAL_MEDIA_BYTES),
   };
 
   // Excerpt configuration
@@ -1459,14 +1474,14 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         logger.info(`📊 Media processing summary:`);
         logger.info(`   - Found ${medias.length} unique media URLs across all posts`);
         logger.info(`   - Concurrency limit: ${concurrency}`);
-        logger.info(`   - Allowed hosts: ${normalizedAllowedHosts.length > 0 ? normalizedAllowedHosts.join(', ') : 'all hosts'}`);
+        logger.info(`   - Allowed hosts: ${normalizedAllowedHosts.length > 0 ? normalizedAllowedHosts.join(', ') : 'none (remote media disabled)'}`);
       }
       if (verbose && medias.length) logger.info(`📥 Downloading ${medias.length} media files (concurrency=${concurrency})...`);
 
       await runWithConcurrency(medias, concurrency, async (url) => {
         try {
           if (!result.mediaUrls.has(url)) {
-            const downloadOpts: { dryRun?: boolean; verbose?: boolean; uploadsPath?: string; rootUrlPattern?: string } = { dryRun, verbose };
+            const downloadOpts: { dryRun?: boolean; verbose?: boolean; uploadsPath?: string; rootUrlPattern?: string; budget?: typeof mediaBudget } = { dryRun, verbose, budget: mediaBudget };
             if (uploadsPath && rootUrlPattern) {
               downloadOpts.uploadsPath = uploadsPath;
               downloadOpts.rootUrlPattern = rootUrlPattern;

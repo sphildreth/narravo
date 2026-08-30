@@ -42,7 +42,7 @@ describe("S3Service", () => {
     expect(result).toHaveProperty("url");
     expect(result).toHaveProperty("fields");
     expect(result).toHaveProperty("key");
-    expect(result.key).toMatch(/^uploads\/[a-zA-Z0-9_-]+\.jpg$/);
+    expect(result.key).toMatch(/^images\/[a-zA-Z0-9_-]+\.jpg$/);
   });
 
   it("should reject invalid MIME types", async () => {
@@ -51,7 +51,7 @@ describe("S3Service", () => {
         maxBytes: 5000000,
         allowedMimeTypes: ["image/jpeg", "image/png"],
       })
-    ).rejects.toThrow("MIME type application/exe not allowed");
+    ).rejects.toThrow(/not supported|not allowed/);
   });
 
   it("should generate public URL correctly", () => {
@@ -101,6 +101,10 @@ describe("validateFileType", () => {
     view[1] = 0x50;
     view[2] = 0x4e;
     view[3] = 0x47;
+    view[4] = 0x0d;
+    view[5] = 0x0a;
+    view[6] = 0x1a;
+    view[7] = 0x0a;
 
     expect(validateFileType(pngBuffer, "image/png")).toBe(true);
     expect(validateFileType(pngBuffer, "image/jpeg")).toBe(false);

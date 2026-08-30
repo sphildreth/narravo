@@ -1,5 +1,6 @@
 import { ConfigServiceImpl } from "./config";
 import { db } from "./db";
+import { consumeSharedRateLimit, peekSharedRateLimit } from "./shared-rate-limit";
 
 export class RateLimitError extends Error {
   constructor(
@@ -111,13 +112,6 @@ class InMemoryRateLimiter {
   }
 }
 
-// Global instance for the application
-const limiter = new InMemoryRateLimiter();
-
-// Clean up on process exit
-process.on('SIGTERM', () => limiter.destroy());
-process.on('SIGINT', () => limiter.destroy());
-
 export interface RateLimitOptions {
   userId: string;
   ip?: string;
@@ -143,12 +137,18 @@ export async function checkRateLimit(options: RateLimitOptions): Promise<RateLim
   
   const windowMs = 60 * 1000; // 1 minute in milliseconds
   
-  // Create rate limit key combining user and IP (if available)
-  // This prevents both per-user and per-IP abuse
-  const ip = options.ip || extractIpFromHeaders(options.headers) || 'unknown';
-  const key = `${options.action}:${options.userId}:${ip}`;
-  
-  return limiter.checkLimit(key, limit, windowMs);
+  // Authenticated flows are keyed by stable user identity. Forwarding headers
+  // are intentionally excluded: without a configured trusted-proxy boundary,
+  // a client can rotate X-Forwarded-For to create unlimited buckets.
+  const key = `${options.action}:${options.userId}`;
+  const result = await peekSharedRateLimit(key, limit);
+  return {
+    allowed: !result.limited,
+    retryAfter: result.limited ? result.retryAfter : undefined,
+    limit,
+    remaining: result.remaining,
+    resetTime: result.resetTime,
+  };
 }
 
 /**
@@ -169,11 +169,15 @@ export async function recordAndCheckRateLimit(options: RateLimitOptions): Promis
   
   const windowMs = 60 * 1000; // 1 minute in milliseconds
   
-  // Create rate limit key combining user and IP (if available)
-  const ip = options.ip || extractIpFromHeaders(options.headers) || 'unknown';
-  const key = `${options.action}:${options.userId}:${ip}`;
-  
-  return limiter.recordRequest(key, limit, windowMs);
+  const key = `${options.action}:${options.userId}`;
+  const result = await consumeSharedRateLimit(key, limit, windowMs);
+  return {
+    allowed: !result.limited,
+    retryAfter: result.limited ? result.retryAfter : undefined,
+    limit,
+    remaining: result.remaining,
+    resetTime: result.resetTime,
+  };
 }
 
 /**

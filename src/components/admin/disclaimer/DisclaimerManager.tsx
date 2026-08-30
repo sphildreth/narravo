@@ -39,7 +39,6 @@ export default function DisclaimerManager({ initial }: { initial: DisclaimerStat
       await Promise.all([
         postJSON("/api/admin/config/global", { key: "SITE.DISCLAIMER.ENABLED", value: state.enabled, type: "boolean", required: true }),
         postJSON("/api/admin/config/global", { key: "SITE.DISCLAIMER.TEXT", value: html, type: "string", required: true }),
-        postJSON("/api/admin/config/global", { key: "SITE.DISCLAIMER.STYLE", value: state.style, type: "string", required: false }),
       ]);
       setMessage("Disclaimer settings saved");
       router.refresh();
@@ -84,19 +83,9 @@ export default function DisclaimerManager({ initial }: { initial: DisclaimerStat
               />
             </div>
             
-            <div className="grid gap-2">
-              <label className="text-xs uppercase tracking-wide text-muted">Style</label>
-              <textarea 
-                className="rounded-lg border border-border bg-bg px-3 py-2 text-sm" 
-                placeholder="Enter custom CSS styles here..." 
-                value={state.style}
-                rows={5}
-                onChange={(e) => {
-                  const v = e.currentTarget.value;
-                  setState((s) => ({ ...s, style: v }));
-                }}
-              />
-            </div>
+            <p className="text-xs text-muted">
+              Custom disclaimer CSS is no longer rendered because arbitrary CSS can obscure or impersonate the administration interface.
+            </p>
           </div>
         )}
       </section>

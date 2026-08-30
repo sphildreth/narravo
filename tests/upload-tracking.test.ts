@@ -4,7 +4,9 @@ import { db } from '../src/lib/db';
 import { uploads, posts, users } from '../drizzle/schema';
 import { eq } from 'drizzle-orm';
 
-describe('Upload Tracking System', () => {
+const hasTestDatabase = Boolean(process.env.DATABASE_URL?.trim()) && process.env.NARRAVO_DISABLE_DB !== 'true';
+
+describe.skipIf(!hasTestDatabase)('Upload Tracking System', () => {
   const testSessionId = 'test-session-123';
   const testPostId = '00000000-0000-0000-0000-000000000001';
   const testUserId = '00000000-0000-0000-0000-000000000002';

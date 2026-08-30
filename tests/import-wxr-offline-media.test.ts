@@ -5,6 +5,7 @@ import { importWxr, ImportOptions } from "../scripts/import-wxr";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { rm, mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 
 // Mock the database to avoid real database operations
 vi.mock("@/lib/db", () => ({
@@ -64,6 +65,7 @@ const PUBLIC_DIR = path.join(process.cwd(), "public");
 const NARRAVO_UPLOADS_BASE = path.join(PUBLIC_DIR, "uploads");
 const NARRAVO_IMPORTED_MEDIA = path.join(NARRAVO_UPLOADS_BASE, "imported-media");
 const WXR_FILE_PATH = path.join(__dirname, "fixtures", "wxr", "wxr_offline_media.xml");
+const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
 
 describe("WXR Importer - Offline Media", () => {
   beforeAll(async () => {
@@ -72,7 +74,7 @@ describe("WXR Importer - Offline Media", () => {
     await mkdir(NARRAVO_IMPORTED_MEDIA, { recursive: true });
 
     // Create a fake media file in the temp uploads dir
-    await writeFile(path.join(UPLOADS_DIR, "2023", "01", "test-image.jpg"), "fake image data");
+    await writeFile(path.join(UPLOADS_DIR, "2023", "01", "test-image.jpg"), imageBytes);
 
     // Create a fake WXR file
     const wxrContent = `
@@ -136,11 +138,12 @@ describe("WXR Importer - Offline Media", () => {
     // Posts may have import errors due to mocking, but media should work
     expect(result.mediaUrls.size).toBe(1);
 
+    const hash = createHash("sha256").update(imageBytes).digest("hex");
     const newUrl = result.mediaUrls.get(`${TEST_ROOT_URL}/wp-content/uploads/2023/01/test-image.jpg`);
-    expect(newUrl).toBe("/uploads/imported-media/2023/01/test-image.jpg");
+    expect(newUrl).toBe(`/uploads/imported-media/${hash}.jpg`);
 
     // Check if the file was copied
-    const destinationFile = path.join(NARRAVO_IMPORTED_MEDIA, "2023", "01", "test-image.jpg");
+    const destinationFile = path.join(NARRAVO_IMPORTED_MEDIA, `${hash}.jpg`);
     expect(fs.existsSync(destinationFile)).toBe(true);
 
     // Check if the missing file was not "copied"

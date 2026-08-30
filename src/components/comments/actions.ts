@@ -1,16 +1,17 @@
 "use server";
 // SPDX-License-Identifier: Apache-2.0
 import { headers } from "next/headers";
-import { getCommentTreeForPost, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
+import { CommentError, getCommentTreeForPost, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
 import { ConfigServiceImpl } from "@/lib/config";
 import { requireSession } from "@/lib/auth";
 import { validateAntiAbuse } from "@/lib/rateLimit";
 import { db } from "@/lib/db";
-import { posts, comments, commentAttachments } from "@/drizzle/schema";
-import { eq, sql, count } from "drizzle-orm";
+import { posts, comments, commentAttachments, uploads } from "@/drizzle/schema";
+import { eq, sql, count, and } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 import { enqueueVideoPosterGeneration } from "@/lib/jobs";
 import logger from "@/lib/logger";
+import { getSafeUploadTypeByMime } from "@/lib/upload-validation";
 
 export async function loadReplies(params: { postId: string; parentPath: string | null; already?: number; cursor?: string | null; topLevel?: boolean; }) {
   if (params.topLevel) {
@@ -71,6 +72,41 @@ export async function createComment(params: {
 
     // Check if comments should be auto-approved
     const autoApprove = await config.getBoolean("COMMENTS.AUTO-APPROVE") ?? false;
+
+    // Attachments are client-provided references, not an authorization or
+    // content-type assertion. Accept only uploads issued to this user and
+    // recorded by a hardened upload endpoint after byte validation.
+    if (params.attachments && params.attachments.length > 0) {
+      if (params.attachments.length > 3) {
+        throw new Error("Too many attachments");
+      }
+      for (const attachment of params.attachments) {
+        const detected = getSafeUploadTypeByMime(attachment.mimeType);
+        if (!detected || detected.kind !== attachment.kind ||
+          !Number.isSafeInteger(attachment.size) || attachment.size <= 0 ||
+          typeof attachment.key !== "string" || typeof attachment.url !== "string") {
+          throw new Error("Invalid attachment");
+        }
+
+        const storedUpload = await db.select({
+          key: uploads.key,
+          url: uploads.url,
+          mimeType: uploads.mimeType,
+          size: uploads.size,
+        }).from(uploads).where(and(
+          eq(uploads.key, attachment.key),
+          eq(uploads.url, attachment.url),
+          eq(uploads.mimeType, detected.mimeType),
+          eq(uploads.size, attachment.size),
+          eq(uploads.userId, userId),
+          eq(uploads.status, "temporary"),
+        )).limit(1);
+
+        if (!storedUpload[0]) {
+          throw new Error("Attachment is not a valid upload for this user");
+        }
+      }
+    }
 
     // Create comment using existing core logic
     const deps = {
@@ -167,9 +203,19 @@ export async function createComment(params: {
 
   } catch (error) {
     logger.error('Failed to create comment:', error);
+    const knownMessages = new Set([
+      "Too many attachments",
+      "Invalid attachment",
+      "Attachment is not a valid upload for this user",
+      "Post not found",
+    ]);
+    const publicMessage = error instanceof CommentError ||
+      (error instanceof Error && knownMessages.has(error.message))
+      ? error.message
+      : "Failed to create comment";
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Failed to create comment' 
+      error: publicMessage,
     };
   }
 }

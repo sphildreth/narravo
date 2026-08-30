@@ -654,22 +654,19 @@ describe("TwoFactorVerification", () => {
       expect(recoveryInput).toHaveAttribute("autoComplete", "off");
     });
 
-    // Note: autofocus testing is skipped because jsdom doesn't reliably
-    // render the autofocus attribute even when React's autoFocus prop is used.
-    // The component has autoFocus={true} on inputs, which works in real browsers.
-    it.skip("should autofocus the input field for each method", () => {
+    it("should autofocus the input field for each method", () => {
       render(<TwoFactorVerification />);
 
       // TOTP should autofocus
       const totpInput = screen.getByPlaceholderText("000000");
-      expect(totpInput).toHaveAttribute("autofocus");
+      expect(totpInput).toHaveFocus();
 
       // Switch to Recovery
       const recoveryButton = screen.getByRole("button", { name: /Recovery/i });
       fireEvent.click(recoveryButton);
 
       const recoveryInput = screen.getByPlaceholderText("xxxx-xxxx-xxxx");
-      expect(recoveryInput).toHaveAttribute("autofocus");
+      expect(recoveryInput).toHaveFocus();
     });
   });
 });

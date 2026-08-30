@@ -64,7 +64,7 @@ describe("/api/admin/users/anonymize", () => {
 
     expect(response.status).toBe(400);
     expect(payload.ok).toBe(false);
-    expect(payload.error.message).toBe("Identifier required");
+    expect(payload.error.message).toBe("Invalid anonymize request");
   });
 
   it("maps auth errors to 403", async () => {

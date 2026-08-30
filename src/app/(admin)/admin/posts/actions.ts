@@ -16,6 +16,7 @@ import { localStorageService } from "@/lib/local-storage";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import logger from '@/lib/logger';
+import { detectSafeUploadType } from "@/lib/upload-validation";
 
 // Helper function to extract image URLs from markdown
 function extractImageUrls(markdown: string): string[] {
@@ -346,40 +347,31 @@ export async function createPost(formData: FormData) {
     let finalFeaturedUrl: string | null = null;
 
     if (featuredImageFile && featuredImageFile instanceof File && featuredImageFile.size > 0) {
-      logger.info(`[createPost] Processing featured image upload: ${featuredImageFile.name}, size: ${featuredImageFile.size} bytes, type: ${featuredImageFile.type}`);
-      // Basic validation
-      const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"]; // extend as needed
-      if (!allowed.includes(featuredImageFile.type)) {
+      logger.info(`[createPost] Processing featured image upload: ${featuredImageFile.name}, size: ${featuredImageFile.size} bytes`);
+      const buffer = new Uint8Array(await featuredImageFile.arrayBuffer());
+      const detected = detectSafeUploadType(buffer);
+      if (!detected || detected.kind !== "image") {
         return { error: "Unsupported featured image type" };
       }
-      if (featuredImageFile.size > 5 * 1024 * 1024) { // 5MB limit
+      if (buffer.byteLength > 5 * 1024 * 1024) { // 5MB limit
         return { error: "Featured image file too large (max 5MB)" };
       }
       
       try {
-        const arrayBuffer = await featuredImageFile.arrayBuffer();
-        const buffer = new Uint8Array(arrayBuffer);
-        
-        const ext = featuredImageFile.name.includes('.') 
-          ? featuredImageFile.name.split('.').pop()!.toLowerCase()
-          : (featuredImageFile.type === 'image/png' ? 'png' : 
-             featuredImageFile.type === 'image/webp' ? 'webp' : 
-             featuredImageFile.type === 'image/gif' ? 'gif' : 'jpg');
-        
         // Try to use S3/R2 storage first, fallback to local storage
         const storageService = getStorageService();
         if (storageService) {
           // Use cloud storage (S3/R2)
-          const key = `featured/${randomUUID()}.${ext}`;
+          const key = `featured/${randomUUID()}.${detected.extension}`;
           logger.info(`[createPost] Uploading to cloud storage (S3/R2): ${key}`);
-          await storageService.putObject(key, buffer, featuredImageFile.type);
+          await storageService.putObject(key, buffer, detected.mimeType);
           finalFeaturedUrl = storageService.getPublicUrl(key);
           logger.info(`[createPost] Cloud upload successful: ${finalFeaturedUrl}`);
         } else {
           // Use local storage service
-          const key = `featured/${randomUUID()}.${ext}`;
+          const key = `featured/${randomUUID()}.${detected.extension}`;
           logger.info(`[createPost] Uploading to local storage: ${key}`);
-          await localStorageService.putObject(key, buffer, featuredImageFile.type);
+          await localStorageService.putObject(key, buffer, detected.mimeType);
           finalFeaturedUrl = localStorageService.getPublicUrl(key);
           logger.info(`[createPost] Local upload successful: ${finalFeaturedUrl}`);
         }
@@ -512,39 +504,31 @@ export async function updatePost(formData: FormData) {
   
     let finalFeaturedUrl: string | null = null;
     if (featuredImageFile && featuredImageFile instanceof File && featuredImageFile.size > 0) {
-      logger.info(`[updatePost] Processing featured image upload for post ${id}: ${featuredImageFile.name}, size: ${featuredImageFile.size} bytes, type: ${featuredImageFile.type}`);
-      const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"]; 
-      if (!allowed.includes(featuredImageFile.type)) {
+      logger.info(`[updatePost] Processing featured image upload for post ${id}: ${featuredImageFile.name}, size: ${featuredImageFile.size} bytes`);
+      const buffer = new Uint8Array(await featuredImageFile.arrayBuffer());
+      const detected = detectSafeUploadType(buffer);
+      if (!detected || detected.kind !== "image") {
         return { error: "Unsupported featured image type" };
       }
-      if (featuredImageFile.size > 5 * 1024 * 1024) {
+      if (buffer.byteLength > 5 * 1024 * 1024) {
         return { error: "Featured image file too large (max 5MB)" };
       }
       
       try {
-        const arrayBuffer = await featuredImageFile.arrayBuffer();
-        const buffer = new Uint8Array(arrayBuffer);
-        
-        const ext = featuredImageFile.name.includes('.') 
-          ? featuredImageFile.name.split('.').pop()!.toLowerCase()
-          : (featuredImageFile.type === 'image/png' ? 'png' : 
-             featuredImageFile.type === 'image/webp' ? 'webp' : 
-             featuredImageFile.type === 'image/gif' ? 'gif' : 'jpg');
-        
         // Try to use S3/R2 storage first, fallback to local storage
         const storageService = getStorageService();
         if (storageService) {
           // Use cloud storage (S3/R2)
-          const key = `featured/${randomUUID()}.${ext}`;
+          const key = `featured/${randomUUID()}.${detected.extension}`;
           logger.info(`[updatePost] Uploading to cloud storage (S3/R2): ${key}`);
-          await storageService.putObject(key, buffer, featuredImageFile.type);
+          await storageService.putObject(key, buffer, detected.mimeType);
           finalFeaturedUrl = storageService.getPublicUrl(key);
           logger.info(`[updatePost] Cloud upload successful: ${finalFeaturedUrl}`);
         } else {
           // Use local storage service
-          const key = `featured/${randomUUID()}.${ext}`;
+          const key = `featured/${randomUUID()}.${detected.extension}`;
           logger.info(`[updatePost] Uploading to local storage: ${key}`);
-          await localStorageService.putObject(key, buffer, featuredImageFile.type);
+          await localStorageService.putObject(key, buffer, detected.mimeType);
           finalFeaturedUrl = localStorageService.getPublicUrl(key);
           logger.info(`[updatePost] Local upload successful: ${finalFeaturedUrl}`);
         }

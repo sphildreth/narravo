@@ -5,29 +5,50 @@ import { db } from "@/lib/db";
 import { ownerWebAuthnCredential } from "@/drizzle/schema";
 import { verifyWebAuthnRegistration } from "@/lib/2fa/webauthn";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
+import { consumePendingWebAuthnChallenge, extractClientDataChallenge, getPendingWebAuthnChallenge } from "@/lib/2fa/webauthn-challenge";
+import { getMfaSessionContext } from "@/lib/2fa/session-grant";
 import type { RegistrationResponseJSON } from "@simplewebauthn/server";
+import { safeApiError } from "@/lib/api-error";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAdmin2FA();
-    const userId = (session.user as any).id;
+    const context = getMfaSessionContext(session);
+    if (!context) {
+      return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
+    }
+    const { userId } = context;
 
     const body: RegistrationResponseJSON = await req.json();
 
-    // Extract challenge from clientDataJSON
-    const clientData = JSON.parse(
-      Buffer.from(body.response.clientDataJSON, "base64").toString()
-    );
-    const expectedChallenge = clientData.challenge;
+    const responseChallenge = extractClientDataChallenge(body.response.clientDataJSON);
+    if (!responseChallenge) {
+      return NextResponse.json({ error: "Invalid WebAuthn challenge" }, { status: 400 });
+    }
+
+    const challengeContext = {
+      userId,
+      sessionId: context.sessionId,
+      ceremony: "registration" as const,
+      responseChallenge,
+    };
+    const challenge = await getPendingWebAuthnChallenge(challengeContext);
+    if (!challenge) {
+      return NextResponse.json({ error: "WebAuthn challenge is missing, expired, consumed, or bound to another session" }, { status: 400 });
+    }
 
     // Verify registration
-    const verification = await verifyWebAuthnRegistration(body, expectedChallenge);
+    const verification = await verifyWebAuthnRegistration(body, challenge.challenge);
 
     if (!verification.verified || !verification.registrationInfo) {
       return NextResponse.json(
         { error: "Verification failed" },
         { status: 400 }
       );
+    }
+
+    if (!await consumePendingWebAuthnChallenge(challengeContext, challenge)) {
+      return NextResponse.json({ error: "WebAuthn challenge was already consumed" }, { status: 400 });
     }
 
     const { credential } = verification.registrationInfo;
@@ -51,11 +72,9 @@ export async function POST(req: NextRequest) {
       success: true,
       message: "WebAuthn credential registered successfully",
     });
-  } catch (error: any) {
-    console.error("Error verifying WebAuthn registration:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to verify registration" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Error verifying WebAuthn registration");
+    const publicError = safeApiError(error, "Failed to verify registration");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

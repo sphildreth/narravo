@@ -1,21 +1,42 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdmin2FA, requireRecentLogin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerTotp, users, ownerRecoveryCode } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { verifyTotpCode, generateRecoveryCodes, hashRecoveryCode } from "@/lib/2fa/totp";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
 import { z } from "zod";
+import { createMfaSessionGrant, getMfaSessionContext } from "@/lib/2fa/session-grant";
+import { decryptTotpSecret, protectTotpSecret } from "@/lib/2fa/totp-secret";
+import { safeApiError } from "@/lib/api-error";
 
 const confirmSchema = z.object({
   code: z.string().length(6).regex(/^\d+$/),
 });
 
+class TotpEnrollmentConflictError extends Error {}
+
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAdmin();
-    const userId = (session.user as any).id;
+    let session = await requireAdmin();
+    const context = getMfaSessionContext(session);
+    if (!context) {
+      return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
+    }
+    const { userId } = context;
+    const [account] = await db
+      .select({ twoFactorEnabled: users.twoFactorEnabled })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!account) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (account.twoFactorEnabled) {
+      session = await requireAdmin2FA();
+      if (!getMfaSessionContext(session)) {
+        return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
+      }
+    } else requireRecentLogin(session);
     const body = await req.json();
     
     const parsed = confirmSchema.safeParse(body);
@@ -50,8 +71,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify the code
-    const step = verifyTotpCode(totp.secretBase32, code);
-    if (!step) {
+    const step = verifyTotpCode(decryptTotpSecret(totp.secretBase32), code);
+    if (step === null) {
       return NextResponse.json(
         { error: "Invalid code" },
         { status: 400 }
@@ -59,56 +80,64 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate recovery codes
-    const recoveryCodes = generateRecoveryCodes(10);
+    const recoveryCodes = account.twoFactorEnabled ? [] : generateRecoveryCodes(10);
     const now = new Date();
 
     // Activate TOTP and enable 2FA
     await db.transaction(async (tx: any) => {
       // Activate TOTP
-      await tx
+      const [activated] = await tx
         .update(ownerTotp)
         .set({
           activatedAt: now,
           lastUsedAt: now,
           lastUsedStep: step,
+          secretBase32: protectTotpSecret(totp.secretBase32),
         })
-        .where(eq(ownerTotp.userId, userId));
+        .where(and(
+          eq(ownerTotp.userId, userId),
+          eq(ownerTotp.secretBase32, totp.secretBase32),
+          isNull(ownerTotp.activatedAt),
+        ))
+        .returning({ userId: ownerTotp.userId });
+      if (!activated) throw new TotpEnrollmentConflictError();
 
-      // Enable 2FA on user
-      await tx
-        .update(users)
-        .set({
-          twoFactorEnabled: true,
-          twoFactorEnforcedAt: now,
-          mfaVerifiedAt: now, // Mark as verified since user just confirmed TOTP
-        })
-        .where(eq(users.id, userId));
-
-      // Store recovery codes (hashed)
-      await tx.insert(ownerRecoveryCode).values(
-        recoveryCodes.map((code) => ({
-          userId,
-          codeHash: hashRecoveryCode(code),
-        }))
-      );
+      if (!account.twoFactorEnabled) {
+        const [enabled] = await tx
+          .update(users)
+          .set({
+            twoFactorEnabled: true,
+            twoFactorEnforcedAt: now,
+            mfaVerifiedAt: now,
+          })
+          .where(and(eq(users.id, userId), eq(users.twoFactorEnabled, false)))
+          .returning({ id: users.id });
+        if (!enabled) throw new TotpEnrollmentConflictError();
+        await tx.insert(ownerRecoveryCode).values(
+          recoveryCodes.map((code) => ({ userId, codeHash: hashRecoveryCode(code) }))
+        );
+      }
     });
+
+    if (!account.twoFactorEnabled) await createMfaSessionGrant(context);
 
     // Log activity
-    await logSecurityActivity(userId, "2fa_enabled");
+    if (!account.twoFactorEnabled) await logSecurityActivity(userId, "2fa_enabled");
     await logSecurityActivity(userId, "totp_activated");
-    await logSecurityActivity(userId, "recovery_codes_generated", {
-      count: recoveryCodes.length,
-    });
+    if (!account.twoFactorEnabled) {
+      await logSecurityActivity(userId, "recovery_codes_generated", { count: recoveryCodes.length });
+    }
 
     return NextResponse.json({
       success: true,
       recoveryCodes,
     });
-  } catch (error: any) {
-    console.error("Error confirming TOTP:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to confirm TOTP" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Error confirming TOTP");
+    if (error instanceof TotpEnrollmentConflictError) {
+      return NextResponse.json({ error: "TOTP enrollment changed; restart setup" }, { status: 409 });
+    }
+    const publicError = safeApiError(error, "Failed to confirm TOTP");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

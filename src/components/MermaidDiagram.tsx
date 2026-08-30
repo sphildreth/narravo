@@ -17,6 +17,13 @@ interface MermaidDiagramProps {
   className?: string;
 }
 
+const escapeHtml = (value: string) => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
 export default function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
   const elementRef = useRef<HTMLDivElement>(null);
   const idRef = useRef<string | null>(null);
@@ -57,7 +64,7 @@ export default function MermaidDiagram({ chart, className = "" }: MermaidDiagram
         const config = {
           startOnLoad: false,
           theme: 'default' as const,
-          securityLevel: 'loose' as const,
+          securityLevel: 'strict' as const,
           gantt: { axisFormat: '%Y-%m-%d' },
           ...(hasCrossSubgraphConnections && {
             flowchart: {
@@ -94,10 +101,10 @@ export default function MermaidDiagram({ chart, className = "" }: MermaidDiagram
           elementRef.current.innerHTML = `
             <div class="border border-red-200 bg-red-50 p-4 rounded-md text-red-800 text-sm">
               <strong>Mermaid Diagram Error:</strong><br/>
-              ${error instanceof Error ? error.message : 'Invalid diagram syntax'}
+              ${escapeHtml(error instanceof Error ? error.message : 'Invalid diagram syntax')}
               <details class="mt-2">
                 <summary class="cursor-pointer text-xs">Show diagram source</summary>
-                <pre class="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">${decodedChart.replace(/</g, '&lt;')}</pre>
+                <pre class="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">${escapeHtml(decodedChart)}</pre>
               </details>
             </div>
           `;

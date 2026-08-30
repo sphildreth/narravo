@@ -3,6 +3,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST as viewApiHandler } from "@/app/api/metrics/view/route";
 
+const SERVER_SESSION_ID = /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
+
 vi.mock('next/server', () => ({
   NextResponse: class NextResponse {
     body: any;
@@ -12,6 +14,7 @@ vi.mock('next/server', () => ({
       this.body = body;
       this.status = init?.status;
     }
+    cookies = { set: vi.fn() };
     static json(data: any, init?: { status?: number }) {
       return new NextResponse(JSON.stringify(data), init);
     }
@@ -22,6 +25,17 @@ vi.mock('next/server', () => ({
 vi.mock("@/lib/analytics", () => ({
   recordView: vi.fn(),
   recordPageView: vi.fn(),
+  pruneViewEvents: vi.fn().mockResolvedValue(0),
+}));
+
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: vi.fn().mockResolvedValue({ limited: false, remaining: 1, resetAt: new Date() }),
+  pruneExpiredRateLimitBuckets: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("node:crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:crypto")>()),
+  randomUUID: () => "123e4567-e89b-42d3-a456-426614174000",
 }));
 
 // Mock the config module
@@ -43,6 +57,7 @@ vi.mock("@/lib/logger", () => ({
 function makeRequest(payload?: unknown, headers: Record<string, string> = {}): any {
   return {
     json: () => Promise.resolve(payload),
+    cookies: { get: () => undefined },
     headers: {
       get: (key: string) => headers[key.toLowerCase()] ?? null,
     },
@@ -77,7 +92,7 @@ describe("/api/metrics/view", () => {
       expect(recordPageView).toHaveBeenCalledWith(
         expect.objectContaining({
           path: "/",
-          sessionId: "test-session-123",
+          sessionId: expect.stringMatching(SERVER_SESSION_ID),
           ip: "192.168.1.1",
           ua: "Mozilla/5.0 Test Browser",
           referer: "https://google.com",
@@ -131,7 +146,7 @@ describe("/api/metrics/view", () => {
       expect(recordView).toHaveBeenCalledWith(
         expect.objectContaining({
           postId: "550e8400-e29b-41d4-a716-446655440000",
-          sessionId: "test-session-123",
+          sessionId: expect.stringMatching(SERVER_SESSION_ID),
         })
       );
     });
@@ -252,7 +267,7 @@ describe("/api/metrics/view", () => {
   });
 
   describe("Session ID Validation", () => {
-    it("should accept valid session IDs", async () => {
+    it("should ignore valid caller-provided session IDs", async () => {
       const { recordPageView } = await import("@/lib/analytics");
       (recordPageView as any).mockResolvedValue(true);
 
@@ -269,7 +284,7 @@ describe("/api/metrics/view", () => {
       expect(response.status).toBe(204);
       expect(recordPageView).toHaveBeenCalledWith(
         expect.objectContaining({
-          sessionId: validSessionId,
+          sessionId: expect.stringMatching(SERVER_SESSION_ID),
         })
       );
     });
@@ -288,7 +303,7 @@ describe("/api/metrics/view", () => {
       expect(response.status).toBe(400);
     });
 
-    it("should allow missing session ID", async () => {
+    it("should assign a server session ID when the caller omits one", async () => {
       const { recordPageView } = await import("@/lib/analytics");
       (recordPageView as any).mockResolvedValue(true);
 
@@ -302,8 +317,8 @@ describe("/api/metrics/view", () => {
 
       expect(response.status).toBe(204);
       expect(recordPageView).toHaveBeenCalledWith(
-        expect.not.objectContaining({
-          sessionId: expect.anything(),
+        expect.objectContaining({
+          sessionId: expect.stringMatching(SERVER_SESSION_ID),
         })
       );
     });

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import { formatDateSafe } from "@/lib/dateFormat";
+import { sanitizeCommentHtml } from "@/lib/sanitize";
 
 interface UserDetailPageProps {
   params: Promise<{
@@ -138,7 +139,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                     </div>
                     <div 
                       className="text-sm prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{ __html: comment.bodyHtml }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeCommentHtml(comment.bodyHtml) }}
                     />
                   </div>
                 ))}

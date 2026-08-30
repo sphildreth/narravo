@@ -7,6 +7,8 @@ import logger from '@/lib/logger';
 // Revalidate the feed every hour
 export const revalidate = 3600;
 
+const isBuildPhase = () => process.env.NEXT_PHASE === "phase-production-build";
+
 export async function GET() {
   // Best-effort: allow build to succeed even if DB/config are unavailable
   let latestCount = 20;
@@ -15,7 +17,7 @@ export async function GET() {
     const c = await config.getNumber("FEED.LATEST-COUNT");
     if (c != null) latestCount = c;
   } catch (err) {
-    if (process.env.NODE_ENV !== 'test') {
+    if (process.env.NODE_ENV !== 'test' && !isBuildPhase()) {
       logger.warn('feed.xml: falling back to default FEED.LATEST-COUNT due to config/db error');
     }
   }
@@ -24,7 +26,7 @@ export async function GET() {
   try {
     posts = await getPostsForRSS(latestCount);
   } catch (err) {
-    if (process.env.NODE_ENV !== 'test') {
+    if (process.env.NODE_ENV !== 'test' && !isBuildPhase()) {
       logger.warn('feed.xml: failed to load posts; returning empty feed');
     }
     posts = [];
