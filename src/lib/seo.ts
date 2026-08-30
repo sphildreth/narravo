@@ -14,6 +14,8 @@ const escapeXML = (str: string) => {
     .replace(/'/g, "&#39;");
 };
 
+const isBuildPhase = () => process.env.NEXT_PHASE === "phase-production-build";
+
 export async function generateSitemap(siteUrl: string): Promise<string> {
   const urls: string[] = [];
 
@@ -31,7 +33,7 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
       nextCursor = postResult.nextCursor;
     } while (nextCursor);
   } catch (err) {
-    if (process.env.NODE_ENV !== 'test') {
+    if (process.env.NODE_ENV !== 'test' && !isBuildPhase()) {
       logger.warn('Sitemap: failed to list posts; continuing with partial sitemap');
     }
   }
@@ -41,7 +43,7 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
   try {
     archiveMonths = await listArchiveMonths();
   } catch (err) {
-    if (process.env.NODE_ENV !== 'test') {
+    if (process.env.NODE_ENV !== 'test' && !isBuildPhase()) {
       logger.warn('Sitemap: failed to list archive months; continuing without archives');
     }
   }

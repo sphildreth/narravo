@@ -23,9 +23,12 @@ peerDependencyRules:
 
 overrides:
   esbuild: ">=0.25.0"
-  postcss: "8.5.23"
+  postcss: "8.5.26"
   prismjs: ">=1.30.0"
   tmp: ">=0.2.4"
   vite: "$vite"
+  lighthouse: "13.4.1"
+  "@puppeteer/browsers": ">=3.0.0"
+  proxy-agent: ">=8.0.2"
   uuid: "11.1.1"
   yaml: "2.9.0"

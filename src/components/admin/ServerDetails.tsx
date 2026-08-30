@@ -1,26 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import { promises as fs } from "fs";
+import { APP_VERSION, GIT_SHA, BUILD_TIME } from "@/version";
 
 async function getPostgresVersion() {
   const result: any = await db.execute(sql`SELECT version()`);
   return result.rows[0].version;
 }
 
-async function getAppVersion() {
-  const packageJson = await fs.readFile(
-    process.cwd() + "/package.json",
-    "utf8"
-  );
-  return JSON.parse(packageJson).version;
-}
-
 export default async function ServerDetails() {
-  const [pgVersion, appVersion] = await Promise.all([
-    getPostgresVersion(),
-    getAppVersion(),
-  ]);
+  const pgVersion = await getPostgresVersion();
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
@@ -28,7 +17,13 @@ export default async function ServerDetails() {
       <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
         <li className="flex justify-between">
           <span>Application Version:</span>
-          <span className="font-mono">{appVersion}</span>
+          <span className="font-mono">
+            {APP_VERSION} ({GIT_SHA})
+          </span>
+        </li>
+        <li className="flex justify-between">
+          <span>Build Time:</span>
+          <span className="font-mono">{BUILD_TIME}</span>
         </li>
         <li className="flex justify-between">
           <span>Node.js Version:</span>

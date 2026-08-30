@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { logSlowQuery } from "./performance";
 
-loadEnv();
+loadEnv({ quiet: true });
 
 const skipDb = process.env.NARRAVO_DISABLE_DB === "true";
 const url = skipDb ? undefined : process.env.DATABASE_URL?.trim();
