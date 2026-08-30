@@ -5,7 +5,17 @@ import { upsertTag, upsertCategory, getTagBySlug, getCategoryBySlug } from "@/li
 import { db } from "@/lib/db";
 
 // Mock the database
-vi.mock("@/lib/db");
+vi.mock("@/lib/db", () => ({
+  db: {
+    execute: vi.fn(),
+    select: vi.fn(),
+    insert: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    transaction: vi.fn(),
+  },
+  pool: null,
+}));
 
 describe("Taxonomy Functions", () => {
   describe("upsertTag", () => {

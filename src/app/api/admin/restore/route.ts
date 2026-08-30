@@ -8,6 +8,7 @@ import { restoreBackup } from "../../../../../scripts/restore";
 import { nanoid } from "nanoid";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import logger from "@/lib/logger";
 
 const MAX_BACKUP_BYTES = 100 * 1024 * 1024;
 const MAX_MULTIPART_BYTES = MAX_BACKUP_BYTES + 1024 * 1024;
@@ -181,6 +182,7 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (err) {
+    logger.error("Restore API failed", err);
     const message = err instanceof Error ? err.message : "Internal error";
     const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 500;
     

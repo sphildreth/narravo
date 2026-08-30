@@ -27,7 +27,7 @@ describe("lib/db", () => {
     delete process.env.NARRAVO_DISABLE_DB;
 
     expect(mod.pool).toBeNull();
-    expect(() => (mod.db as any).select).toThrowError(/Database is not configured/);
+    expect(() => (mod.db as any).select()).toThrowError(/Database is not configured/);
     expect(logSlowQuery).not.toHaveBeenCalled();
   });
 

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
@@ -13,10 +13,6 @@ describe("scripts/add-spdx", () => {
     vi.resetModules();
     vi.clearAllMocks();
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "spdx-test-"));
-    const exitSpy = vi.spyOn(process, "exit");
-    exitSpy.mockImplementation(((code?: number) => {
-      throw new Error(`process.exit should not be called (code: ${code ?? "undefined"})`);
-    }) as never);
   });
 
   afterEach(async () => {
@@ -26,7 +22,7 @@ describe("scripts/add-spdx", () => {
     }
   });
 
-  it.skip("adds SPDX headers while preserving directives", async () => {
+  it("adds SPDX headers while preserving directives", async () => {
     const tsFile = path.join(tmpDir, "component.ts");
     const existingFile = path.join(tmpDir, "existing.ts");
     const pyFile = path.join(tmpDir, "script.py");
@@ -35,8 +31,8 @@ describe("scripts/add-spdx", () => {
     await fs.writeFile(existingFile, "// SPDX-License-Identifier: Apache-2.0\nconsole.log('existing');\n", "utf8");
     await fs.writeFile(pyFile, "#!/usr/bin/env python3\n# coding: utf-8\nprint('hi')\n", "utf8");
 
-    await import("@/scripts/add-spdx");
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    const { addSpdxHeaders } = await import("@/scripts/add-spdx");
+    const result = await addSpdxHeaders(tmpDir);
 
     const tsContent = await fs.readFile(tsFile, "utf8");
     expect(tsContent.startsWith("'use client';\n// SPDX-License-Identifier: Apache-2.0\n")).toBe(true);
@@ -53,5 +49,6 @@ describe("scripts/add-spdx", () => {
 
     expect(logger.error).not.toHaveBeenCalled();
     expect(logger.info.mock.calls[0]?.[0]).toMatch(/added header/);
+    expect(result).toEqual({ scanned: 3, changed: 2 });
   });
 });
