@@ -92,4 +92,14 @@ describe("/api/uploads/banner", () => {
     const response = await bannerPost(makeFormRequest(form));
     expect(response.status).toBe(403);
   });
+
+  it("returns 401 for unauthorized errors", async () => {
+    mockRequireAdmin2FA.mockRejectedValueOnce(new Error("Unauthorized"));
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "header.png", { type: "image/png" });
+    const form = new FormData();
+    form.append("file", file);
+
+    const response = await bannerPost(makeFormRequest(form));
+    expect(response.status).toBe(401);
+  });
 });

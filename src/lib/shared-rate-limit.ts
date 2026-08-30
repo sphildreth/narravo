@@ -82,6 +82,9 @@ export async function peekSharedRateLimit(
   key: string,
   maxAttempts: number,
 ): Promise<SharedRateLimitResult> {
+  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) {
+    throw new Error("Invalid rate-limit configuration");
+  }
   const now = new Date();
   const result = await db.execute(sql`
     SELECT count, expires_at

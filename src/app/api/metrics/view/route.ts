@@ -51,9 +51,8 @@ export async function POST(req: NextRequest) {
     if (globalLimit.limited) return new NextResponse(null, { status: 204 });
     const cookieName = process.env.NODE_ENV === "production" ? "__Host-viewSession" : "viewSession";
     const existingSession = (req as NextRequest).cookies?.get(cookieName)?.value;
-    const serverSessionId = existingSession && /^[a-f\d-]{36}$/i.test(existingSession)
-      ? existingSession
-      : randomUUID();
+    const hasValidExistingSession = !!existingSession && /^[a-f\d-]{36}$/i.test(existingSession);
+    const serverSessionId = hasValidExistingSession ? existingSession : randomUUID();
     const sessionLimit = await consumeSharedRateLimit(`analytics:view:${serverSessionId}`, 60, 60 * 1000);
     if (sessionLimit.limited) return new NextResponse(null, { status: 204 });
 
@@ -127,7 +126,7 @@ export async function POST(req: NextRequest) {
 
     // Always return 204 to avoid leaking details to clients.
     const response = new NextResponse(null, { status: 204 });
-    if (!existingSession) {
+    if (!hasValidExistingSession) {
       response.cookies.set(cookieName, serverSessionId, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

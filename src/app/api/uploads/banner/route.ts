@@ -77,7 +77,11 @@ export async function POST(req: NextRequest) {
       try { await localStorageService.deleteObject(storedKey); } catch { /* best effort cleanup */ }
     }
     const message = err instanceof Error ? err.message : "Internal error";
-    const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 500;
+    const status = message === "Forbidden"
+      ? 403
+      : message === "Unauthorized"
+        ? 401
+        : 500;
     return new Response(JSON.stringify({ ok: false, error: { message: status === 500 ? "Upload failed" : message } }), { status, headers: JSON_HEADERS });
   }
 }

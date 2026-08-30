@@ -549,6 +549,31 @@ describe("/api/metrics/view endpoint", () => {
       );
     });
 
+    it("should replace an invalid session cookie with a server-issued session ID", async () => {
+      const body = JSON.stringify({
+        postId: "550e8400-e29b-41d4-a716-446655440000",
+      });
+
+      const request = new Request("http://localhost:3000/api/metrics/view", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: "viewSession=not-a-uuid",
+        },
+        body,
+      }) as NextRequest;
+
+      const response = await POST(request);
+
+      expect(response.status).toBe(204);
+      expect(mockRecordView).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: SERVER_SESSION_ID,
+        })
+      );
+      expect(response.headers.get("set-cookie")).toContain(`viewSession=${SERVER_SESSION_ID}`);
+    });
+
     it("should reject empty sessionId", async () => {
       const body = JSON.stringify({
         postId: "550e8400-e29b-41d4-a716-446655440000",
