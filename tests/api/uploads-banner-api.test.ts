@@ -4,9 +4,10 @@ import type { NextRequest } from "next/server";
 import { POST as bannerPost } from "@/app/api/uploads/banner/route";
 
 const mockRequireAdmin2FA = vi.fn();
-const mockFs = {
-  mkdir: vi.fn(),
-  writeFile: vi.fn(),
+const mockLocalStorage = {
+  putObject: vi.fn(),
+  getPublicUrl: vi.fn((key: string) => `/uploads/${key}`),
+  deleteObject: vi.fn(),
 };
 const mockDb = { insert: vi.fn() };
 
@@ -15,12 +16,11 @@ vi.mock("@/lib/auth", () => ({
   getSessionUserId: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("node:fs", () => ({
-  get promises() {
-    return mockFs;
-  },
-}));
 vi.mock("@/lib/db", () => ({ get db() { return mockDb; } }));
+vi.mock("@/lib/local-storage", () => ({ get localStorageService() { return mockLocalStorage; } }));
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: vi.fn().mockResolvedValue({ limited: false, remaining: 9, retryAfter: 0, resetTime: Date.now() + 60_000 }),
+}));
 
 let mockUuidCounter = 0;
 vi.mock("node:crypto", () => ({
@@ -31,11 +31,12 @@ describe("/api/uploads/banner", () => {
   beforeEach(() => {
     mockRequireAdmin2FA.mockReset();
     mockRequireAdmin2FA.mockResolvedValue({ user: { id: "admin" } });
-    mockFs.mkdir.mockReset();
-    mockFs.writeFile.mockReset();
+    mockLocalStorage.putObject.mockReset();
+    mockLocalStorage.getPublicUrl.mockClear();
+    mockLocalStorage.deleteObject.mockReset();
     mockDb.insert.mockReset();
-    mockFs.mkdir.mockResolvedValue(undefined);
-    mockFs.writeFile.mockResolvedValue(undefined);
+    mockLocalStorage.putObject.mockResolvedValue(undefined);
+    mockLocalStorage.deleteObject.mockResolvedValue(undefined);
     mockDb.insert.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
   });
 
@@ -58,8 +59,7 @@ describe("/api/uploads/banner", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.url).toMatch(/\/uploads\/banner\/uuid-test-\d+-\d+\./);
-    expect(mockFs.mkdir).toHaveBeenCalled();
-    expect(mockFs.writeFile).toHaveBeenCalled();
+    expect(mockLocalStorage.putObject).toHaveBeenCalled();
   });
 
   it("rejects non-image uploads", async () => {
@@ -69,6 +69,18 @@ describe("/api/uploads/banner", () => {
 
     const response = await bannerPost(makeFormRequest(form));
     expect(response.status).toBe(400);
+  });
+
+  it("rejects oversized declared bodies before multipart parsing", async () => {
+    const request = new Request("http://localhost/api/uploads/banner", {
+      method: "POST",
+      headers: { "content-length": String(7 * 1024 * 1024) },
+      body: "x",
+    }) as unknown as NextRequest;
+
+    const response = await bannerPost(request);
+    expect(response.status).toBe(413);
+    expect(mockRequireAdmin2FA).not.toHaveBeenCalled();
   });
 
   it("propagates authorization errors", async () => {

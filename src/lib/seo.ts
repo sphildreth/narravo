@@ -20,7 +20,7 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
   const urls: string[] = [];
 
   // Add home page
-  urls.push(`<url><loc>${siteUrl}</loc></url>`);
+  urls.push(`<url><loc>${escapeXML(siteUrl)}</loc></url>`);
 
   // Add posts (best-effort; tolerate DB being unavailable at build time)
   let nextCursor: { publishedAt: string; id: string } | null = null;
@@ -28,7 +28,7 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
     do {
       const postResult = await listPosts({ limit: 50, cursor: nextCursor });
       postResult.items.forEach((post) => {
-        urls.push(`<url><loc>${siteUrl}/${post.slug}</loc></url>`);
+        urls.push(`<url><loc>${escapeXML(`${siteUrl}/${post.slug}`)}</loc></url>`);
       });
       nextCursor = postResult.nextCursor;
     } while (nextCursor);
@@ -52,7 +52,7 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
   archiveMonths.forEach((archive) => {
     // Add monthly archive URL
     const monthUrl = `${siteUrl}/archives/${archive.year}/${String(archive.month).padStart(2, '0')}`;
-    urls.push(`<url><loc>${monthUrl}</loc></url>`);
+    urls.push(`<url><loc>${escapeXML(monthUrl)}</loc></url>`);
     
     // Add year to set for yearly archives
     years.add(archive.year);
@@ -61,13 +61,13 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
   // Add yearly archive URLs
   years.forEach(year => {
     const yearUrl = `${siteUrl}/archives/${year}`;
-    urls.push(`<url><loc>${yearUrl}</loc></url>`);
+    urls.push(`<url><loc>${escapeXML(yearUrl)}</loc></url>`);
   });
 
   // Add monthly RSS feed URLs
   archiveMonths.forEach((archive) => {
     const rssUrl = `${siteUrl}/rss-feed/${archive.year}/${String(archive.month).padStart(2, '0')}`;
-    urls.push(`<url><loc>${rssUrl}</loc></url>`);
+    urls.push(`<url><loc>${escapeXML(rssUrl)}</loc></url>`);
   });
 
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
@@ -127,5 +127,13 @@ export function generatePostJsonLd(post: PostDTO, siteUrl: string, siteName: str
       },
     },
   };
-  return JSON.stringify(jsonLd, null, 2);
+  // This string is embedded in a script element. JSON escaping alone does not
+  // neutralize a title containing </script>, so escape HTML-significant code
+  // points while preserving valid JSON-LD.
+  return JSON.stringify(jsonLd, null, 2)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }

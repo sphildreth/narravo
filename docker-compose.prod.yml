@@ -10,6 +10,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in deploy/.env}
       NEXTAUTH_URL: ${NEXTAUTH_URL:?NEXTAUTH_URL must be set in deploy/.env}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET must be set in deploy/.env}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY must be set in deploy/.env}
     depends_on:
       db:
         condition: service_healthy

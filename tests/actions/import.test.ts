@@ -247,8 +247,8 @@ describe("import.ts - startImportJob", () => {
       // Arrange
       const options = {
         dryRun: true,
-        skipExisting: true,
-        author: "admin",
+        skipMedia: true,
+        allowedStatuses: ["publish"],
       };
 
       const formData = makeFormData({
@@ -259,7 +259,7 @@ describe("import.ts - startImportJob", () => {
       (db as any).insert = vi.fn(() => ({
         values: vi.fn((values: any) => {
           // Verify options are parsed correctly
-          expect(values.options).toEqual(options);
+          expect(values.options).toEqual(expect.objectContaining(options));
           return {
             returning: vi.fn().mockResolvedValue([{ id: "job-1" }]),
           };
@@ -292,6 +292,19 @@ describe("import.ts - startImportJob", () => {
       await startImportJob(formData);
 
       // Assert - verified in mock callback
+    });
+
+    it("rejects hidden local-path importer options", async () => {
+      const formData = makeFormData({
+        file: createMockFile("test.xml", "<xml/>"),
+        options: JSON.stringify({ dryRun: true, uploads: "/etc", root: ".*" }),
+      });
+
+      const result = await startImportJob(formData);
+
+      expect(result.error).toBe("Invalid options format");
+      expect(fsMock.writeFile).not.toHaveBeenCalled();
+      expect(mockDb.insert).not.toHaveBeenCalled();
     });
   });
 
@@ -382,7 +395,7 @@ describe("import.ts - startImportJob", () => {
       // Assert
       expect(fsMock.writeFile).toHaveBeenCalled();
       const writeCall = fsMock.writeFile.mock.calls[0];
-      expect(writeCall[0]).toMatch(/\/tmp\/narravo-imports\/.+-export\.xml/);
+      expect(writeCall[0]).toMatch(/\/tmp\/narravo-imports\/.+\.xml/);
     });
 
     it("should clean up temporary file after dry run", async () => {
@@ -395,7 +408,7 @@ describe("import.ts - startImportJob", () => {
       (db as any).insert = vi.fn(() => ({
         values: vi.fn(() => ({
           returning: vi.fn().mockResolvedValue([
-            { id: "job-1", filePath: "/tmp/test.xml" },
+            { id: "job-1", filePath: "/tmp/narravo-imports/test.xml" },
           ]),
         })),
       }));
@@ -610,7 +623,7 @@ describe("import.ts - startImportJob", () => {
 
       // Assert
       expect(loggerErrorMock).toHaveBeenCalledWith("Start import job error:", testError);
-      expect(result.error).toBe("Test error");
+      expect(result.error).toBe("Failed to start import job");
     });
 
     it("should return generic error message for non-Error objects", async () => {
@@ -728,7 +741,7 @@ describe("import.ts - retryImportJob", () => {
         where: vi.fn().mockResolvedValue([
           {
             id: "job-1",
-            filePath: "/tmp/missing.xml",
+            filePath: "/tmp/narravo-imports/missing.xml",
             options: { dryRun: false },
           },
         ]),
@@ -751,7 +764,7 @@ describe("import.ts - retryImportJob", () => {
         where: vi.fn().mockResolvedValue([
           {
             id: "job-1",
-            filePath: "/tmp/test.xml",
+            filePath: "/tmp/narravo-imports/test.xml",
             options: { dryRun: false },
           },
         ]),
@@ -848,7 +861,7 @@ describe("import.ts - deleteImportJob", () => {
         where: vi.fn().mockResolvedValue([
           {
             id: "job-1",
-            filePath: "/tmp/test.xml",
+            filePath: "/tmp/narravo-imports/test.xml",
           },
         ]),
       })),
@@ -873,7 +886,7 @@ describe("import.ts - deleteImportJob", () => {
         where: vi.fn().mockResolvedValue([
           {
             id: "job-1",
-            filePath: "/tmp/test.xml",
+            filePath: "/tmp/narravo-imports/test.xml",
           },
         ]),
       })),

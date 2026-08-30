@@ -4,6 +4,7 @@ import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dataOperationLogs } from "@/drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { safeApiError } from "@/lib/api-error";
 
 export async function GET(
   req: NextRequest,
@@ -92,14 +93,13 @@ export async function GET(
     });
 
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal error";
-    const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 500;
+    const publicError = safeApiError(err, "Failed to retrieve export");
     
     return new Response(JSON.stringify({
       ok: false,
-      error: { message }
+      error: { message: publicError.message }
     }), {
-      status,
+      status: publicError.status,
       headers: { "Content-Type": "application/json" }
     });
   }

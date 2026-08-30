@@ -45,12 +45,14 @@ export function sanitizeHtml(html: string): string {
       "frameborder", "allow", "allowfullscreen", "referrerpolicy",
       // Table-related safe attributes
       "colspan", "rowspan", "scope",
-      // Code highlighting attributes - allow class for pre/code tags only
+      // Code highlighting attributes. DOMPurify's allowlist is global, so a
+      // post-filter below removes class from every element except pre/code.
       "class", "data-lang",
       // Task list checkbox attributes
       "checked", "disabled",
-      // Image styling attributes
-      "style"
+      // Image sizing/alignment is represented by the constrained data
+      // attributes below. Arbitrary inline CSS can create deceptive overlays
+      // and trigger remote resource requests even without JavaScript.
     ],
     // Explicitly allow select data attributes used by trusted extensions
     ADD_ATTR: ["data-mermaid", "data-width", "data-align"],
@@ -91,10 +93,16 @@ export function sanitizeHtml(html: string): string {
     return '';
   });
 
-  // Post-process to filter dangerous class names on code elements
+  // Only pre/code may retain a tightly constrained syntax-highlighting class.
+  // Allowing arbitrary classes on authored markup can activate application
+  // utility classes (for example fixed positioning and large z-index values)
+  // even when inline styles are prohibited.
   sanitized = sanitized.replace(
-    /<(pre|code)([^>]*?)\sclass=["']([^"']*?)["']/gi,
+    /<([a-z][\w-]*)([^>]*?)\sclass=["']([^"']*?)["']/gi,
     (match, tagName, attrs, className) => {
+      if (!/^(?:pre|code)$/i.test(tagName)) {
+        return `<${tagName}${attrs}`;
+      }
       // Only allow safe syntax highlighting classes
       const safeClasses = className
         .split(/\s+/)

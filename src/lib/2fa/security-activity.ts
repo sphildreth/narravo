@@ -6,6 +6,7 @@ import { eq, desc } from "drizzle-orm";
 export type SecurityEvent =
   | "2fa_enabled"
   | "2fa_disabled"
+  | "2fa_disable_failed"
   | "totp_activated"
   | "passkey_added"
   | "passkey_removed"

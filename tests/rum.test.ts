@@ -2,19 +2,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST as rumPostHandler } from "@/app/api/rum/route";
 
-// Mock next/headers to control DNT and IP headers
-const mockHeaderStore: Record<string, string | undefined> = {};
-vi.mock("next/headers", () => ({
-  headers: () => ({
-    get: (key: string) => mockHeaderStore[key.toLowerCase()] ?? null,
-  }),
+const mockConsumeSharedRateLimit = vi.fn();
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: (...args: unknown[]) => mockConsumeSharedRateLimit(...args),
 }));
 
-function makeRequest(payload?: unknown): any {
+function makeRequest(payload?: unknown, headers: Record<string, string> = {}): any {
   return new Request("http://localhost/api/rum", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...headers,
     },
     body: payload ? JSON.stringify(payload) : null,
   }) as any;
@@ -22,17 +20,14 @@ function makeRequest(payload?: unknown): any {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockHeaderStore["dnt"] = "0"; // default allow
-  mockHeaderStore["x-forwarded-for"] = "127.0.0.1";
+  mockConsumeSharedRateLimit.mockResolvedValue({ limited: false, remaining: 599, resetAt: new Date() });
   // Ensure full sampling for deterministic tests
   process.env.RUM_SAMPLING_RATE = "1.0";
 });
 
 describe("/api/rum", () => {
   it("returns 204 (no content) immediately when DNT=1", async () => {
-    mockHeaderStore["dnt"] = "1";
-
-    const res = await rumPostHandler(makeRequest() as any);
+    const res = await rumPostHandler(makeRequest(undefined, { dnt: "1" }) as any);
     expect(res.status).toBe(204);
   });
 

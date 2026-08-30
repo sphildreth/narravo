@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireRecentLogin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users, ownerWebAuthnCredential, ownerRecoveryCode } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { verifyWebAuthnRegistration } from "@/lib/2fa/webauthn";
 import { generateRecoveryCodes, hashRecoveryCode } from "@/lib/2fa/totp";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
 import { createMfaSessionGrant, getMfaSessionContext } from "@/lib/2fa/session-grant";
-import { consumeWebAuthnChallenge, extractClientDataChallenge } from "@/lib/2fa/webauthn-challenge";
+import { consumePendingWebAuthnChallenge, extractClientDataChallenge, getPendingWebAuthnChallenge } from "@/lib/2fa/webauthn-challenge";
 import type { RegistrationResponseJSON } from "@simplewebauthn/server";
+import { safeApiError } from "@/lib/api-error";
+
+class PasskeyEnrollmentConflictError extends Error {}
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,15 +22,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
     }
     const { userId } = context;
-    const twoFactorEnabled = (session.user as any).twoFactorEnabled;
+    const [account] = await db
+      .select({ twoFactorEnabled: users.twoFactorEnabled })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!account) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     // This endpoint is only for initial 2FA setup via passkey
-    if (twoFactorEnabled) {
+    if (account.twoFactorEnabled) {
       return NextResponse.json(
         { error: "2FA is already enabled. Use /api/2fa/webauthn/register/verify to add additional passkeys." },
         { status: 400 }
       );
     }
+    requireRecentLogin(session);
 
     const body: RegistrationResponseJSON = await req.json();
     const responseChallenge = extractClientDataChallenge(body.response.clientDataJSON);
@@ -35,12 +44,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid WebAuthn challenge" }, { status: 400 });
     }
 
-    const challenge = await consumeWebAuthnChallenge({
+    const challengeContext = {
       userId,
       sessionId: context.sessionId,
-      ceremony: "registration",
+      ceremony: "registration" as const,
       responseChallenge,
-    });
+    };
+    const challenge = await getPendingWebAuthnChallenge(challengeContext);
     if (!challenge) {
       return NextResponse.json({ error: "WebAuthn challenge is missing, expired, consumed, or bound to another session" }, { status: 400 });
     }
@@ -55,6 +65,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!await consumePendingWebAuthnChallenge(challengeContext, challenge)) {
+      return NextResponse.json({ error: "WebAuthn challenge was already consumed" }, { status: 400 });
+    }
+
     const { credential } = verification.registrationInfo;
 
     // Generate recovery codes
@@ -64,14 +78,16 @@ export async function POST(req: NextRequest) {
     // Enable 2FA and store the passkey
     await db.transaction(async (tx: any) => {
       // Enable 2FA on user
-      await tx
+      const [enabled] = await tx
         .update(users)
         .set({
           twoFactorEnabled: true,
           twoFactorEnforcedAt: now,
           mfaVerifiedAt: now, // Mark as verified since user just registered passkey
         })
-        .where(eq(users.id, userId));
+        .where(and(eq(users.id, userId), eq(users.twoFactorEnabled, false)))
+        .returning({ id: users.id });
+      if (!enabled) throw new PasskeyEnrollmentConflictError();
 
       // Store the WebAuthn credential
       await tx.insert(ownerWebAuthnCredential).values({
@@ -107,11 +123,12 @@ export async function POST(req: NextRequest) {
       success: true,
       recoveryCodes,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error confirming passkey registration");
-    return NextResponse.json(
-      { error: error.message || "Failed to enable 2FA with passkey" },
-      { status: 500 }
-    );
+    if (error instanceof PasskeyEnrollmentConflictError) {
+      return NextResponse.json({ error: "2FA enrollment changed; restart setup" }, { status: 409 });
+    }
+    const publicError = safeApiError(error, "Failed to enable 2FA with passkey");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

@@ -42,6 +42,10 @@ vi.mock("@/lib/auth", () => ({
   requireSession: (...args: unknown[]) => mockRequireSession(...args),
 }));
 
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: vi.fn().mockResolvedValue({ limited: false, remaining: 29, retryAfter: 0, resetTime: Date.now() + 60_000 }),
+}));
+
 vi.mock("@/lib/logger", () => ({
   default: {
     error: vi.fn(),

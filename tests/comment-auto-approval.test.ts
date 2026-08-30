@@ -34,6 +34,8 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/comments', () => ({
   createCommentCore: vi.fn(),
+  sanitizeMarkdown: vi.fn((value: string) => value),
+  CommentError: class CommentError extends Error {},
 }));
 
 vi.mock('@/lib/rateLimit', () => ({

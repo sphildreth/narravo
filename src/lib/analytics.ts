@@ -8,6 +8,17 @@ import logger from './logger';
 
 const config = new ConfigServiceImpl({ db });
 
+export async function pruneViewEvents(retentionDays = 90): Promise<void> {
+  if (!Number.isSafeInteger(retentionDays) || retentionDays < 1 || retentionDays > 3650) {
+    throw new Error("Invalid analytics retention period");
+  }
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  await db.transaction(async (tx: any) => {
+    await tx.delete(postViewEvents).where(sql`${postViewEvents.ts} < ${cutoff}`);
+    await tx.delete(pageViewEvents).where(sql`${pageViewEvents.ts} < ${cutoff}`);
+  });
+}
+
 interface RecordViewInput {
   postId: string;
   sessionId?: string;

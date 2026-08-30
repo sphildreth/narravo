@@ -10,6 +10,25 @@ import {
   __testables__
 } from "@/lib/rateLimit";
 
+const sharedBuckets = vi.hoisted(() => new Map<string, { count: number; expiresAt: number }>());
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: vi.fn(async (key: string, max: number, windowMs: number) => {
+    const now = Date.now();
+    const previous = sharedBuckets.get(key);
+    const bucket = !previous || previous.expiresAt <= now
+      ? { count: 1, expiresAt: now + windowMs }
+      : { ...previous, count: Math.min(previous.count + 1, max + 1) };
+    sharedBuckets.set(key, bucket);
+    return { limited: bucket.count > max, remaining: Math.max(0, max - bucket.count), retryAfter: 1, resetTime: bucket.expiresAt };
+  }),
+  peekSharedRateLimit: vi.fn(async (key: string, max: number) => {
+    const bucket = sharedBuckets.get(key);
+    return !bucket || bucket.expiresAt <= Date.now()
+      ? { limited: false, remaining: max, retryAfter: 0, resetTime: Date.now() }
+      : { limited: bucket.count >= max, remaining: Math.max(0, max - bucket.count), retryAfter: 1, resetTime: bucket.expiresAt };
+  }),
+}));
+
 const { InMemoryRateLimiter, extractIpFromHeaders, isValidIp } = __testables__;
 
 // Mock the db module
@@ -112,6 +131,7 @@ describe("InMemoryRateLimiter", () => {
 
 describe("Rate limiting functions", () => {
   beforeEach(() => {
+    sharedBuckets.clear();
     mockGetNumber.mockImplementation((key: string) => {
       const defaults: Record<string, number> = {
         'RATE.COMMENTS-PER-MINUTE': 5,
@@ -188,7 +208,7 @@ describe("Rate limiting functions", () => {
     expect(user2Check.allowed).toBe(true);
   });
 
-  it("should create different keys for different IPs", async () => {
+  it("should not let a user bypass limits by rotating forwarded IPs", async () => {
     const baseUserId = `user-${Date.now()}-${Math.random()}`;
     const baseOptions = {
       userId: baseUserId,
@@ -204,9 +224,9 @@ describe("Rate limiting functions", () => {
     const ip1Check = await recordAndCheckRateLimit({ ...baseOptions, ip: "192.168.1.1" });
     expect(ip1Check.allowed).toBe(false);
 
-    // Same user from IP 2 should still be allowed
+    // The stable authenticated-user bucket is still exhausted from IP 2.
     const ip2Check = await recordAndCheckRateLimit({ ...baseOptions, ip: "192.168.1.2" });
-    expect(ip2Check.allowed).toBe(true);
+    expect(ip2Check.allowed).toBe(false);
   });
 });
 
@@ -323,6 +343,7 @@ describe("Submit time validation", () => {
 
 describe("Anti-abuse validation", () => {
   beforeEach(() => {
+    sharedBuckets.clear();
     mockGetNumber.mockImplementation((key: string) => {
       const defaults: Record<string, number> = {
         'RATE.COMMENTS-PER-MINUTE': 5,

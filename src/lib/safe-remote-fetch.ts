@@ -66,6 +66,7 @@ export function isUnsafeRemoteAddress(address: string): boolean {
       ["192.0.0.0", 24],    // IETF protocol assignments
       ["168.63.129.16", 32], // Azure platform/reserved address
       ["192.0.2.0", 24],    // TEST-NET
+      ["192.88.99.0", 24],  // deprecated 6to4 relay anycast
       ["192.168.0.0", 16],  // RFC1918
       ["198.18.0.0", 15],   // benchmarking
       ["198.51.100.0", 24], // TEST-NET
@@ -82,6 +83,10 @@ export function isUnsafeRemoteAddress(address: string): boolean {
       const mapped = Number(value & 0xffffffffn);
       return isUnsafeRemoteAddress(`${mapped >>> 24}.${(mapped >>> 16) & 255}.${(mapped >>> 8) & 255}.${mapped & 255}`);
     }
+    // Public imports have no reason to target non-global IPv6 space. Start
+    // default-deny, then exclude transition/documentation assignments that
+    // sit inside the global-unicast 2000::/3 allocation.
+    if (!inIpv6Range(value, "2000::", 3)) return true;
     return [
       ["::", 128],          // unspecified
       ["::1", 128],         // loopback
@@ -89,10 +94,10 @@ export function isUnsafeRemoteAddress(address: string): boolean {
       ["fe80::", 10],       // link-local
       ["fec0::", 10],       // deprecated site-local
       ["ff00::", 8],        // multicast
+      ["2001::", 23],       // IETF protocol/transition assignments
       ["2001:db8::", 32],   // documentation
-      ["2001:2::", 48],     // benchmarking
-      ["2001:10::", 28],    // ORCHID/reserved
-      ["2001::", 32],       // Teredo/reserved transition range
+      ["2002::", 16],       // 6to4 can encode non-public IPv4 targets
+      ["3fff::", 20],       // documentation
     ].some(([start, prefix]) => inIpv6Range(value, String(start), Number(prefix)));
   }
   return true;
@@ -156,9 +161,11 @@ export async function downloadRemoteBytes(rawUrl: string, allowedHosts: string[]
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
     const fail = (error: Error) => {
       if (settled) return;
       settled = true;
+      if (deadline) clearTimeout(deadline);
       reject(error);
     };
     const request = transport.request({
@@ -213,9 +220,11 @@ export async function downloadRemoteBytes(rawUrl: string, allowedHosts: string[]
       response.on("end", () => {
         if (settled) return;
         settled = true;
+        if (deadline) clearTimeout(deadline);
         resolve(new Uint8Array(Buffer.concat(chunks, total)));
       });
     });
+    deadline = setTimeout(() => request.destroy(new Error("Media download exceeded the total time limit")), 30_000);
     request.setTimeout(15_000, () => request.destroy(new Error("Media download timed out")));
     request.on("error", (error) => fail(error));
     request.end();

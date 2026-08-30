@@ -12,7 +12,9 @@ const ConfigServiceImpl = vi.fn(function() { return mockConfigInstance; });
 const mockLocalStorage = {
   putObject: vi.fn(),
   getPublicUrl: vi.fn(),
+  deleteObject: vi.fn(),
 };
+const mockConsumeSharedRateLimit = vi.fn();
 const mockDb = { insert: vi.fn() };
 
 vi.mock("@/lib/config", () => ({
@@ -33,6 +35,10 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/db", () => ({ get db() { return mockDb; } }));
 
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: (...args: unknown[]) => mockConsumeSharedRateLimit(...args),
+}));
+
 vi.mock("@/lib/logger", () => ({
   default: {
     error: (...args: any[]) => console.error("LOGGER ERROR:", ...args),
@@ -48,7 +54,9 @@ describe("/api/uploads/local", () => {
     mockConfigInstance.getJSON.mockReset();
     mockLocalStorage.putObject.mockReset();
     mockLocalStorage.getPublicUrl.mockReset();
+    mockLocalStorage.deleteObject.mockReset();
     mockDb.insert.mockReset();
+    mockConsumeSharedRateLimit.mockReset();
 
     mockConfigInstance.getNumber.mockImplementation((key: string) => {
       if (key === "UPLOADS.IMAGE-MAX-BYTES") return Promise.resolve(5 * 1024 * 1024);
@@ -63,8 +71,10 @@ describe("/api/uploads/local", () => {
     });
 
     mockLocalStorage.putObject.mockResolvedValue(undefined);
+    mockLocalStorage.deleteObject.mockResolvedValue(undefined);
     mockLocalStorage.getPublicUrl.mockImplementation((key: string) => `/local/${key}`);
     mockDb.insert.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
+    mockConsumeSharedRateLimit.mockResolvedValue({ limited: false, remaining: 29, resetAt: new Date() });
   });
 
   const makeFormRequest = (form: FormData): NextRequest =>
@@ -128,5 +138,16 @@ describe("/api/uploads/local", () => {
 
     const response = await uploadsLocalPost(makeFormRequest(form));
     expect(response.status).toBe(400);
+  });
+
+  it("rejects oversized declared bodies before multipart parsing", async () => {
+    const request = new Request("http://localhost/api/uploads/local", {
+      method: "POST",
+      headers: { "content-length": String(102 * 1024 * 1024) },
+      body: "x",
+    }) as unknown as NextRequest;
+
+    const response = await uploadsLocalPost(request);
+    expect(response.status).toBe(413);
   });
 });

@@ -11,6 +11,27 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import logger from '@/lib/logger';
+import { safeApiError } from "@/lib/api-error";
+import { normalizeAllowedHosts } from "@/lib/safe-remote-fetch";
+import { z } from "zod";
+
+const MAX_WXR_BYTES = 50 * 1024 * 1024;
+const IMPORT_TEMP_DIR = "/tmp/narravo-imports";
+
+const importOptionsSchema = z.strictObject({
+  dryRun: z.boolean().default(false),
+  skipMedia: z.boolean().default(false),
+  purgeBeforeImport: z.boolean().default(false),
+  allowedStatuses: z.array(z.enum(["publish", "draft", "private", "pending"])).max(4).default(["publish"]),
+  concurrency: z.number().int().min(1).max(10).default(4),
+  allowedHosts: z.array(z.string().min(1).max(253)).max(50).default([]),
+  rebuildExcerpts: z.boolean().default(false),
+});
+
+function isImportTempPath(candidate: string): boolean {
+  const relative = path.relative(IMPORT_TEMP_DIR, path.resolve(candidate));
+  return Boolean(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
 
 interface ImportJobResult {
   job?: typeof importJobs.$inferSelect | undefined;
@@ -18,19 +39,31 @@ interface ImportJobResult {
 }
 
 export async function startImportJob(formData: FormData): Promise<ImportJobResult> {
+  let tempPathToCleanup: string | null = null;
   try {
     const session = await requireAdmin2FA();
 
-    const file = formData.get("file") as File;
-    const optionsJson = formData.get("options") as string;
+    const file = formData.get("file");
+    const optionsJson = formData.get("options");
     
-    if (!file) {
+    if (!(file instanceof File)) {
       return { error: "No file provided" };
+    }
+    if (file.size <= 0 || file.size > MAX_WXR_BYTES) {
+      return { error: `WXR file must be no larger than ${MAX_WXR_BYTES} bytes` };
+    }
+    if (typeof optionsJson !== "string" || optionsJson.length > 100_000) {
+      return { error: "Invalid options format" };
     }
 
     let options;
     try {
-      options = JSON.parse(optionsJson);
+      const parsedOptions = importOptionsSchema.safeParse(JSON.parse(optionsJson));
+      if (!parsedOptions.success) return { error: "Invalid options format" };
+      options = {
+        ...parsedOptions.data,
+        allowedHosts: normalizeAllowedHosts(parsedOptions.data.allowedHosts),
+      };
     } catch {
       return { error: "Invalid options format" };
     }
@@ -41,19 +74,20 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
     }
 
     // Create temporary file
-    const tempDir = "/tmp/narravo-imports";
+    const tempDir = IMPORT_TEMP_DIR;
     await fs.mkdir(tempDir, { recursive: true });
     
-    const tempFileName = `${nanoid()}-${file.name}`;
+    const tempFileName = `${nanoid()}.xml`;
     const tempFilePath = path.join(tempDir, tempFileName);
     
     // Save uploaded file
     const arrayBuffer = await file.arrayBuffer();
     await fs.writeFile(tempFilePath, new Uint8Array(arrayBuffer));
+    tempPathToCleanup = tempFilePath;
 
     // Create job record
     const jobResult = await db.insert(importJobs).values({
-      fileName: file.name,
+      fileName: path.basename(file.name).slice(0, 255),
       filePath: tempFilePath,
       options,
       userId: session.user?.id,
@@ -62,6 +96,8 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
     
     const job = jobResult[0];
     if (!job) {
+      await fs.unlink(tempFilePath).catch(() => undefined);
+      tempPathToCleanup = null;
       return { error: "Failed to create job record" };
     }
 
@@ -93,6 +129,7 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
           }
         }
       });
+      tempPathToCleanup = null; // Background job owns cleanup from here.
     } else {
       // For dry run, execute immediately and return results
       try {
@@ -129,6 +166,7 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
         } catch {
           // Ignore cleanup errors
         }
+        tempPathToCleanup = null;
       }
     }
 
@@ -140,8 +178,11 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
     
     return { job: updatedJob || job };
   } catch (error) {
+    if (tempPathToCleanup) {
+      try { await fs.unlink(tempPathToCleanup); } catch { /* best effort cleanup */ }
+    }
     logger.error("Start import job error:", error);
-    return { error: error instanceof Error ? error.message : "Failed to start import job" };
+    return { error: safeApiError(error, "Failed to start import job").message };
   }
 }
 
@@ -180,7 +221,7 @@ export async function cancelImportJob(jobId: string): Promise<ImportJobResult> {
     return { job };
   } catch (error) {
     logger.error("Cancel import job error:", error);
-    return { error: error instanceof Error ? error.message : "Failed to cancel import job" };
+    return { error: safeApiError(error, "Failed to cancel import job").message };
   }
 }
 
@@ -193,6 +234,19 @@ export async function retryImportJob(jobId: string): Promise<ImportJobResult> {
     const existingJob = existingJobResult[0];
     if (!existingJob) {
       return { error: "Job not found" };
+    }
+
+    const parsedOptions = importOptionsSchema.safeParse(existingJob.options);
+    if (!parsedOptions.success) {
+      return { error: "Stored import options are invalid; upload the file again" };
+    }
+    const retryOptions = {
+      ...parsedOptions.data,
+      allowedHosts: normalizeAllowedHosts(parsedOptions.data.allowedHosts),
+    };
+
+    if (!isImportTempPath(existingJob.filePath)) {
+      return { error: "Stored import path is invalid" };
     }
 
     // Check if file still exists (it probably doesn't for completed jobs)
@@ -236,7 +290,7 @@ export async function retryImportJob(jobId: string): Promise<ImportJobResult> {
     setImmediate(async () => {
       try {
         await importWxr(existingJob.filePath, {
-          ...existingJob.options as any,
+          ...retryOptions,
           jobId: job.id,
         });
       } catch (error) {
@@ -255,7 +309,7 @@ export async function retryImportJob(jobId: string): Promise<ImportJobResult> {
     return { job };
   } catch (error) {
     logger.error("Retry import job error:", error);
-    return { error: error instanceof Error ? error.message : "Failed to retry import job" };
+    return { error: safeApiError(error, "Failed to retry import job").message };
   }
 }
 
@@ -271,10 +325,12 @@ export async function deleteImportJob(jobId: string): Promise<ImportJobResult> {
     }
 
     // Clean up file if it exists
-    try {
-      await fs.unlink(existingJob.filePath);
-    } catch {
-      // Ignore file cleanup errors (file may not exist)
+    if (isImportTempPath(existingJob.filePath)) {
+      try {
+        await fs.unlink(existingJob.filePath);
+      } catch {
+        // Ignore file cleanup errors (file may not exist)
+      }
     }
 
     // Delete job record (this will cascade delete related errors due to FK constraint)
@@ -284,6 +340,6 @@ export async function deleteImportJob(jobId: string): Promise<ImportJobResult> {
     return { job: existingJob };
   } catch (error) {
     logger.error("Delete import job error:", error);
-    return { error: error instanceof Error ? error.message : "Failed to delete import job" };
+    return { error: safeApiError(error, "Failed to delete import job").message };
   }
 }

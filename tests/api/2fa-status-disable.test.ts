@@ -8,8 +8,11 @@ const mockRequireAdmin = vi.fn();
 const mockRequireAdmin2FA = vi.fn();
 const mockDb = {
   select: vi.fn(),
+  update: vi.fn(),
   transaction: vi.fn(),
 };
+const mockVerifyTotpCode = vi.fn();
+const mockRateLimit = { isRateLimited: vi.fn(), resetRateLimit: vi.fn() };
 
 const mockTrustedDevices = {
   revokeAllTrustedDevices: vi.fn(),
@@ -38,11 +41,39 @@ vi.mock("@/lib/2fa/security-activity", () => ({
   logSecurityActivity: (...args: unknown[]) => mockSecurityActivity.logSecurityActivity(...args),
 }));
 
+vi.mock("@/lib/2fa/session-grant", () => ({
+  getMfaSessionContext: (session: any) => ({ userId: session.user.id, sessionId: session.user.mfaSessionId }),
+}));
+
+vi.mock("@/lib/2fa/rate-limit", () => ({
+  isRateLimited: (...args: unknown[]) => mockRateLimit.isRateLimited(...args),
+  resetRateLimit: (...args: unknown[]) => mockRateLimit.resetRateLimit(...args),
+}));
+
+vi.mock("@/lib/2fa/totp", () => ({
+  verifyTotpCode: (...args: unknown[]) => mockVerifyTotpCode(...args),
+  verifyRecoveryCode: vi.fn(),
+}));
+
+vi.mock("@/lib/2fa/totp-secret", () => ({
+  decryptTotpSecret: (value: string) => value,
+  protectTotpSecret: (value: string) => value,
+}));
+
+vi.mock("@/lib/2fa/webauthn", () => ({ verifyWebAuthnAuthentication: vi.fn() }));
+vi.mock("@/lib/2fa/webauthn-challenge", () => ({
+  extractClientDataChallenge: vi.fn(),
+  getPendingWebAuthnChallenge: vi.fn(),
+  consumePendingWebAuthnChallenge: vi.fn(),
+}));
+
 vi.mock("@/drizzle/schema", () => ({
-  ownerTotp: Symbol("ownerTotp"),
-  ownerWebAuthnCredential: Symbol("ownerWebAuthnCredential"),
-  ownerRecoveryCode: Symbol("ownerRecoveryCode"),
-  users: Symbol("users"),
+  ownerTotp: { userId: Symbol("totp.userId"), activatedAt: Symbol("totp.activatedAt"), lastUsedStep: Symbol("totp.lastUsedStep") },
+  ownerWebAuthnCredential: { userId: Symbol("webauthn.userId") },
+  ownerRecoveryCode: { userId: Symbol("recovery.userId") },
+  users: { id: Symbol("users.id") },
+  mfaSessionGrant: { userId: Symbol("grant.userId") },
+  webauthnChallenge: { userId: Symbol("challenge.userId") },
 }));
 
 describe("2FA status and disable endpoints", () => {
@@ -50,13 +81,18 @@ describe("2FA status and disable endpoints", () => {
     mockRequireAdmin.mockReset();
     mockRequireAdmin.mockResolvedValue({ user: { id: "user-1", twoFactorEnabled: true } });
     mockRequireAdmin2FA.mockReset();
-    mockRequireAdmin2FA.mockResolvedValue({ user: { id: "user-1" } });
+    mockRequireAdmin2FA.mockResolvedValue({ user: { id: "user-1", mfaSessionId: "session-a" } });
 
     mockDb.select.mockReset();
+    mockDb.update.mockReset();
     mockDb.transaction.mockReset();
 
     mockTrustedDevices.revokeAllTrustedDevices.mockReset();
     mockSecurityActivity.logSecurityActivity.mockReset();
+    mockVerifyTotpCode.mockReset();
+    mockRateLimit.isRateLimited.mockReset();
+    mockRateLimit.isRateLimited.mockResolvedValue(false);
+    mockRateLimit.resetRateLimit.mockReset();
   });
 
   const makeRequest = (url: string, init?: RequestInit): NextRequest => {
@@ -120,6 +156,19 @@ describe("2FA status and disable endpoints", () => {
   });
 
   it("disables 2FA and revokes trusted devices", async () => {
+    mockDb.select.mockImplementationOnce(() => ({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([{ secretBase32: "SECRET", activatedAt: new Date(), lastUsedStep: 100 }]),
+        }),
+      }),
+    }));
+    mockVerifyTotpCode.mockReturnValue(101);
+    mockDb.update.mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ userId: "user-1" }]) }),
+      }),
+    });
     const txUpdate = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
     const txDeleteWhere = vi.fn().mockResolvedValue(undefined);
 
@@ -130,27 +179,37 @@ describe("2FA status and disable endpoints", () => {
       });
     });
 
-    const response = await disableDelete(makeRequest("http://localhost/api/2fa/disable", { method: "DELETE" }));
+    const response = await disableDelete(makeRequest("http://localhost/api/2fa/disable", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ method: "totp", code: "123456" }),
+    }));
     const payload = await response.json();
 
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
     expect(mockTrustedDevices.revokeAllTrustedDevices).toHaveBeenCalledWith("user-1");
-    expect(mockSecurityActivity.logSecurityActivity).toHaveBeenCalledWith("user-1", "2fa_disabled");
+    expect(mockSecurityActivity.logSecurityActivity).toHaveBeenCalledWith("user-1", "2fa_disabled", { method: "totp" });
     expect(txDeleteWhere).toHaveBeenCalled();
+  });
+
+  it("requires a fresh factor rather than confirmation alone", async () => {
+    const response = await disableDelete(makeRequest("http://localhost/api/2fa/disable", { method: "DELETE" }));
+    expect(response.status).toBe(400);
+    expect(mockDb.transaction).not.toHaveBeenCalled();
   });
 
   it("returns error when admin check fails", async () => {
     mockRequireAdmin.mockRejectedValueOnce(new Error("Unauthorized"));
 
     const response = await statusGet(makeRequest("http://localhost/api/2fa/status"));
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(401);
   });
 
   it("fails disabling when admin 2FA check fails", async () => {
     mockRequireAdmin2FA.mockRejectedValueOnce(new Error("Forbidden"));
 
     const response = await disableDelete(makeRequest("http://localhost/api/2fa/disable", { method: "DELETE" }));
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(403);
   });
 });

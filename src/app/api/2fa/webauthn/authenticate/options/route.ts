@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { generateWebAuthnAuthenticationOptions } from "@/lib/2fa/webauthn";
 import { getMfaSessionContext } from "@/lib/2fa/session-grant";
 import { persistWebAuthnChallenge } from "@/lib/2fa/webauthn-challenge";
+import { safeApiError } from "@/lib/api-error";
 
 export async function POST(req: NextRequest) {
   try {
@@ -51,11 +52,9 @@ export async function POST(req: NextRequest) {
     await persistWebAuthnChallenge(userId, context.sessionId, "authentication", options.challenge);
 
     return NextResponse.json(options);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error generating WebAuthn authentication options");
-    return NextResponse.json(
-      { error: error.message || "Failed to generate authentication options" },
-      { status: 500 }
-    );
+    const publicError = safeApiError(error, "Failed to generate authentication options");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

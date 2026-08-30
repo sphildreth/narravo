@@ -23,11 +23,21 @@ export function getMfaSessionContext(session: unknown): MfaSessionContext | null
 
 /** Create a grant after a factor has been verified. It is never client supplied. */
 export async function createMfaSessionGrant({ userId, sessionId }: MfaSessionContext): Promise<void> {
-  await db.insert(mfaSessionGrant).values({
-    userId,
-    sessionId,
-    expiresAt: new Date(Date.now() + MFA_GRANT_TTL_MS),
-  });
+  await db
+    .insert(mfaSessionGrant)
+    .values({
+      userId,
+      sessionId,
+      expiresAt: new Date(Date.now() + MFA_GRANT_TTL_MS),
+    })
+    .onConflictDoUpdate({
+      target: [mfaSessionGrant.userId, mfaSessionGrant.sessionId],
+      set: {
+        expiresAt: new Date(Date.now() + MFA_GRANT_TTL_MS),
+        consumedAt: null,
+        createdAt: new Date(),
+      },
+    });
 }
 
 /**

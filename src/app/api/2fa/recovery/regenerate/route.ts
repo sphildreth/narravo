@@ -6,6 +6,7 @@ import { ownerRecoveryCode } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { generateRecoveryCodes, hashRecoveryCode } from "@/lib/2fa/totp";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
+import { safeApiError } from "@/lib/api-error";
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,11 +40,9 @@ export async function POST(req: NextRequest) {
       success: true,
       recoveryCodes,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error regenerating recovery codes:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to regenerate recovery codes" },
-      { status: 500 }
-    );
+    const publicError = safeApiError(error, "Failed to regenerate recovery codes");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

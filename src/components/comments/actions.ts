@@ -1,7 +1,7 @@
 "use server";
 // SPDX-License-Identifier: Apache-2.0
 import { headers } from "next/headers";
-import { getCommentTreeForPost, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
+import { CommentError, getCommentTreeForPost, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
 import { ConfigServiceImpl } from "@/lib/config";
 import { requireSession } from "@/lib/auth";
 import { validateAntiAbuse } from "@/lib/rateLimit";
@@ -203,9 +203,19 @@ export async function createComment(params: {
 
   } catch (error) {
     logger.error('Failed to create comment:', error);
+    const knownMessages = new Set([
+      "Too many attachments",
+      "Invalid attachment",
+      "Attachment is not a valid upload for this user",
+      "Post not found",
+    ]);
+    const publicMessage = error instanceof CommentError ||
+      (error instanceof Error && knownMessages.has(error.message))
+      ? error.message
+      : "Failed to create comment";
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Failed to create comment' 
+      error: publicMessage,
     };
   }
 }

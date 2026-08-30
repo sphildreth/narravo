@@ -22,6 +22,13 @@ const decodeHtmlEntities = (content: string): string => {
     .replace(/&nbsp;/g, " ");
 };
 
+const escapeHtml = (value: string): string => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
 export const MermaidNode = Node.create({
   name: 'mermaid',
   
@@ -236,7 +243,7 @@ export const MermaidNode = Node.create({
             await mermaid.default.initialize({
               startOnLoad: false,
               theme: 'default',
-              securityLevel: 'loose',
+              securityLevel: 'strict',
               gantt: { axisFormat: '%Y-%m-%d' },
             });
             window.mermaid = mermaid.default;
@@ -272,7 +279,7 @@ export const MermaidNode = Node.create({
             await window.mermaid.initialize({ 
               startOnLoad: false, 
               theme: 'default', 
-              securityLevel: 'loose',
+              securityLevel: 'strict',
               flowchart: { 
                 useMaxWidth: true,
                 htmlLabels: true,
@@ -290,7 +297,7 @@ export const MermaidNode = Node.create({
             await window.mermaid.parse(source);
           } catch (syntaxErr) {
             logger.error('Mermaid parse error:', syntaxErr);
-            contentDiv.innerHTML = `<div style="color:#dc2626;font-size:14px;padding:8px;background:#fef2f2;border-radius:4px;">Syntax Error: ${syntaxErr instanceof Error ? syntaxErr.message : 'Invalid diagram'}<details style="margin-top:8px;"><summary style="cursor:pointer;">Show source</summary><pre style="margin-top:8px;white-space:pre-wrap;max-height:220px;overflow:auto;font-family:monospace;font-size:12px;">${source.replace(/</g,'&lt;')}</pre></details></div>`;
+            contentDiv.innerHTML = `<div style="color:#dc2626;font-size:14px;padding:8px;background:#fef2f2;border-radius:4px;">Syntax Error: ${escapeHtml(syntaxErr instanceof Error ? syntaxErr.message : 'Invalid diagram')}<details style="margin-top:8px;"><summary style="cursor:pointer;">Show source</summary><pre style="margin-top:8px;white-space:pre-wrap;max-height:220px;overflow:auto;font-family:monospace;font-size:12px;">${escapeHtml(source)}</pre></details></div>`;
             return;
           }
         }
@@ -341,7 +348,7 @@ export const MermaidNode = Node.create({
           if (/NaN|length/.test(errorMsg) || /Invalid date/.test(errorMsg)) {
             await new Promise(r => requestAnimationFrame(r));
             try {
-              await window.mermaid.initialize({ startOnLoad:false, theme:'default', securityLevel:'loose', gantt:{ axisFormat:'%Y-%m-%d' } });
+              await window.mermaid.initialize({ startOnLoad:false, theme:'default', securityLevel:'strict', gantt:{ axisFormat:'%Y-%m-%d' } });
             } catch {/* ignore */}
             
             const secondAttempt = await tryRender(2);
@@ -353,7 +360,7 @@ export const MermaidNode = Node.create({
                 await window.mermaid.initialize({ 
                   startOnLoad: false, 
                   theme: 'default', 
-                  securityLevel: 'loose',
+                  securityLevel: 'strict',
                   flowchart: { 
                     useMaxWidth: true,
                     htmlLabels: true,
@@ -376,13 +383,13 @@ export const MermaidNode = Node.create({
             <strong>Render Warning:</strong> Could not render diagram.
             <details style="margin-top:6px;">
               <summary style="cursor:pointer;">Show source</summary>
-              <pre style="white-space:pre-wrap;max-height:200px;overflow:auto;margin-top:4px;font-family:monospace;font-size:11px;">${source.replace(/</g,'&lt;')}</pre>
+              <pre style="white-space:pre-wrap;max-height:200px;overflow:auto;margin-top:4px;font-family:monospace;font-size:11px;">${escapeHtml(source)}</pre>
             </details>
-            <p style="margin-top:6px;font-size:11px;color:#92400e;">Error: ${finalError}</p>
+            <p style="margin-top:6px;font-size:11px;color:#92400e;">Error: ${escapeHtml(finalError)}</p>
           </div>`;
         }
         } catch (error) {
-          contentDiv.innerHTML = `<div style="color: #dc2626; font-size: 14px; padding: 8px; background: #fef2f2; border-radius: 4px;">Error: ${error instanceof Error ? error.message : 'Invalid syntax'}</div>`;
+          contentDiv.innerHTML = `<div style="color: #dc2626; font-size: 14px; padding: 8px; background: #fef2f2; border-radius: 4px;">Error: ${escapeHtml(error instanceof Error ? error.message : 'Invalid syntax')}</div>`;
         }
       };
       

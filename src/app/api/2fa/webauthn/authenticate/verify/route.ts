@@ -9,8 +9,9 @@ import { isRateLimited, resetRateLimit } from "@/lib/2fa/rate-limit";
 import { createTrustedDevice, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/2fa/trusted-device";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
 import { createMfaSessionGrant, getMfaSessionContext } from "@/lib/2fa/session-grant";
-import { consumeWebAuthnChallenge, extractClientDataChallenge } from "@/lib/2fa/webauthn-challenge";
+import { consumePendingWebAuthnChallenge, extractClientDataChallenge, getPendingWebAuthnChallenge } from "@/lib/2fa/webauthn-challenge";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
+import { safeApiError } from "@/lib/api-error";
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,19 +40,20 @@ export async function POST(req: NextRequest) {
 
     // Rate limiting
     const rateLimitKey = `2fa:webauthn:${userId}`;
-    if (isRateLimited(rateLimitKey, 5, 60 * 1000)) {
+    if (await isRateLimited(rateLimitKey, 5, 60 * 1000)) {
       return NextResponse.json(
         { error: "Too many attempts. Please try again later." },
         { status: 429 }
       );
     }
 
-    const challenge = await consumeWebAuthnChallenge({
+    const challengeContext = {
       userId,
       sessionId: context.sessionId,
-      ceremony: "authentication",
+      ceremony: "authentication" as const,
       responseChallenge,
-    });
+    };
+    const challenge = await getPendingWebAuthnChallenge(challengeContext);
     if (!challenge) {
       return NextResponse.json({ error: "WebAuthn challenge is missing, expired, consumed, or bound to another session" }, { status: 400 });
     }
@@ -88,6 +90,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!await consumePendingWebAuthnChallenge(challengeContext, challenge)) {
+      return NextResponse.json({ error: "WebAuthn challenge was already consumed" }, { status: 400 });
+    }
+
     // Update counter
     const [counterUpdated] = await db
       .update(ownerWebAuthnCredential)
@@ -116,7 +122,7 @@ export async function POST(req: NextRequest) {
     await createMfaSessionGrant(context);
 
     // Reset rate limit on success
-    resetRateLimit(rateLimitKey);
+    await resetRateLimit(rateLimitKey);
 
     // Handle "remember this device"
     let trustedDeviceToken: string | null = null;
@@ -146,11 +152,9 @@ export async function POST(req: NextRequest) {
     }
 
     return apiResponse;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error verifying WebAuthn authentication");
-    return NextResponse.json(
-      { error: error.message || "Failed to verify authentication" },
-      { status: 500 }
-    );
+    const publicError = safeApiError(error, "Failed to verify authentication");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/auth";
 import { getSafeUploadTypeByMime, isConfiguredSafeType } from "@/lib/upload-validation";
 import { createUploadToken } from "@/lib/upload-signing";
 import logger from "@/lib/logger";
+import { consumeSharedRateLimit } from "@/lib/shared-rate-limit";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json",
@@ -22,6 +23,10 @@ export async function POST(req: NextRequest) {
     const session = await requireSession();
     const userId = session.user?.id;
     if (!userId) return json({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } }, 401);
+    const uploadLimit = await consumeSharedRateLimit(`upload:sign:${userId}`, 30, 60 * 1000);
+    if (uploadLimit.limited) {
+      return json({ error: { code: "RATE_LIMITED", message: "Too many upload attempts" } }, 429);
+    }
 
     const config = new ConfigServiceImpl({ db });
     const imageMaxBytes = await config.getNumber("UPLOADS.IMAGE-MAX-BYTES") ?? 5_000_000;

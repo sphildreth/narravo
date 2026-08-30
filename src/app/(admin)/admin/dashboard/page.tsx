@@ -14,6 +14,7 @@ import {
 } from "@/components/admin/DashboardActions";
 import ServerDetails from "@/components/admin/ServerDetails";
 import AdminActivityWidget from "@/components/admin/analytics/AdminActivityWidget";
+import { sanitizeCommentHtml } from "@/lib/sanitize";
 
 export default async function AdminDashboardPage() {
   await requireAdmin2FA();
@@ -81,7 +82,7 @@ export default async function AdminDashboardPage() {
                   <div>
                     <div
                       className="text-sm"
-                      dangerouslySetInnerHTML={{ __html: comment.bodyHtml }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeCommentHtml(comment.bodyHtml) }}
                     ></div>
                     <p className="text-xs text-muted-foreground">
                       {comment.author.name}

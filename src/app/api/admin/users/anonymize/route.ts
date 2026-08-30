@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { users } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { anonymizeUser, type UsersRepo } from "@/lib/adminUsers";
+import { safeApiError } from "@/lib/api-error";
 
 class DrizzleUsersRepo implements UsersRepo {
   async deleteById(id: string): Promise<number> {
@@ -25,8 +26,7 @@ export async function POST(req: NextRequest) {
     const result = await anonymizeUser(repo, { userId, email });
     return new Response(JSON.stringify({ ok: result.ok, deleted: result.deleted, mode: result.mode }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal error";
-    const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 400;
-    return new Response(JSON.stringify({ ok: false, error: { message } }), { status, headers: { "Content-Type": "application/json" } });
+    const publicError = safeApiError(err, "Invalid anonymize request", 400);
+    return new Response(JSON.stringify({ ok: false, error: { message: publicError.message } }), { status: publicError.status, headers: { "Content-Type": "application/json" } });
   }
 }

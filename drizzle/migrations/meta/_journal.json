@@ -141,6 +141,34 @@
       "when": 1788102758304,
       "tag": "0019_lowly_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788106032371,
+      "tag": "0020_security_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788106314040,
+      "tag": "0021_bound_webauthn_challenges",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788106697165,
+      "tag": "0022_analytics_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788107503722,
+      "tag": "0023_parched_amazoness",
+      "breakpoints": true
     }
   ]
 }

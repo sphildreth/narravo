@@ -136,14 +136,11 @@ export class S3Service {
     return output;
   }
 
-  // New: delete a single object by key (best-effort)
+  // Delete a single object. S3 deletion is idempotent for missing keys, while
+  // transport/permission failures must remain observable to callers.
   async deleteObject(key: string): Promise<void> {
-    try {
-      const cmd = new DeleteObjectCommand({ Bucket: this.bucket, Key: key });
-      await this.client.send(cmd);
-    } catch (err) {
-      // swallow errors for idempotency; callers may ignore missing keys
-    }
+    const cmd = new DeleteObjectCommand({ Bucket: this.bucket, Key: key });
+    await this.client.send(cmd);
   }
 
   // New: delete all objects under a given prefix (handles pagination, batches up to 1000 per call)

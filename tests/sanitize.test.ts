@@ -10,6 +10,14 @@ describe("sanitizeHtml", () => {
     expect(out).not.toContain("<script>");
   });
 
+  it("removes authored styles and application utility classes", () => {
+    const bad = `<p style="position:fixed;inset:0" class="fixed inset-0 z-50">Overlay</p>`;
+    const out = sanitizeHtml(bad);
+    expect(out).not.toContain("style=");
+    expect(out).not.toContain("class=");
+    expect(out).toContain("Overlay");
+  });
+
   it("allows safe HTML tags", () => {
     const safe = `<p>Safe <strong>bold</strong> and <em>italic</em> text with <a href="/page">link</a></p>`;
     const out = sanitizeHtml(safe);

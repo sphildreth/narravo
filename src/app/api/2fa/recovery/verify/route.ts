@@ -11,6 +11,7 @@ import { logSecurityActivity } from "@/lib/2fa/security-activity";
 import { z } from "zod";
 import { and, isNull } from "drizzle-orm";
 import { createMfaSessionGrant, getMfaSessionContext } from "@/lib/2fa/session-grant";
+import { safeApiError } from "@/lib/api-error";
 
 const verifySchema = z.object({
   code: z.string().min(8).max(10),
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     // Rate limiting
     const rateLimitKey = `2fa:recovery:${userId}`;
-    if (isRateLimited(rateLimitKey, 3, 60 * 1000)) {
+    if (await isRateLimited(rateLimitKey, 3, 60 * 1000)) {
       return NextResponse.json(
         { error: "Too many attempts. Please try again later." },
         { status: 429 }
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
     await createMfaSessionGrant(context);
 
     // Reset rate limit on success
-    resetRateLimit(rateLimitKey);
+    await resetRateLimit(rateLimitKey);
 
     // Log activity
     await logSecurityActivity(userId, "recovery_code_used", {
@@ -146,11 +147,9 @@ export async function POST(req: NextRequest) {
     }
 
     return response;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error verifying recovery code");
-    return NextResponse.json(
-      { error: error.message || "Failed to verify recovery code" },
-      { status: 500 }
-    );
+    const publicError = safeApiError(error, "Failed to verify recovery code");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

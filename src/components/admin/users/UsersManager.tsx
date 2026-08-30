@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useDateFormat } from "@/lib/dateFormat.client";
 import { formatDateSafe } from "@/lib/dateFormat";
 import logger from '@/lib/logger';
+import { sanitizeCommentHtml } from "@/lib/sanitize";
 import { 
   anonymizeUser, 
   exportUserData, 
@@ -491,7 +492,7 @@ export default function UsersManager({ initialData, filter, sort, page }: UsersM
                         </div>
                         <div 
                           className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2"
-                          dangerouslySetInnerHTML={{ __html: comment.bodyHtml }}
+                          dangerouslySetInnerHTML={{ __html: sanitizeCommentHtml(comment.bodyHtml) }}
                         />
                         <div className="text-xs text-gray-500 mt-1">
                           {formatDateSafe(comment.createdAt, fmt)}

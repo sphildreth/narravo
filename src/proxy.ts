@@ -9,6 +9,44 @@ let redirectsCache: { fromPath: string; toPath: string }[] | null = null;
 let cacheTimestamp = 0;
 const CACHE_DURATION_MS = 60 * 1000; // 1 minute
 
+function contentSecurityPolicy(nonce: string): string {
+  const isDev = process.env.NODE_ENV !== "production";
+  const s3Endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || "";
+  let storageHost = "";
+  try { storageHost = s3Endpoint ? new URL(s3Endpoint).hostname : ""; } catch { /* omit invalid config */ }
+  const awsHost = !s3Endpoint && process.env.S3_BUCKET && process.env.S3_REGION
+    ? `${process.env.S3_BUCKET}.s3.${process.env.S3_REGION}.amazonaws.com`
+    : "";
+  const imageHosts = [
+    "'self'", "data:", "blob:", storageHost, awsHost,
+    "avatars.githubusercontent.com", "images.unsplash.com", "lh3.googleusercontent.com",
+    "i.pravatar.cc", "stackoverflow.com",
+  ].filter(Boolean).join(" ");
+  const mediaHosts = ["'self'", storageHost, awsHost].filter(Boolean).join(" ");
+  const connectHosts = [
+    "'self'", storageHost, awsHost,
+    ...(isDev ? ["http:", "https:", "ws:", "data:", "blob:"] : []),
+  ].filter(Boolean).join(" ");
+  const scriptSources = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", ...(isDev ? ["'unsafe-eval'"] : [])].join(" ");
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSources}`,
+    "script-src-attr 'none'",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src ${imageHosts}`,
+    `media-src ${mediaHosts}`,
+    "frame-src 'self' https://*.youtube.com https://*.youtube-nocookie.com",
+    `connect-src ${connectHosts}`,
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "block-all-mixed-content",
+    "upgrade-insecure-requests",
+  ].join("; ");
+}
+
 async function getCachedRedirects(request: NextRequest) {
   const now = Date.now();
   if (!redirectsCache || now - cacheTimestamp > CACHE_DURATION_MS) {
@@ -25,9 +63,8 @@ export async function proxy(request: NextRequest) {
 
   logger.debug(`Processing: ${pathname}`);
   
-  // Note: 2FA checking is handled client-side in TwoFactorGuard component
-  // because NextAuth v5 uses encrypted JWE tokens that cannot be decrypted
-  // in Edge Runtime middleware without database access
+  // Authorization remains enforced in server components, actions, and API
+  // routes. This proxy is intentionally limited to redirects and headers.
   
   const redirects = await getCachedRedirects(request);
   logger.debug(`Found ${redirects?.length || 0} redirects in cache`);
@@ -83,7 +120,16 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  const nonce = crypto.randomUUID().replace(/-/g, "");
+  const csp = contentSecurityPolicy(nonce);
+  const requestHeaders = new Headers(request.headers);
+  // Next.js reads the request CSP to apply this nonce to framework-generated
+  // inline scripts. The response header enforces the same policy in-browser.
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set("Content-Security-Policy", csp);
+  return response;
 }
 
 export const config = {

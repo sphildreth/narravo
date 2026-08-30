@@ -9,6 +9,7 @@ import type { ModerateAction } from "@/lib/adminModeration";
 import { useDateFormat } from "@/lib/dateFormat.client";
 import { formatDateSafe } from "@/lib/dateFormat";
 import logger from '@/lib/logger';
+import { sanitizeCommentHtml } from "@/lib/sanitize";
 
 interface ModerationQueueProps {
   initialData: ModerationResult;
@@ -431,7 +432,7 @@ function CommentCard({
             ) : (
               <div 
                 className={`prose prose-sm max-w-none ${!isExpanded && comment.bodyHtml.length > 300 ? "line-clamp-3" : ""}`}
-                dangerouslySetInnerHTML={{ __html: comment.bodyHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeCommentHtml(comment.bodyHtml) }}
               />
             )}
             

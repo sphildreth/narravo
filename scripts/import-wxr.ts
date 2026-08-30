@@ -366,15 +366,40 @@ async function handleLocalMedia(
     return { isLocal: true, url: null }; // Handled, but file missing
   }
 
+  // Lexical containment alone does not stop a symlink inside the uploads tree
+  // from pointing at a file elsewhere on the host. Resolve both sides before
+  // reading and require a regular, bounded file.
+  let realSourcePath: string;
+  try {
+    const realSourceRoot = fs.realpathSync(sourceRoot);
+    realSourcePath = fs.realpathSync(sourcePath);
+    const realRelative = path.relative(realSourceRoot, realSourcePath);
+    if (!realRelative || realRelative === ".." || realRelative.startsWith(`..${path.sep}`) || path.isAbsolute(realRelative)) {
+      if (verbose) logger.warn("  ⚠️ Local media symlink escapes the upload root, skipping.");
+      return { isLocal: true, url: null };
+    }
+    const stat = fs.statSync(realSourcePath);
+    if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_SINGLE_MEDIA_BYTES) {
+      if (verbose) logger.warn("  ⚠️ Local media file exceeds the size limit, skipping.");
+      return { isLocal: true, url: null };
+    }
+  } catch {
+    return { isLocal: true, url: null };
+  }
+
   let localBuffer: Buffer;
   try {
-    localBuffer = fs.readFileSync(sourcePath);
+    localBuffer = fs.readFileSync(realSourcePath);
   } catch {
     return { isLocal: true, url: null };
   }
   const detectedLocal = detectSafeUploadType(localBuffer);
   if (!detectedLocal) {
     if (verbose) logger.warn("  ⚠️ Unsupported local media bytes, skipping.");
+    return { isLocal: true, url: null };
+  }
+  if (detectedLocal.kind === "image" && localBuffer.byteLength > MAX_IMAGE_MEDIA_BYTES) {
+    if (verbose) logger.warn("  ⚠️ Local image exceeds the size limit, skipping.");
     return { isLocal: true, url: null };
   }
   const localHash = crypto.createHash("sha256").update(localBuffer).digest("hex");

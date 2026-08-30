@@ -25,7 +25,7 @@ cp deploy/.env.example deploy/.env
 # Keep this file private (chmod 600); deploy/.env.example is never loaded.
 # DATABASE_URL must use the same database name/user/password as POSTGRES_* below.
 # Required: DATABASE_URL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD,
-# NEXTAUTH_URL, NEXTAUTH_SECRET
+# NEXTAUTH_URL, NEXTAUTH_SECRET, TOTP_ENCRYPTION_KEY
 # Recommended: ADMIN_EMAILS (comma-separated), OAuth provider credentials
 chmod 600 deploy/.env
 
@@ -46,7 +46,7 @@ Notes:
 - If optional object storage (S3/R2) is NOT configured, uploads default to local filesystem storage under `public/uploads` and are served by the app host (localhost in dev). Ensure persistence (Docker volume or durable disk path) if you care about retaining media across redeploys.
 - If upgrading a stack that already has a root-owned `narravo_uploads` volume, repair its ownership once before starting the new non-root image:
   ```bash
-  docker run --rm -u 0 -v narravo_uploads:/uploads alpine:3.20 chown -R 10001:10001 /uploads
+  docker compose --env-file deploy/.env -f docker-compose.prod.yml run --rm --user root --entrypoint sh web -c 'chown -R 10001:10001 /app/public/uploads'
   ```
 
 4) Seed initial data (optional):
@@ -74,6 +74,8 @@ caddy:
 		- caddy_config:/config
 	depends_on:
 		- web
+	networks:
+		- frontend
 ```
 
 And add these named volumes at the bottom of your compose file if not present:
@@ -84,6 +86,7 @@ volumes:
 ```
 
 Alternatively, use the provided `deploy/nginx.conf` with Nginx + Certbot on the host or in a container.
+Both provided proxy examples reject request bodies above roughly 101 MiB before Next.js parses multipart uploads. If you customize the proxy, preserve an equivalent limit.
 
 6) Backup and restore:
 - Backup the database and uploads to a zip:
@@ -104,6 +107,9 @@ docker compose --env-file deploy/.env -f docker-compose.prod.yml up -d --build
 Security notes:
 - Generate a unique long random `POSTGRES_PASSWORD` and URL-encode it in `DATABASE_URL`; there is no production password fallback.
 - Use a strong `NEXTAUTH_SECRET` (e.g., `openssl rand -base64 32`).
+- Generate a separate `TOTP_ENCRYPTION_KEY` with `openssl rand -base64 32`; back it up securely because losing it prevents use of encrypted TOTP seeds.
+- On upgrade, the migration command encrypts any legacy plaintext TOTP seeds with this key before the application starts.
+- After upgrading to the session-bound MFA model, sign out and back in once. First-time MFA enrollment is accepted only within 15 minutes of a fresh primary sign-in.
 - Set `ADMIN_EMAILS` to a comma-separated list to control admin access.
 
 ## Option B — Proxmox LXC (Debian 13, no Docker)
@@ -157,6 +163,7 @@ sudo -u narravo -H bash -lc "cd /opt && git clone https://github.com/sphildreth/
 sudo tee /etc/narravo.env >/dev/null <<'EOF'
 NEXTAUTH_URL=https://your-domain.com
 NEXTAUTH_SECRET=REPLACE_WITH_A_LONG_RANDOM_SECRET
+TOTP_ENCRYPTION_KEY=REPLACE_WITH_OUTPUT_OF_OPENSSL_RAND_BASE64_32
 DATABASE_URL=postgres://narravo:REPLACE_WITH_URL_ENCODED_PASSWORD@<postgres-lxc-ip>:5432/narravo
 ADMIN_EMAILS=admin@example.com
 EOF
@@ -253,6 +260,7 @@ Security notes:
 	 - `DATABASE_URL` — your Neon connection string
 	 - `NEXTAUTH_URL` — your production URL (e.g., https://your-domain.com)
 	 - `NEXTAUTH_SECRET` — strong random value
+	 - `TOTP_ENCRYPTION_KEY` — a separate 32-byte base64 key, retained across deployments
 	 - OAuth provider credentials (GitHub/Google) as needed
 	 - Optional: `ADMIN_EMAILS`, S3/R2 config, analytics salt
 3) Run migrations once against Neon (from your local dev machine):
@@ -266,6 +274,7 @@ Vercel will build and serve the app. No container is needed in this setup.
 	- `DATABASE_URL`
 	- `NEXTAUTH_URL`
 	- `NEXTAUTH_SECRET`
+	- `TOTP_ENCRYPTION_KEY`
 - Recommended:
 	- `ADMIN_EMAILS` (comma-separated emails with admin access)
 	- OAuth: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`

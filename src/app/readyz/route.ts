@@ -43,17 +43,16 @@ export async function GET() {
     checkS3(),
   ]);
 
-  const errors: string[] = [];
+  const errors: unknown[] = [];
   for (const result of checks) {
     if (result.status === "rejected") {
-      errors.push(result.reason.message);
+      errors.push(result.reason);
     }
   }
 
   if (errors.length > 0) {
-    const errorMessage = `Readiness check failed: ${errors.join(", ")}`;
-    logger.error(`/readyz error:`, errorMessage);
-    return new Response(errorMessage, { status: 503 });
+    logger.error("/readyz error:", errors);
+    return new Response("Readiness check failed", { status: 503 });
   }
 
   return new Response("OK", { status: 200 });

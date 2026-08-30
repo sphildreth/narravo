@@ -10,6 +10,7 @@ import { getS3Config, S3Service } from "@/lib/s3";
 import { localStorageService } from "@/lib/local-storage";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { safeApiError } from "@/lib/api-error";
 
 // Accept id when valid UUID; otherwise drop it so slug/BULK paths can proceed
 const idOptionalUuid = z.preprocess((v) => {
@@ -351,14 +352,13 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal error";
-    const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 500;
+    const publicError = safeApiError(err, "Purge failed");
     
     return new Response(JSON.stringify({
       ok: false,
-      error: { message }
+      error: { message: publicError.message }
     }), {
-      status,
+      status: publicError.status,
       headers: { "Content-Type": "application/json" }
     });
   }

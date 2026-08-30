@@ -3,19 +3,25 @@ import { NextRequest } from "next/server";
 import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { uploads } from "@/drizzle/schema";
-import path from "node:path";
-import { promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { detectSafeUploadType } from "@/lib/upload-validation";
+import { consumeSharedRateLimit } from "@/lib/shared-rate-limit";
+import { localStorageService } from "@/lib/local-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_MULTIPART_BYTES = DEFAULT_MAX_IMAGE_BYTES + 1024 * 1024;
 const JSON_HEADERS = { "Content-Type": "application/json", "X-Content-Type-Options": "nosniff" };
 
 export async function POST(req: NextRequest) {
+  let storedKey: string | null = null;
   try {
+    const declaredLength = req.headers.get("content-length");
+    if (declaredLength && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > MAX_MULTIPART_BYTES)) {
+      return new Response(JSON.stringify({ ok: false, error: { message: "Upload request is too large" } }), { status: 413, headers: JSON_HEADERS });
+    }
     const session = await requireAdmin2FA();
 
     // Accept multipart form data
@@ -23,6 +29,18 @@ export async function POST(req: NextRequest) {
     const file = form.get("file");
     if (!(file instanceof File)) {
       return new Response(JSON.stringify({ ok: false, error: { message: "file required" } }), { status: 400, headers: JSON_HEADERS });
+    }
+    if (file.size <= 0 || file.size > DEFAULT_MAX_IMAGE_BYTES) {
+      return new Response(JSON.stringify({ ok: false, error: { message: `Image size must be >0 and <= ${DEFAULT_MAX_IMAGE_BYTES} bytes` } }), { status: 400, headers: JSON_HEADERS });
+    }
+
+    const userId = session.user?.id;
+    if (!userId) {
+      return new Response(JSON.stringify({ ok: false, error: { message: "Unauthorized" } }), { status: 401, headers: JSON_HEADERS });
+    }
+    const uploadLimit = await consumeSharedRateLimit(`upload:banner:${userId}`, 10, 60 * 1000);
+    if (uploadLimit.limited) {
+      return new Response(JSON.stringify({ ok: false, error: { message: "Too many upload attempts" } }), { status: 429, headers: JSON_HEADERS });
     }
 
     const arr = new Uint8Array(await file.arrayBuffer());
@@ -37,34 +55,29 @@ export async function POST(req: NextRequest) {
     }
 
     const id = randomUUID();
-    const relDir = path.posix.join("uploads", "banner");
-    const relPath = path.posix.join(relDir, `${id}.${detected.extension}`);
-
-    const absDir = path.join(process.cwd(), "public", relDir);
-    const absPath = path.join(process.cwd(), "public", relPath);
-
-    await fs.mkdir(absDir, { recursive: true });
-
-    await fs.writeFile(absPath, arr);
-
-    const publicUrl = `/${relPath}`;
+    const key = `banner/${id}.${detected.extension}`;
+    await localStorageService.putObject(key, arr, detected.mimeType);
+    storedKey = key;
+    const publicUrl = localStorageService.getPublicUrl(key);
 
     // Track upload in database as temporary
-    const userId = session.user?.id ?? null;
-    const key = relPath; // e.g., "uploads/banner/xxx.png"
     await db.insert(uploads).values({
       key,
       url: publicUrl,
       mimeType: detected.mimeType,
       size,
       status: "temporary",
-      userId: userId || undefined,
+      userId,
     });
+    storedKey = null;
 
     return new Response(JSON.stringify({ ok: true, url: publicUrl, mimeType: detected.mimeType, size }), { status: 200, headers: JSON_HEADERS });
   } catch (err) {
+    if (storedKey) {
+      try { await localStorageService.deleteObject(storedKey); } catch { /* best effort cleanup */ }
+    }
     const message = err instanceof Error ? err.message : "Internal error";
     const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 500;
-    return new Response(JSON.stringify({ ok: false, error: { message } }), { status, headers: JSON_HEADERS });
+    return new Response(JSON.stringify({ ok: false, error: { message: status === 500 ? "Upload failed" : message } }), { status, headers: JSON_HEADERS });
   }
 }

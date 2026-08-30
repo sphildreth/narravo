@@ -20,6 +20,7 @@ import Prose from "@/components/Prose";
 import { RenderTimeBadge } from "@/components/RenderTimeBadge";
 import { measureAsync, createServerTimingHeader } from "@/lib/performance";
 import { formatDateSafe } from "@/lib/dateFormat";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -223,7 +224,7 @@ export default async function PostPage({ params }: Props) {
 
 
               {/* Render post body with Prose to avoid max-width cap */}
-              <Prose html={post.bodyHtml ?? ""} />
+              <Prose html={sanitizeHtml(post.bodyHtml ?? "")} />
 
               {/* Tags and Category */}
               {(((post.tags?.length ?? 0) > 0) || Boolean(post.category)) && (

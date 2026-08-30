@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerTotp, ownerWebAuthnCredential, ownerRecoveryCode } from "@/drizzle/schema";
 import { eq, isNull } from "drizzle-orm";
+import { safeApiError } from "@/lib/api-error";
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,11 +52,9 @@ export async function GET(req: NextRequest) {
         unused: unusedRecoveryCodes.length,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error fetching 2FA status:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to fetch 2FA status" },
-      { status: 500 }
-    );
+    const publicError = safeApiError(error, "Failed to fetch 2FA status");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

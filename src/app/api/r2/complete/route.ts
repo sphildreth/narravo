@@ -6,6 +6,7 @@ import { uploads } from "@/drizzle/schema";
 import { getS3Config, S3Service } from "@/lib/s3";
 import { verifyUploadToken } from "@/lib/upload-signing";
 import { detectSafeUploadType } from "@/lib/upload-validation";
+import { and, eq } from "drizzle-orm";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json",
@@ -31,6 +32,22 @@ export async function POST(req: NextRequest) {
       return json({ error: { code: "INVALID_UPLOAD_TOKEN", message: "Invalid or expired upload token" } }, 400);
     }
 
+    const [existing] = await db
+      .select()
+      .from(uploads)
+      .where(and(eq(uploads.key, key), eq(uploads.userId, userId)))
+      .limit(1);
+    if (existing) {
+      completed = true;
+      return json({
+        ok: true,
+        key: existing.key,
+        url: existing.url,
+        mimeType: existing.mimeType,
+        size: existing.size,
+      });
+    }
+
     const config = getS3Config();
     if (!config) return json({ error: { code: "STORAGE_UNAVAILABLE", message: "Remote storage is not configured" } }, 500);
     service = new S3Service(config);
@@ -41,14 +58,30 @@ export async function POST(req: NextRequest) {
       return json({ error: { code: "UNSUPPORTED_FILE_TYPE", message: "Uploaded bytes do not match the signed upload" } }, 400);
     }
     const publicUrl = service.getPublicUrl(key);
-    await db.insert(uploads).values({
+    const [inserted] = await db.insert(uploads).values({
       key,
       url: publicUrl,
       mimeType: detected.mimeType,
       size: bytes.byteLength,
       status: "temporary",
       userId,
-    });
+    }).onConflictDoNothing({ target: uploads.key }).returning({ id: uploads.id });
+    if (!inserted) {
+      const [concurrent] = await db
+        .select()
+        .from(uploads)
+        .where(and(eq(uploads.key, key), eq(uploads.userId, userId)))
+        .limit(1);
+      if (!concurrent) throw new Error("Upload key was claimed by another user");
+      completed = true;
+      return json({
+        ok: true,
+        key: concurrent.key,
+        url: concurrent.url,
+        mimeType: concurrent.mimeType,
+        size: concurrent.size,
+      });
+    }
     completed = true;
     return json({ ok: true, key, url: publicUrl, mimeType: detected.mimeType, size: bytes.byteLength });
   } catch (error) {

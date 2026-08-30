@@ -6,6 +6,7 @@ import { POST as totpConfirmPost } from "@/app/api/2fa/totp/confirm/route";
 import { POST as totpVerifyPost } from "@/app/api/2fa/totp/verify/route";
 
 const mockRequireAdmin = vi.fn();
+const mockRequireAdmin2FA = vi.fn();
 const mockRequireSession = vi.fn();
 const mockDb = {
   select: vi.fn(),
@@ -21,6 +22,12 @@ const mockTotp = {
   verifyTotpCode: vi.fn(),
   generateRecoveryCodes: vi.fn(),
   hashRecoveryCode: vi.fn(),
+};
+
+const mockTotpSecret = {
+  encrypt: vi.fn((value: string) => `encrypted:${value}`),
+  decrypt: vi.fn((value: string) => value),
+  protect: vi.fn((value: string) => value),
 };
 
 const mockRateLimit = {
@@ -42,6 +49,8 @@ const mockSessionGrant = {
 
 vi.mock("@/lib/auth", () => ({
   requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
+  requireAdmin2FA: (...args: unknown[]) => mockRequireAdmin2FA(...args),
+  requireRecentLogin: vi.fn(),
   requireSession: (...args: unknown[]) => mockRequireSession(...args),
 }));
 
@@ -58,6 +67,12 @@ vi.mock("@/lib/2fa/totp", () => ({
   verifyTotpCode: (...args: unknown[]) => mockTotp.verifyTotpCode(...args),
   generateRecoveryCodes: (...args: unknown[]) => mockTotp.generateRecoveryCodes(...args),
   hashRecoveryCode: (...args: unknown[]) => mockTotp.hashRecoveryCode(...args),
+}));
+
+vi.mock("@/lib/2fa/totp-secret", () => ({
+  encryptTotpSecret: (...args: unknown[]) => mockTotpSecret.encrypt(...args as [string]),
+  decryptTotpSecret: (...args: unknown[]) => mockTotpSecret.decrypt(...args as [string]),
+  protectTotpSecret: (...args: unknown[]) => mockTotpSecret.protect(...args as [string]),
 }));
 
 vi.mock("@/lib/2fa/rate-limit", () => ({
@@ -84,15 +99,26 @@ vi.mock("@/lib/2fa/session-grant", () => ({
 }));
 
 vi.mock("@/drizzle/schema", () => ({
-  ownerTotp: Symbol("ownerTotp"),
-  ownerRecoveryCode: Symbol("ownerRecoveryCode"),
-  users: Symbol("users"),
+  ownerTotp: {
+    userId: Symbol("ownerTotp.userId"),
+    secretBase32: Symbol("ownerTotp.secretBase32"),
+    activatedAt: Symbol("ownerTotp.activatedAt"),
+    lastUsedStep: Symbol("ownerTotp.lastUsedStep"),
+  },
+  ownerRecoveryCode: { userId: Symbol("ownerRecoveryCode.userId") },
+  users: {
+    id: Symbol("users.id"),
+    twoFactorEnabled: Symbol("users.twoFactorEnabled"),
+  },
 }));
 
 describe("2FA TOTP endpoints", () => {
   beforeEach(() => {
     mockRequireAdmin.mockReset();
     mockRequireAdmin.mockResolvedValue({ user: { id: "user-1", email: "admin@example.com", mfaSessionId: "session-a" } });
+
+    mockRequireAdmin2FA.mockReset();
+    mockRequireAdmin2FA.mockResolvedValue({ user: { id: "user-1", email: "admin@example.com", mfaSessionId: "session-a" } });
 
     mockRequireSession.mockReset();
     mockRequireSession.mockResolvedValue({ user: { id: "user-1", mfaPending: true, mfaSessionId: "session-a" } });
@@ -108,6 +134,9 @@ describe("2FA TOTP endpoints", () => {
     mockTotp.verifyTotpCode.mockReset();
     mockTotp.generateRecoveryCodes.mockReset();
     mockTotp.hashRecoveryCode.mockReset();
+    mockTotpSecret.encrypt.mockClear();
+    mockTotpSecret.decrypt.mockClear();
+    mockTotpSecret.protect.mockClear();
 
     mockRateLimit.isRateLimited.mockReset();
     mockRateLimit.resetRateLimit.mockReset();
@@ -127,13 +156,21 @@ describe("2FA TOTP endpoints", () => {
   };
 
   it("initializes a new TOTP secret", async () => {
-    mockDb.select.mockImplementationOnce(() => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
+    mockDb.select
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([{ twoFactorEnabled: false }]),
+          }),
         }),
-      }),
-    }));
+      }))
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      }));
 
     const onConflict = vi.fn().mockResolvedValue(undefined);
     const values = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflict });
@@ -155,26 +192,42 @@ describe("2FA TOTP endpoints", () => {
 
   it("prevents initializing when TOTP already active", async () => {
     const activatedAt = new Date();
-    mockDb.select.mockImplementationOnce(() => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([{ activatedAt }]),
+    mockDb.select
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([{ twoFactorEnabled: false }]),
+          }),
         }),
-      }),
-    }));
+      }))
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([{ activatedAt }]),
+          }),
+        }),
+      }));
 
     const response = await totpInitPost(makeJsonRequest("http://localhost/api/2fa/totp/init", {}));
     expect(response.status).toBe(400);
   });
 
   it("confirms TOTP enrollment and generates recovery codes", async () => {
-    mockDb.select.mockImplementationOnce(() => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([{ userId: "user-1", secretBase32: "SECRET", activatedAt: null }]),
+    mockDb.select
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([{ twoFactorEnabled: false }]),
+          }),
         }),
-      }),
-    }));
+      }))
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([{ userId: "user-1", secretBase32: "SECRET", activatedAt: null }]),
+          }),
+        }),
+      }));
 
     mockTotp.verifyTotpCode.mockReturnValue(123456);
     mockTotp.generateRecoveryCodes.mockReturnValue(["code-1", "code-2"]);
@@ -182,7 +235,13 @@ describe("2FA TOTP endpoints", () => {
 
     mockDb.transaction.mockImplementation(async (fn: (tx: any) => Promise<void>) => {
       await fn({
-        update: () => ({ set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }) }),
+        update: () => ({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ userId: "user-1", id: "user-1" }]),
+            }),
+          }),
+        }),
         insert: () => ({ values: vi.fn().mockResolvedValue(undefined) }),
       });
     });
@@ -203,18 +262,54 @@ describe("2FA TOTP endpoints", () => {
   });
 
   it("rejects invalid confirmation codes", async () => {
-    mockDb.select.mockImplementationOnce(() => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([{ userId: "user-1", secretBase32: "SECRET", activatedAt: null }]),
+    mockDb.select
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([{ twoFactorEnabled: false }]),
+          }),
         }),
-      }),
-    }));
+      }))
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([{ userId: "user-1", secretBase32: "SECRET", activatedAt: null }]),
+          }),
+        }),
+      }));
 
     mockTotp.verifyTotpCode.mockReturnValue(null);
 
     const response = await totpConfirmPost(makeJsonRequest("http://localhost/api/2fa/totp/confirm", { code: "000000" }));
     expect(response.status).toBe(400);
+  });
+
+  it("rejects a concurrent first-factor enrollment", async () => {
+    mockDb.select
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([{ twoFactorEnabled: false }]) }),
+        }),
+      }))
+      .mockImplementationOnce(() => ({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([{ userId: "user-1", secretBase32: "SECRET", activatedAt: null }]),
+          }),
+        }),
+      }));
+    mockTotp.verifyTotpCode.mockReturnValue(123456);
+    mockTotp.generateRecoveryCodes.mockReturnValue(["code-1"]);
+    mockDb.transaction.mockImplementation(async (fn: (tx: any) => Promise<void>) => fn({
+      update: () => ({
+        set: () => ({ where: () => ({ returning: vi.fn().mockResolvedValue([]) }) }),
+      }),
+      insert: () => ({ values: vi.fn() }),
+    }));
+
+    const response = await totpConfirmPost(makeJsonRequest("http://localhost/api/2fa/totp/confirm", { code: "123456" }));
+    expect(response.status).toBe(409);
+    expect(mockSessionGrant.createMfaSessionGrant).not.toHaveBeenCalled();
   });
 
   it("verifies TOTP codes and issues trusted device tokens", async () => {

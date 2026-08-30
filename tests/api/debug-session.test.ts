@@ -3,19 +3,19 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { GET as debugSessionGet } from "@/app/api/debug/session/route";
 
-const mockGetSession = vi.fn();
+const mockRequireSession = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
-  getSession: (...args: unknown[]) => mockGetSession(...args),
+  requireSession: (...args: unknown[]) => mockRequireSession(...args),
 }));
 
 describe("/api/debug/session", () => {
   beforeEach(() => {
-    mockGetSession.mockReset();
+    mockRequireSession.mockReset();
   });
 
   it("returns session details when user authenticated", async () => {
-    mockGetSession.mockResolvedValue({
+    mockRequireSession.mockResolvedValue({
       user: {
         email: "admin@example.com",
         twoFactorEnabled: true,
@@ -37,16 +37,16 @@ describe("/api/debug/session", () => {
         mfa: { totp: true },
       },
     });
-    expect(mockGetSession).toHaveBeenCalledTimes(1);
+    expect(mockRequireSession).toHaveBeenCalledTimes(1);
   });
 
-  it("returns unauthenticated state when no session", async () => {
-    mockGetSession.mockResolvedValue(undefined);
+  it("rejects requests with no session", async () => {
+    mockRequireSession.mockRejectedValue(new Error("Unauthorized"));
 
     const response = await debugSessionGet();
     const payload = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(payload).toEqual({ authenticated: false, user: null });
+    expect(response.status).toBe(401);
+    expect(payload).toEqual({ error: "Unauthorized" });
   });
 });

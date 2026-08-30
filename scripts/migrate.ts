@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
 import * as dotenv from "dotenv";
+import { encryptTotpSecret } from "../src/lib/2fa/totp-secret";
 
 dotenv.config();
 
@@ -53,6 +54,34 @@ async function main() {
     
     console.log("🚀 Running migrations from ./drizzle/migrations...");
     await migrate(db, { migrationsFolder: "./drizzle/migrations" });
+
+    // Application-level data migration: encryption depends on a deployment
+    // secret and therefore cannot be expressed safely in a SQL migration.
+    // Compare-and-swap updates make this restart-safe and avoid overwriting a
+    // concurrent TOTP rotation.
+    const legacyTotp = await client.query(`
+      SELECT user_id, secret_base32
+      FROM owner_totp
+      WHERE secret_base32 NOT LIKE 'enc:v1:%'
+    `) as { rows: Array<{ user_id: string; secret_base32: string }> };
+    if (legacyTotp.rows.length > 0) {
+      console.log(`🔐 Encrypting ${legacyTotp.rows.length} legacy TOTP secret(s)...`);
+      await client.query("BEGIN");
+      try {
+        for (const row of legacyTotp.rows) {
+          await client.query(
+            `UPDATE owner_totp
+             SET secret_base32 = $1
+             WHERE user_id = $2 AND secret_base32 = $3`,
+            [encryptTotpSecret(row.secret_base32), row.user_id, row.secret_base32],
+          );
+        }
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    }
     
     console.log("✅ All migrations applied successfully");
   } catch (error) {

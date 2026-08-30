@@ -10,7 +10,7 @@ import { comments, commentAttachments, posts } from "@/drizzle/schema";
 import { eq, sql, desc, asc } from "drizzle-orm";
 import { ConfigServiceImpl } from "@/lib/config";
 import { sanitizeHtml } from "@/lib/sanitize";
-import { createCommentCore, sanitizeMarkdown } from "@/lib/comments";
+import { CommentError, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
 import logger from "@/lib/logger";
 
 class DrizzleModerationRepo implements ModerationRepo {
@@ -339,7 +339,7 @@ export async function createAdminReply(formData: FormData) {
     return { success: true, comment };
   } catch (error) {
     logger.error("Error creating admin reply:", error);
-    return { error: error instanceof Error ? error.message : "Failed to create reply" };
+    return { error: error instanceof CommentError ? error.message : "Failed to create reply" };
   }
 }
 

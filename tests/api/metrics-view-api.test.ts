@@ -5,7 +5,11 @@ import { POST } from "@/app/api/metrics/view/route";
 
 const mockRecordView = vi.fn();
 const mockRecordPageView = vi.fn();
+const mockPruneViewEvents = vi.fn();
 const mockGetBoolean = vi.fn();
+const mockConsumeSharedRateLimit = vi.fn();
+const mockPruneRateLimits = vi.fn();
+const SERVER_SESSION_ID = "123e4567-e89b-42d3-a456-426614174000";
 
 const mockConfig = {
   getBoolean: mockGetBoolean,
@@ -16,6 +20,17 @@ const ConfigServiceImpl = vi.fn(function() { return mockConfig; });
 vi.mock("@/lib/analytics", () => ({
   recordView: (...args: unknown[]) => mockRecordView(...args),
   recordPageView: (...args: unknown[]) => mockRecordPageView(...args),
+  pruneViewEvents: (...args: unknown[]) => mockPruneViewEvents(...args),
+}));
+
+vi.mock("@/lib/shared-rate-limit", () => ({
+  consumeSharedRateLimit: (...args: unknown[]) => mockConsumeSharedRateLimit(...args),
+  pruneExpiredRateLimitBuckets: (...args: unknown[]) => mockPruneRateLimits(...args),
+}));
+
+vi.mock("node:crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:crypto")>()),
+  randomUUID: () => "123e4567-e89b-42d3-a456-426614174000",
 }));
 
 vi.mock("@/lib/config", () => ({
@@ -47,6 +62,9 @@ describe("/api/metrics/view endpoint", () => {
     vi.clearAllMocks();
     mockRecordView.mockResolvedValue(true);
     mockRecordPageView.mockResolvedValue(true);
+    mockPruneViewEvents.mockResolvedValue(0);
+    mockConsumeSharedRateLimit.mockResolvedValue({ limited: false, remaining: 1, resetAt: new Date() });
+    mockPruneRateLimits.mockResolvedValue(undefined);
     mockGetBoolean.mockResolvedValue(false);
     ConfigServiceImpl.mockClear();
     ConfigServiceImpl.mockImplementation(function() { return mockConfig; });
@@ -76,7 +94,7 @@ describe("/api/metrics/view endpoint", () => {
       );
     });
 
-    it("should include sessionId if provided", async () => {
+    it("should ignore caller-provided session IDs", async () => {
       const body = JSON.stringify({
         postId: "550e8400-e29b-41d4-a716-446655440000",
         sessionId: "session-abc123",
@@ -96,7 +114,7 @@ describe("/api/metrics/view endpoint", () => {
       expect(mockRecordView).toHaveBeenCalledWith(
         expect.objectContaining({
           postId: "550e8400-e29b-41d4-a716-446655440000",
-          sessionId: "session-abc123",
+          sessionId: SERVER_SESSION_ID,
         })
       );
     });
@@ -265,7 +283,7 @@ describe("/api/metrics/view endpoint", () => {
       );
     });
 
-    it("should include sessionId for page views", async () => {
+    it("should use a server-issued session ID for page views", async () => {
       const body = JSON.stringify({
         type: "page",
         path: "/contact",
@@ -286,7 +304,7 @@ describe("/api/metrics/view endpoint", () => {
       expect(mockRecordPageView).toHaveBeenCalledWith(
         expect.objectContaining({
           path: "/contact",
-          sessionId: "session-xyz789",
+          sessionId: SERVER_SESSION_ID,
         })
       );
     });
@@ -503,7 +521,7 @@ describe("/api/metrics/view endpoint", () => {
       expect(mockRecordView).not.toHaveBeenCalled();
     });
 
-    it("should accept sessionId exactly 128 characters", async () => {
+    it("should accept but not trust a caller sessionId exactly 128 characters", async () => {
       const validSessionId = "a".repeat(128);
       const body = JSON.stringify({
         postId: "550e8400-e29b-41d4-a716-446655440000",
@@ -523,8 +541,11 @@ describe("/api/metrics/view endpoint", () => {
       expect(response.status).toBe(204);
       expect(mockRecordView).toHaveBeenCalledWith(
         expect.objectContaining({
-          sessionId: validSessionId,
+          sessionId: SERVER_SESSION_ID,
         })
+      );
+      expect(mockRecordView).not.toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: validSessionId })
       );
     });
 

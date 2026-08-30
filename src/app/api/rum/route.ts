@@ -1,17 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
-import { headers } from "next/headers";
 import logger from '@/lib/logger';
-
-async function extractIpAddress(request: NextRequest): Promise<string> {
-  const headersList = await headers();
-  return (
-    headersList.get('x-forwarded-for')?.split(',')[0] ||
-    headersList.get('x-real-ip') ||
-    headersList.get('cf-connecting-ip') ||
-    'unknown'
-  );
-}
+import { consumeSharedRateLimit } from "@/lib/shared-rate-limit";
 
 const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,11 +33,22 @@ interface RUMPayload {
  */
 export async function POST(request: NextRequest) {
   try {
+    const fetchSite = request.headers.get("sec-fetch-site");
+    if (fetchSite && !["same-origin", "same-site", "none"].includes(fetchSite)) {
+      return new Response(null, { status: 204 });
+    }
+
     // Check Do Not Track header
-    const headersList = await headers();
-    const dnt = headersList.get('dnt') || headersList.get('DNT');
+    const dnt = request.headers.get('dnt');
     if (dnt === '1') {
       return new Response(null, { status: 204 });
+    }
+
+    // A shared global budget avoids per-process bypasses and eliminates the
+    // attacker-controlled, spoofable IP-key map previously used here.
+    const rateLimit = await consumeSharedRateLimit("rum:global", 600, 60 * 1000);
+    if (rateLimit.limited) {
+      return new Response('Rate limited', { status: 429 });
     }
 
     // Apply sampling - only process 10% of requests by default
@@ -75,14 +76,6 @@ export async function POST(request: NextRequest) {
       return new Response('No valid metrics', { status: 400 });
     }
 
-    // Extract client IP for rate limiting (hashed)
-    const clientIp = await getClientIp(request);
-    
-    // Rate limiting: max 60 requests per minute per IP
-    if (await isRateLimited(clientIp)) {
-      return new Response('Rate limited', { status: 429 });
-    }
-
     // Process the metrics (in production, this would typically be sent to a metrics store)
     await processMetrics({
       url: sanitizedUrl,
@@ -90,7 +83,6 @@ export async function POST(request: NextRequest) {
       deviceType: payload.deviceType || undefined,
       connectionType: payload.connectionType,
       timestamp: payload.timestamp || Date.now(),
-      clientIp: hashIp(clientIp),
     });
 
     return new Response(null, { status: 204 });
@@ -130,54 +122,6 @@ function isValidMetric(metric: any): metric is RUMMetric {
 }
 
 /**
- * Extract client IP with proxy support
- */
-async function getClientIp(request: NextRequest): Promise<string> {
-  const headersList = await headers();
-  return (
-    headersList.get('x-forwarded-for')?.split(',')[0] ||
-    headersList.get('x-real-ip') ||
-    headersList.get('cf-connecting-ip') ||
-    'unknown'
-  );
-}
-
-/**
- * Hash IP address for privacy
- */
-function hashIp(ip: string): string {
-  // In production, use a proper hash with a secret salt
-  // For now, just return a simple hash for demonstration
-  return Buffer.from(ip).toString('base64').substring(0, 16);
-}
-
-/**
- * Simple in-memory rate limiting (in production, use Redis)
- */
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-
-async function isRateLimited(ip: string): Promise<boolean> {
-  const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute
-  const maxRequests = 60;
-  
-  const key = hashIp(ip);
-  const entry = rateLimitStore.get(key);
-  
-  if (!entry || now > entry.resetTime) {
-    rateLimitStore.set(key, { count: 1, resetTime: now + windowMs });
-    return false;
-  }
-  
-  if (entry.count >= maxRequests) {
-    return true;
-  }
-  
-  entry.count++;
-  return false;
-}
-
-/**
  * Process metrics (store or forward to analytics service)
  */
 async function processMetrics(data: {
@@ -186,7 +130,6 @@ async function processMetrics(data: {
   deviceType?: string | undefined;
   connectionType?: string | undefined;
   timestamp: number;
-  clientIp: string;
 }): Promise<void> {
   // Log metrics for debugging (in production, send to analytics service)
   if (process.env.NODE_ENV === 'development') {

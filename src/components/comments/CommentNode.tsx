@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Image from "next/image";
 import ReactionButtons from "@/components/reactions/ReactionButtons";
+import { sanitizeCommentHtml } from "@/lib/sanitize";
 
 interface CommentAttachment {
   id: string;
@@ -43,7 +44,7 @@ export default function CommentNode({ node, canReact = false }: CommentNodeProps
         <time dateTime={node.createdAt} suppressHydrationWarning>{created}</time>
       </header>
       
-      <div className="prose" dangerouslySetInnerHTML={{ __html: node.bodyHtml }} />
+      <div className="prose" dangerouslySetInnerHTML={{ __html: sanitizeCommentHtml(node.bodyHtml) }} />
       
       {/* Attachments */}
       {node.attachments && node.attachments.length > 0 && (

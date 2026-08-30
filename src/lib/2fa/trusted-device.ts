@@ -9,7 +9,9 @@ import {
   getTrustedDeviceExpiration,
 } from "./totp";
 
-export const TRUSTED_DEVICE_COOKIE_NAME = "__Host-trustedDevice";
+export const TRUSTED_DEVICE_COOKIE_NAME = process.env.NODE_ENV === "production"
+  ? "__Host-trustedDevice"
+  : "trustedDevice";
 
 /**
  * Create a new trusted device entry
@@ -73,11 +75,17 @@ export async function verifyTrustedDevice(
 /**
  * Revoke a specific trusted device
  */
-export async function revokeTrustedDevice(deviceId: string): Promise<void> {
-  await db
+export async function revokeTrustedDevice(deviceId: string, userId: string): Promise<boolean> {
+  const [revoked] = await db
     .update(trustedDevice)
     .set({ revokedAt: new Date() })
-    .where(eq(trustedDevice.id, deviceId));
+    .where(and(
+      eq(trustedDevice.id, deviceId),
+      eq(trustedDevice.userId, userId),
+      isNull(trustedDevice.revokedAt),
+    ))
+    .returning({ id: trustedDevice.id });
+  return Boolean(revoked);
 }
 
 /**

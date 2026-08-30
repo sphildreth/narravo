@@ -207,7 +207,7 @@
       </div>
       <xsl:if test="description">
         <div class="item-description">
-          <xsl:value-of select="description" disable-output-escaping="yes"/>
+          <xsl:value-of select="description"/>
         </div>
       </xsl:if>
     </div>

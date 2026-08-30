@@ -1,15 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdmin2FA, requireRecentLogin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerTotp, users } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { generateTotpSecret, generateTotpUri, generateQrCodeDataUrl } from "@/lib/2fa/totp";
+import { encryptTotpSecret } from "@/lib/2fa/totp-secret";
+import { safeApiError } from "@/lib/api-error";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAdmin();
+    let session = await requireAdmin();
     const userId = (session.user as any).id;
+
+    const [account] = await db
+      .select({ twoFactorEnabled: users.twoFactorEnabled })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!account) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (account.twoFactorEnabled) session = await requireAdmin2FA();
+    else requireRecentLogin(session);
 
     // Check if TOTP is already enabled
     const [existing] = await db
@@ -27,6 +38,7 @@ export async function POST(req: NextRequest) {
 
     // Generate new secret
     const secret = generateTotpSecret();
+    const protectedSecret = encryptTotpSecret(secret);
     const email = session.user?.email ?? "user@example.com";
     const uri = generateTotpUri(secret, email);
     const qrCode = await generateQrCodeDataUrl(uri);
@@ -36,12 +48,12 @@ export async function POST(req: NextRequest) {
       .insert(ownerTotp)
       .values({
         userId,
-        secretBase32: secret,
+        secretBase32: protectedSecret,
       })
       .onConflictDoUpdate({
         target: ownerTotp.userId,
         set: {
-          secretBase32: secret,
+          secretBase32: protectedSecret,
           activatedAt: null, // Reset activation status
         },
       });
@@ -51,11 +63,9 @@ export async function POST(req: NextRequest) {
       uri,
       qrCode,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error initializing TOTP:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to initialize TOTP" },
-      { status: 500 }
-    );
+    const publicError = safeApiError(error, "Failed to initialize TOTP");
+    return NextResponse.json({ error: publicError.message }, { status: publicError.status });
   }
 }

@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
     getPublicUrl: vi.fn(),
   },
   db: {
+    select: vi.fn(),
     insert: vi.fn(),
   },
 }));
@@ -31,7 +32,11 @@ vi.mock("@/lib/db", () => ({
   get db() { return state.db; },
 }));
 vi.mock("@/drizzle/schema", () => ({
-  uploads: Symbol("uploads"),
+  uploads: {
+    id: Symbol("uploads.id"),
+    key: Symbol("uploads.key"),
+    userId: Symbol("uploads.userId"),
+  },
 }));
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -58,8 +63,20 @@ describe("/api/r2/complete", () => {
     state.service.deleteObject.mockResolvedValue(undefined);
     state.service.getPublicUrl.mockReset();
     state.service.getPublicUrl.mockReturnValue("https://cdn.example/images/final.png");
+    state.db.select.mockReset();
+    state.db.select.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
+      }),
+    });
     state.db.insert.mockReset();
-    state.db.insert.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
+    state.db.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: "upload-1" }]),
+        }),
+      }),
+    });
   });
 
   const request = (body: unknown): NextRequest => new Request("http://localhost/api/r2/complete", {
