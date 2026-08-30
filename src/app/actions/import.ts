@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { importJobs, importJobErrors } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { requireAdmin2FA } from "@/lib/auth";
 import { importWxr } from "../../../scripts/import-wxr";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -19,10 +19,7 @@ interface ImportJobResult {
 
 export async function startImportJob(formData: FormData): Promise<ImportJobResult> {
   try {
-    const session = await auth();
-    if (!session?.user || !(session.user as any).isAdmin) {
-      return { error: "Unauthorized" };
-    }
+    const session = await requireAdmin2FA();
 
     const file = formData.get("file") as File;
     const optionsJson = formData.get("options") as string;
@@ -59,7 +56,7 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
       fileName: file.name,
       filePath: tempFilePath,
       options,
-      userId: session.user.id,
+      userId: session.user?.id,
       status: "queued",
     }).returning();
     
@@ -150,10 +147,7 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
 
 export async function cancelImportJob(jobId: string): Promise<ImportJobResult> {
   try {
-    const session = await auth();
-    if (!session?.user || !(session.user as any).isAdmin) {
-      return { error: "Unauthorized" };
-    }
+    await requireAdmin2FA();
 
     const jobResult = await db.update(importJobs)
       .set({ 
@@ -192,10 +186,7 @@ export async function cancelImportJob(jobId: string): Promise<ImportJobResult> {
 
 export async function retryImportJob(jobId: string): Promise<ImportJobResult> {
   try {
-    const session = await auth();
-    if (!session?.user || !(session.user as any).isAdmin) {
-      return { error: "Unauthorized" };
-    }
+    await requireAdmin2FA();
 
     // Get existing job
     const existingJobResult = await db.select().from(importJobs).where(eq(importJobs.id, jobId));
@@ -270,10 +261,7 @@ export async function retryImportJob(jobId: string): Promise<ImportJobResult> {
 
 export async function deleteImportJob(jobId: string): Promise<ImportJobResult> {
   try {
-    const session = await auth();
-    if (!session?.user || !(session.user as any).isAdmin) {
-      return { error: "Unauthorized" };
-    }
+    await requireAdmin2FA();
 
     // Get existing job to check file path
     const existingJobResult = await db.select().from(importJobs).where(eq(importJobs.id, jobId));

@@ -310,7 +310,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
 
             <div>
               <label htmlFor="allowedHosts" className="block text-sm font-medium mb-2">
-                Allowed Media Hosts (one per line, empty = allow all)
+                Allowed Media Hosts (one per line; required when importing media)
               </label>
               <textarea
                 id="allowedHosts"

@@ -8,6 +8,7 @@ const mockFs = {
   mkdir: vi.fn(),
   writeFile: vi.fn(),
 };
+const mockDb = { insert: vi.fn() };
 
 vi.mock("@/lib/auth", () => ({
   requireAdmin2FA: (...args: unknown[]) => mockRequireAdmin2FA(...args),
@@ -19,6 +20,7 @@ vi.mock("node:fs", () => ({
     return mockFs;
   },
 }));
+vi.mock("@/lib/db", () => ({ get db() { return mockDb; } }));
 
 let mockUuidCounter = 0;
 vi.mock("node:crypto", () => ({
@@ -31,8 +33,10 @@ describe("/api/uploads/banner", () => {
     mockRequireAdmin2FA.mockResolvedValue({ user: { id: "admin" } });
     mockFs.mkdir.mockReset();
     mockFs.writeFile.mockReset();
+    mockDb.insert.mockReset();
     mockFs.mkdir.mockResolvedValue(undefined);
     mockFs.writeFile.mockResolvedValue(undefined);
+    mockDb.insert.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
   });
 
   const makeFormRequest = (form: FormData): NextRequest =>
@@ -42,7 +46,7 @@ describe("/api/uploads/banner", () => {
     }) as unknown as NextRequest;
 
   it("saves banner images and returns a public path", async () => {
-    const file = new File([new Uint8Array([1, 2, 3])], "header.png", { type: "image/png" });
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "header.png", { type: "image/png" });
     const form = new FormData();
     form.append("file", file);
 
@@ -69,7 +73,7 @@ describe("/api/uploads/banner", () => {
 
   it("propagates authorization errors", async () => {
     mockRequireAdmin2FA.mockRejectedValueOnce(new Error("Forbidden"));
-    const file = new File([new Uint8Array([1])], "header.png", { type: "image/png" });
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "header.png", { type: "image/png" });
     const form = new FormData();
     form.append("file", file);
 

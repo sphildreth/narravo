@@ -3,167 +3,104 @@ import { NextRequest } from "next/server";
 import { ConfigServiceImpl } from "@/lib/config";
 import { S3Service, getS3Config } from "@/lib/s3";
 import { db } from "@/lib/db";
-import { localStorageService } from "@/lib/local-storage";
 import { requireSession } from "@/lib/auth";
-import logger from '@/lib/logger';
+import { getSafeUploadTypeByMime, isConfiguredSafeType } from "@/lib/upload-validation";
+import { createUploadToken } from "@/lib/upload-signing";
+import logger from "@/lib/logger";
+
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "X-Content-Type-Options": "nosniff",
+};
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+}
 
 export async function POST(req: NextRequest) {
   try {
-    logger.info('[/api/r2/sign] POST request received');
-    await requireSession();
-    
+    const session = await requireSession();
+    const userId = session.user?.id;
+    if (!userId) return json({ error: { code: "UNAUTHORIZED", message: "Unauthorized" } }, 401);
+
     const config = new ConfigServiceImpl({ db });
-    
-    // Get configuration values
-    const imageMaxBytes = await config.getNumber("UPLOADS.IMAGE-MAX-BYTES") ?? 5000000;
-    const videoMaxBytes = await config.getNumber("UPLOADS.VIDEO-MAX-BYTES") ?? 50000000;
+    const imageMaxBytes = await config.getNumber("UPLOADS.IMAGE-MAX-BYTES") ?? 5_000_000;
+    const videoMaxBytes = await config.getNumber("UPLOADS.VIDEO-MAX-BYTES") ?? 50_000_000;
     const videoMaxDuration = await config.getNumber("UPLOADS.VIDEO-MAX-DURATION-SECONDS") ?? 90;
-    
-
-    // Get optional MIME type allowlists
-    const allowedImageMimes = await config.getJSON<string[]>("UPLOADS.ALLOWED-MIME-IMAGE") ?? [
-      "image/jpeg",
-      "image/png", 
-      "image/gif",
-      "image/webp"
+    const allowedImageMimes = (await config.getJSON<string[]>("UPLOADS.ALLOWED-MIME-IMAGE")) ?? [
+      "image/jpeg", "image/png", "image/gif", "image/webp",
     ];
-    const allowedVideoMimes = await config.getJSON<string[]>("UPLOADS.ALLOWED-MIME-VIDEO") ?? [
-      "video/mp4",
-      "video/webm"
+    const allowedVideoMimes = (await config.getJSON<string[]>("UPLOADS.ALLOWED-MIME-VIDEO")) ?? [
+      "video/mp4", "video/webm",
     ];
 
-    // Parse request body
-    const body = await req.json().catch(() => ({}));
-    const { filename, mimeType, size, kind } = body;
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const filename = typeof body.filename === "string" ? body.filename : "";
+    const mimeType = typeof body.mimeType === "string" ? body.mimeType.toLowerCase() : "";
+    const size = body.size;
+    const kind = body.kind;
+    const detectedFromClaim = getSafeUploadTypeByMime(mimeType);
 
-    logger.info(`[/api/r2/sign] Request - filename: ${filename}, mimeType: ${mimeType}, size: ${size}, kind: ${kind}`);
-
-    if (!filename || !mimeType || typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
-      logger.warn('[/api/r2/sign] Invalid request - missing required fields');
-      return new Response(
-        JSON.stringify({ error: { code: "INVALID_REQUEST", message: "Missing filename, mimeType, or size" } }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+    if (!filename || filename.length > 255 || !detectedFromClaim ||
+      (kind !== "image" && kind !== "video") || detectedFromClaim.kind !== kind ||
+      !Number.isSafeInteger(size) || (size as number) <= 0) {
+      return json({ error: { code: "INVALID_REQUEST", message: "Invalid upload metadata" } }, 400);
     }
 
-    // Validate based on kind
-    const isImage = kind === "image" || mimeType.startsWith("image/");
-    const isVideo = kind === "video" || mimeType.startsWith("video/");
-    
-    if (!isImage && !isVideo) {
-      return new Response(
-        JSON.stringify({ error: { code: "INVALID_MIME_TYPE", message: "Only image and video files are supported" } }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+    const maxBytes = kind === "image" ? imageMaxBytes : videoMaxBytes;
+    const allowedMimes = kind === "image" ? allowedImageMimes : allowedVideoMimes;
+    if ((size as number) > maxBytes || !isConfiguredSafeType(detectedFromClaim, allowedMimes)) {
+      return json({ error: { code: "INVALID_UPLOAD", message: "Upload metadata is not allowed" } }, 400);
     }
 
-    // Check size limits
-    const maxBytes = isImage ? imageMaxBytes : videoMaxBytes;
-    if (size > maxBytes) {
-      return new Response(
-        JSON.stringify({ 
-          error: { 
-            code: "FILE_TOO_LARGE", 
-            message: `File size ${size} exceeds limit of ${maxBytes} bytes for ${kind}s` 
-          } 
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Check MIME type allowlist
-    const allowedMimes = isImage ? allowedImageMimes : allowedVideoMimes;
-    if (!allowedMimes.includes(mimeType)) {
-      return new Response(
-        JSON.stringify({ 
-          error: { 
-            code: "INVALID_MIME_TYPE", 
-            message: `MIME type ${mimeType} not allowed for ${kind}s` 
-          } 
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Get S3/R2 configuration
+    const policy = {
+      kind,
+      limits: { imageMaxBytes, videoMaxBytes, videoMaxDurationSeconds: videoMaxDuration },
+    };
     const s3Config = getS3Config();
     if (!s3Config) {
-      logger.info('[/api/r2/sign] No S3/R2 config found, using local storage');
-      // In development/test, return a same-origin local upload policy to avoid CSP/connect-src issues
-      const ext = String(filename).split('.').pop() || '';
-      const keyPrefix = isImage ? 'images' : 'videos';
-      // Use timestamp + random to reduce collisions
-      const rand = Math.random().toString(36).slice(2);
-      const key = `${keyPrefix}/${Date.now()}-${rand}.${ext}`;
-      const publicUrl = localStorageService.getPublicUrl(key);
-
-      logger.info(`[/api/r2/sign] Generated local upload policy - key: ${key}, publicUrl: ${publicUrl}`);
-
-      return new Response(
-        JSON.stringify({ 
-          url: "/api/uploads/local",
-          fields: { "Content-Type": mimeType, key },
-          key,
-          method: "POST",
-          publicUrl,
-          policy: {
-            kind: isImage ? "image" : "video",
-            limits: {
-              imageMaxBytes,
-              videoMaxBytes,
-              videoMaxDurationSeconds: videoMaxDuration,
-            },
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
+      // The local endpoint assigns the final key after it detects the bytes.
+      return json({
+        url: "/api/uploads/local",
+        fields: { kind },
+        key: null,
+        method: "POST",
+        publicUrl: null,
+        policy,
+      });
     }
 
-    logger.info('[/api/r2/sign] S3/R2 config found, generating presigned URL');
-    // Create S3/R2 service and generate presigned URL
     const s3Service = new S3Service(s3Config);
     const presignedData = await s3Service.createPresignedPost(filename, mimeType, {
       maxBytes,
       allowedMimeTypes: allowedMimes,
-      contentLength: size,
-      keyPrefix: isImage ? "images" : "videos",
+      contentLength: size as number,
+      keyPrefix: kind === "image" ? "images" : "videos",
+    });
+    const uploadToken = createUploadToken({
+      key: presignedData.key,
+      kind,
+      mimeType,
+      size: size as number,
+      maxBytes,
+      userId,
+      expiresAt: Math.floor(Date.now() / 1000) + 5 * 60,
     });
 
-    const publicUrl = s3Service.getPublicUrl(presignedData.key);
-
-    logger.info(`[/api/r2/sign] Generated presigned URL - key: ${presignedData.key}, publicUrl: ${publicUrl}`);
-
-    return new Response(
-      JSON.stringify({
-        url: presignedData.url,
-        fields: presignedData.fields,
-        key: presignedData.key,
-        method: "PUT",
-        publicUrl,
-        policy: {
-          kind: isImage ? "image" : "video",
-          limits: {
-            imageMaxBytes,
-            videoMaxBytes,
-            videoMaxDurationSeconds: videoMaxDuration,
-          },
-        },
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
-
+    return json({
+      url: presignedData.url,
+      fields: presignedData.fields,
+      key: presignedData.key,
+      method: "PUT",
+      completionUrl: "/api/r2/complete",
+      uploadToken,
+      publicUrl: null,
+      policy,
+    });
   } catch (error) {
     logger.error("Error in /api/r2/sign:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
     const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
-    return new Response(
-      JSON.stringify({ 
-        error: { 
-          code: status === 401 ? "UNAUTHORIZED" : status === 403 ? "FORBIDDEN" : "INTERNAL_ERROR",
-          message
-        } 
-      }),
-      { status, headers: { "Content-Type": "application/json" } }
-    );
+    return json({ error: { code: status === 401 ? "UNAUTHORIZED" : "INTERNAL_ERROR", message: status === 500 ? "Internal server error" : message } }, status);
   }
 }

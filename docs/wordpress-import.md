@@ -24,7 +24,7 @@ Choose which WordPress post statuses to import:
 
 ### Advanced Options
 - **Concurrency**: Number of simultaneous media downloads (1-10, default: 4)
-- **Allowed Media Hosts**: Whitelist of domains for media downloads (empty = allow all)
+- **Allowed Media Hosts**: Required non-empty whitelist of domains for media downloads (empty disables remote media)
 
 ## What Gets Imported
 
@@ -156,7 +156,7 @@ pnpm wxr:import -- path=./export.xml allowedHosts=example.com,cdn.example.com --
 - `--purge`: ⚠️ **Delete all posts, comments, categories, tags, redirects, and uploaded files**
 - `uploads=<path>`: Local uploads directory for offline import
 - `root=<pattern>`: Regex pattern for old site URL (required with uploads)
-- `allowedHosts=<hosts>`: Comma-separated allowed domains
+- `allowedHosts=<hosts>`: Required, comma-separated HTTP(S) host allowlist for remote media. An empty allowlist disables remote downloads. Hosts resolving to private, loopback, link-local, metadata, multicast, reserved, or carrier-grade NAT addresses are rejected; only supported raster/video bytes are published.
 - `concurrency=<number>`: Simultaneous downloads (1-10, default: 4)
 
 ## Troubleshooting

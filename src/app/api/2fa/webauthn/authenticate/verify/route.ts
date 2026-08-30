@@ -3,17 +3,23 @@ import { NextResponse, NextRequest } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerWebAuthnCredential, users } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { verifyWebAuthnAuthentication } from "@/lib/2fa/webauthn";
 import { isRateLimited, resetRateLimit } from "@/lib/2fa/rate-limit";
 import { createTrustedDevice, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/2fa/trusted-device";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
+import { createMfaSessionGrant, getMfaSessionContext } from "@/lib/2fa/session-grant";
+import { consumeWebAuthnChallenge, extractClientDataChallenge } from "@/lib/2fa/webauthn-challenge";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await requireSession();
-    const userId = (session.user as any).id;
+    const context = getMfaSessionContext(session);
+    if (!context) {
+      return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
+    }
+    const { userId } = context;
 
     // Check if user has mfaPending status
     if (!(session.user as any).mfaPending) {
@@ -26,11 +32,10 @@ export async function POST(req: NextRequest) {
     const body: AuthenticationResponseJSON & { rememberDevice?: boolean } = await req.json();
     const { rememberDevice, ...authResponse } = body;
 
-    // Extract challenge from clientDataJSON
-    const clientData = JSON.parse(
-      Buffer.from(authResponse.response.clientDataJSON, "base64").toString()
-    );
-    const expectedChallenge = clientData.challenge;
+    const responseChallenge = extractClientDataChallenge(authResponse.response.clientDataJSON);
+    if (!responseChallenge) {
+      return NextResponse.json({ error: "Invalid WebAuthn challenge" }, { status: 400 });
+    }
 
     // Rate limiting
     const rateLimitKey = `2fa:webauthn:${userId}`;
@@ -41,11 +46,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const challenge = await consumeWebAuthnChallenge({
+      userId,
+      sessionId: context.sessionId,
+      ceremony: "authentication",
+      responseChallenge,
+    });
+    if (!challenge) {
+      return NextResponse.json({ error: "WebAuthn challenge is missing, expired, consumed, or bound to another session" }, { status: 400 });
+    }
+
     // Get credential
     const [credential] = await db
       .select()
       .from(ownerWebAuthnCredential)
-      .where(eq(ownerWebAuthnCredential.credentialId, authResponse.id))
+      .where(and(
+        eq(ownerWebAuthnCredential.credentialId, authResponse.id),
+        eq(ownerWebAuthnCredential.userId, userId),
+      ))
       .limit(1);
 
     if (!credential) {
@@ -58,7 +76,7 @@ export async function POST(req: NextRequest) {
     // Verify authentication
     const verification = await verifyWebAuthnAuthentication(
       authResponse,
-      expectedChallenge,
+      challenge.challenge,
       credential.publicKey,
       credential.counter
     );
@@ -71,13 +89,21 @@ export async function POST(req: NextRequest) {
     }
 
     // Update counter
-    await db
+    const [counterUpdated] = await db
       .update(ownerWebAuthnCredential)
       .set({
         counter: verification.authenticationInfo.newCounter,
         lastUsedAt: new Date(),
       })
-      .where(eq(ownerWebAuthnCredential.id, credential.id));
+      .where(and(
+        eq(ownerWebAuthnCredential.id, credential.id),
+        eq(ownerWebAuthnCredential.counter, credential.counter),
+      ))
+      .returning({ id: ownerWebAuthnCredential.id });
+
+    if (!counterUpdated) {
+      return NextResponse.json({ error: "Credential was used concurrently" }, { status: 400 });
+    }
 
     // Mark 2FA as verified in user record
     await db
@@ -86,6 +112,8 @@ export async function POST(req: NextRequest) {
         mfaVerifiedAt: new Date(),
       })
       .where(eq(users.id, userId));
+
+    await createMfaSessionGrant(context);
 
     // Reset rate limit on success
     resetRateLimit(rateLimitKey);
@@ -119,7 +147,7 @@ export async function POST(req: NextRequest) {
 
     return apiResponse;
   } catch (error: any) {
-    console.error("Error verifying WebAuthn authentication:", error);
+    console.error("Error verifying WebAuthn authentication");
     return NextResponse.json(
       { error: error.message || "Failed to verify authentication" },
       { status: 500 }

@@ -1,16 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerWebAuthnCredential } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { generateWebAuthnRegistrationOptions } from "@/lib/2fa/webauthn";
+import { getMfaSessionContext } from "@/lib/2fa/session-grant";
+import { persistWebAuthnChallenge } from "@/lib/2fa/webauthn-challenge";
 
 export async function POST(req: NextRequest) {
   try {
-    // Use requireAdmin instead of requireAdmin2FA to allow initial enrollment
-    const session = await requireAdmin();
-    const userId = (session.user as any).id;
+    // Initial enrollment is allowed before MFA exists. Adding another
+    // credential to an already protected account requires the current session
+    // to have completed MFA before an options challenge is issued.
+    let session = await requireAdmin();
+    if ((session.user as any).twoFactorEnabled) {
+      session = await requireAdmin2FA();
+    }
+    const context = getMfaSessionContext(session);
+    if (!context) {
+      return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
+    }
+    const { userId } = context;
     const email = session.user?.email ?? "user@example.com";
     const name = session.user?.name ?? "User";
 
@@ -33,11 +44,11 @@ export async function POST(req: NextRequest) {
       }))
     );
 
-    // Store challenge in session or temporary storage
-    // For simplicity, we'll return it to client and expect it back
+    await persistWebAuthnChallenge(userId, context.sessionId, "registration", options.challenge);
+
     return NextResponse.json(options);
   } catch (error: any) {
-    console.error("Error generating WebAuthn registration options:", error);
+    console.error("Error generating WebAuthn registration options");
     return NextResponse.json(
       { error: error.message || "Failed to generate registration options" },
       { status: 500 }

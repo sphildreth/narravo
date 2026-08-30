@@ -388,6 +388,45 @@ export const ownerWebAuthnCredential = pgTable("owner_webauthn_credential", {
   ownerWebAuthnCredentialUserIdIndex: index("owner_webauthn_credential_user_id_idx").on(table.userId),
 }));
 
+// Server-side WebAuthn ceremony challenges. A challenge is tied to the exact
+// login session that requested it and is consumed atomically during verify.
+export const webauthnCeremony = pgEnum("webauthn_ceremony", [
+  "registration",
+  "authentication",
+]);
+
+export const webauthnChallenge = pgTable("webauthn_challenge", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  challenge: text("challenge").notNull(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  sessionId: text("session_id").notNull(),
+  ceremony: webauthnCeremony("ceremony").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  webauthnChallengeLookupIndex: index("webauthn_challenge_lookup_idx").on(
+    table.userId, table.sessionId, table.ceremony, table.challenge
+  ),
+  webauthnChallengeExpiryIndex: index("webauthn_challenge_expiry_idx").on(table.expiresAt),
+}));
+
+// A short-lived, single-use grant created only after a second factor has
+// succeeded. The Auth.js JWT callback consumes it using its own signed
+// per-login session identifier; request-body flags are never consulted.
+export const mfaSessionGrant = pgTable("mfa_session_grant", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  sessionId: text("session_id").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  mfaSessionGrantLookupIndex: index("mfa_session_grant_lookup_idx").on(
+    table.userId, table.sessionId, table.expiresAt
+  ),
+}));
+
 // Recovery codes (hashed at rest)
 export const ownerRecoveryCode = pgTable("owner_recovery_code", {
   id: uuid("id").primaryKey().defaultRandom(),

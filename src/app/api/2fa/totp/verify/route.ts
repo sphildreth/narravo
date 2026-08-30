@@ -9,6 +9,8 @@ import { isRateLimited, resetRateLimit } from "@/lib/2fa/rate-limit";
 import { createTrustedDevice, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/2fa/trusted-device";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
 import { z } from "zod";
+import { and, or, isNull, lt } from "drizzle-orm";
+import { createMfaSessionGrant, getMfaSessionContext } from "@/lib/2fa/session-grant";
 
 const verifySchema = z.object({
   code: z.string().length(6).regex(/^\d+$/),
@@ -18,7 +20,11 @@ const verifySchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const session = await requireSession();
-    const userId = (session.user as any).id;
+    const context = getMfaSessionContext(session);
+    if (!context) {
+      return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
+    }
+    const { userId } = context;
     
     // Check if user has mfaPending status
     if (!(session.user as any).mfaPending) {
@@ -73,7 +79,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check for replay attack
-    if (totp.lastUsedStep && step <= totp.lastUsedStep) {
+    if (totp.lastUsedStep !== null && step <= totp.lastUsedStep) {
       return NextResponse.json(
         { error: "Code already used" },
         { status: 400 }
@@ -81,13 +87,21 @@ export async function POST(req: NextRequest) {
     }
 
     // Update last used step
-    await db
+    const [used] = await db
       .update(ownerTotp)
       .set({
         lastUsedAt: new Date(),
         lastUsedStep: step,
       })
-      .where(eq(ownerTotp.userId, userId));
+      .where(and(
+        eq(ownerTotp.userId, userId),
+        or(isNull(ownerTotp.lastUsedStep), lt(ownerTotp.lastUsedStep, step)),
+      ))
+      .returning({ userId: ownerTotp.userId });
+
+    if (!used) {
+      return NextResponse.json({ error: "Code already used" }, { status: 400 });
+    }
 
     // Mark 2FA as verified in user record
     await db
@@ -96,6 +110,8 @@ export async function POST(req: NextRequest) {
         mfaVerifiedAt: new Date(),
       })
       .where(eq(users.id, userId));
+
+    await createMfaSessionGrant(context);
 
     // Reset rate limit on success
     resetRateLimit(rateLimitKey);
@@ -111,8 +127,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // The session will be upgraded to mfa=true in the next request
-    // via JWT callback. For now, we return success.
+    // The Auth.js JWT callback upgrades only this signed session after it
+    // consumes the server-side, single-use grant.
     const response = NextResponse.json({
       success: true,
       message: "2FA verification successful",
@@ -131,7 +147,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: any) {
-    console.error("Error verifying TOTP:", error);
+    console.error("Error verifying TOTP");
     return NextResponse.json(
       { error: error.message || "Failed to verify TOTP" },
       { status: 500 }

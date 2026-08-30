@@ -6,15 +6,18 @@ declare module "next-auth" {
     user?: DefaultSession["user"] & {
       id: string;
       isAdmin?: boolean;
+      mfaSessionId?: string;
     };
     mfaPending?: boolean;
     mfa?: boolean;
+    mfaSessionId?: string;
   }
 
   interface User {
     id: string;
     isAdmin?: boolean;
     twoFactorEnabled?: boolean;
+    mfaSessionId?: string;
   }
 }
 
@@ -25,5 +28,6 @@ declare module "next-auth/jwt" {
     mfaPending?: boolean;
     mfa?: boolean;
     twoFactorEnabled?: boolean;
+    mfaSessionId?: string;
   }
 }

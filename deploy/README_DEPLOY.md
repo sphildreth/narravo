@@ -21,28 +21,41 @@ cd narravo
 2) Configure environment variables:
 ```bash
 cp deploy/.env.example deploy/.env
-# Open deploy/.env and set values for your environment.
-# Required: DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET
+# Open deploy/.env and replace every placeholder with production values.
+# Keep this file private (chmod 600); deploy/.env.example is never loaded.
+# DATABASE_URL must use the same database name/user/password as POSTGRES_* below.
+# Required: DATABASE_URL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD,
+# NEXTAUTH_URL, NEXTAUTH_SECRET
 # Recommended: ADMIN_EMAILS (comma-separated), OAuth provider credentials
+chmod 600 deploy/.env
+
+# Validate interpolation and environment-file syntax before starting.
+docker compose --env-file deploy/.env -f docker-compose.prod.yml config >/dev/null
 ```
 
 3) Build and start the stack:
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml logs -f web
+docker compose --env-file deploy/.env -f docker-compose.prod.yml up -d --build
+docker compose --env-file deploy/.env -f docker-compose.prod.yml logs -f web
 ```
 Notes:
-- First boot runs database migrations automatically (via the container entrypoint) and then starts the app on port 3000.
+- First boot runs database migrations automatically as the unprivileged `narravo` user and then starts the app on port 3000.
 - The compose file starts two services: `db` (Postgres 16) and `web` (Narravo).
+- PostgreSQL has no host port mapping and is reachable only by `web` on the internal Docker network.
+- The host publishes the app only on `127.0.0.1:3000`; a host Nginx/Caddy reverse proxy can use that address. A proxy container can use `http://web:3000` on the shared frontend network.
 - If optional object storage (S3/R2) is NOT configured, uploads default to local filesystem storage under `public/uploads` and are served by the app host (localhost in dev). Ensure persistence (Docker volume or durable disk path) if you care about retaining media across redeploys.
+- If upgrading a stack that already has a root-owned `narravo_uploads` volume, repair its ownership once before starting the new non-root image:
+  ```bash
+  docker run --rm -u 0 -v narravo_uploads:/uploads alpine:3.20 chown -R 10001:10001 /uploads
+  ```
 
 4) Seed initial data (optional):
 ```bash
 # Seed site config (runs inside the web container)
-docker compose -f docker-compose.prod.yml exec web pnpm -s seed:config
+docker compose --env-file deploy/.env -f docker-compose.prod.yml exec web pnpm -s seed:config
 
 # Seed demo posts (optional)
-docker compose -f docker-compose.prod.yml exec web pnpm -s seed:posts
+docker compose --env-file deploy/.env -f docker-compose.prod.yml exec web pnpm -s seed:posts
 ```
 
 5) TLS/HTTPS (optional but recommended):
@@ -75,21 +88,21 @@ Alternatively, use the provided `deploy/nginx.conf` with Nginx + Certbot on the 
 6) Backup and restore:
 - Backup the database and uploads to a zip:
 ```bash
-docker compose -f docker-compose.prod.yml exec web pnpm -s backup > backup-$(date +%F).zip
+docker compose --env-file deploy/.env -f docker-compose.prod.yml exec web pnpm -s backup > backup-$(date +%F).zip
 ```
 - Restore from a backup zip (pipe the file into the container):
 ```bash
-cat backup-YYYY-MM-DD.zip | docker compose -f docker-compose.prod.yml exec -T web pnpm -s restore
+cat backup-YYYY-MM-DD.zip | docker compose --env-file deploy/.env -f docker-compose.prod.yml exec -T web pnpm -s restore
 ```
 
 7) Updating to a new version:
 ```bash
 git pull
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose --env-file deploy/.env -f docker-compose.prod.yml up -d --build
 ```
 
 Security notes:
-- Change default Postgres credentials in `docker-compose.prod.yml` (and update `DATABASE_URL` accordingly) before exposing to the internet.
+- Generate a unique long random `POSTGRES_PASSWORD` and URL-encode it in `DATABASE_URL`; there is no production password fallback.
 - Use a strong `NEXTAUTH_SECRET` (e.g., `openssl rand -base64 32`).
 - Set `ADMIN_EMAILS` to a comma-separated list to control admin access.
 
@@ -107,12 +120,12 @@ This option runs Narravo directly on a Debian 13 (trixie) LXC without containers
 2) Prepare the PostgreSQL LXC (one-time):
 	On the Postgres container, create a database and user for Narravo:
 	```bash
-	sudo -u postgres psql -c "CREATE USER narravo WITH PASSWORD 'change-me-strong';"
+	sudo -u postgres psql -c "CREATE USER narravo WITH PASSWORD 'REPLACE_WITH_A_LONG_RANDOM_PASSWORD';"
 	sudo -u postgres psql -c "CREATE DATABASE narravo OWNER narravo;"
 	sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE narravo TO narravo;"
 	```
-	Your connection URL (from the app LXC) will look like:
-	`postgres://narravo:change-me-strong@<postgres-lxc-ip>:5432/narravo`
+	Your connection URL (from the app LXC) will use that same URL-encoded password:
+	`postgres://narravo:REPLACE_WITH_URL_ENCODED_PASSWORD@<postgres-lxc-ip>:5432/narravo`
 
 	Networking tips (Proxmox):
 	- Assign the Postgres LXC an IP on the same bridge (e.g., vmbr0) as the app LXC.
@@ -143,8 +156,8 @@ sudo -u narravo -H bash -lc "cd /opt && git clone https://github.com/sphildreth/
 # Replace placeholders, keep the quotes around URLs/secrets
 sudo tee /etc/narravo.env >/dev/null <<'EOF'
 NEXTAUTH_URL=https://your-domain.com
-NEXTAUTH_SECRET=replace-with-strong-secret
-DATABASE_URL=postgres://narravo:change-me-strong@<postgres-lxc-ip>:5432/narravo
+NEXTAUTH_SECRET=REPLACE_WITH_A_LONG_RANDOM_SECRET
+DATABASE_URL=postgres://narravo:REPLACE_WITH_URL_ENCODED_PASSWORD@<postgres-lxc-ip>:5432/narravo
 ADMIN_EMAILS=admin@example.com
 EOF
 

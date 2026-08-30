@@ -31,6 +31,9 @@ const mockTrustedDevice = {
 const mockSecurityActivity = {
   logSecurityActivity: vi.fn(),
 };
+const mockSessionGrant = {
+  createMfaSessionGrant: vi.fn(),
+};
 
 vi.mock("@/lib/auth", () => ({
   requireSession: (...args: unknown[]) => mockRequireSession(...args),
@@ -67,6 +70,11 @@ vi.mock("@/lib/2fa/security-activity", () => ({
   logSecurityActivity: (...args: unknown[]) => mockSecurityActivity.logSecurityActivity(...args),
 }));
 
+vi.mock("@/lib/2fa/session-grant", () => ({
+  createMfaSessionGrant: (...args: unknown[]) => mockSessionGrant.createMfaSessionGrant(...args),
+  getMfaSessionContext: (session: any) => ({ userId: session.user.id, sessionId: session.user.mfaSessionId }),
+}));
+
 vi.mock("@/drizzle/schema", () => ({
   ownerRecoveryCode: Symbol("ownerRecoveryCode"),
   users: Symbol("users"),
@@ -75,10 +83,10 @@ vi.mock("@/drizzle/schema", () => ({
 describe("2FA recovery endpoints", () => {
   beforeEach(() => {
     mockRequireSession.mockReset();
-    mockRequireSession.mockResolvedValue({ user: { id: "user-1", mfaPending: true } });
+    mockRequireSession.mockResolvedValue({ user: { id: "user-1", mfaPending: true, mfaSessionId: "session-a" } });
 
     mockRequireAdmin2FA.mockReset();
-    mockRequireAdmin2FA.mockResolvedValue({ user: { id: "user-1" } });
+    mockRequireAdmin2FA.mockResolvedValue({ user: { id: "user-1", mfaSessionId: "session-a" } });
 
     mockDb.select.mockReset();
     mockDb.update.mockReset();
@@ -93,6 +101,7 @@ describe("2FA recovery endpoints", () => {
 
     mockTrustedDevice.createTrustedDevice.mockReset();
     mockSecurityActivity.logSecurityActivity.mockReset();
+    mockSessionGrant.createMfaSessionGrant.mockReset();
   });
 
   const makeJsonRequest = (url: string, body: unknown): NextRequest => {
@@ -123,7 +132,9 @@ describe("2FA recovery endpoints", () => {
 
     mockDb.update
       .mockImplementationOnce(() => ({
-        set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: "rc-2" }]) }),
+        }),
       }))
       .mockImplementationOnce(() => ({
         set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),

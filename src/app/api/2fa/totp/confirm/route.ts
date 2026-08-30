@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { verifyTotpCode, generateRecoveryCodes, hashRecoveryCode } from "@/lib/2fa/totp";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
 import { z } from "zod";
+import { createMfaSessionGrant, getMfaSessionContext } from "@/lib/2fa/session-grant";
 
 const confirmSchema = z.object({
   code: z.string().length(6).regex(/^\d+$/),
@@ -15,7 +16,11 @@ const confirmSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAdmin();
-    const userId = (session.user as any).id;
+    const context = getMfaSessionContext(session);
+    if (!context) {
+      return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
+    }
+    const { userId } = context;
     const body = await req.json();
     
     const parsed = confirmSchema.safeParse(body);
@@ -93,6 +98,8 @@ export async function POST(req: NextRequest) {
       );
     });
 
+    await createMfaSessionGrant(context);
+
     // Log activity
     await logSecurityActivity(userId, "2fa_enabled");
     await logSecurityActivity(userId, "totp_activated");
@@ -105,7 +112,7 @@ export async function POST(req: NextRequest) {
       recoveryCodes,
     });
   } catch (error: any) {
-    console.error("Error confirming TOTP:", error);
+    console.error("Error confirming TOTP");
     return NextResponse.json(
       { error: error.message || "Failed to confirm TOTP" },
       { status: 500 }

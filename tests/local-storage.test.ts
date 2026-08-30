@@ -22,6 +22,7 @@ describe("LocalStorageService", () => {
   beforeEach(() => {
     service = new LocalStorageService(mockUploadDir, mockBaseUrl);
     vi.clearAllMocks();
+    vi.mocked(fs.realpath).mockResolvedValue(mockUploadDir);
   });
 
   afterEach(() => {
@@ -52,6 +53,7 @@ describe("LocalStorageService", () => {
       
       expect(fs.mkdir).toHaveBeenCalled();
       expect(fs.writeFile).toHaveBeenCalledWith(expect.any(String), body);
+      expect(fs.rename).toHaveBeenCalledWith(expect.any(String), expect.any(String));
       expect(fs.stat).toHaveBeenCalledWith(expect.any(String));
     });
 
@@ -91,23 +93,19 @@ describe("LocalStorageService", () => {
     it("should generate upload URL with safe filename", async () => {
       const result = await service.createPresignedPost("test file!.jpg", "image/jpeg", {});
       
-      expect(result.key).toMatch(/^uploads\/[a-zA-Z0-9_-]+\.jpg$/);
+      expect(result.key).toMatch(/^images\/[a-zA-Z0-9_-]+\.jpg$/);
       expect(result.url).toBe(`/api/uploads/local`);
       expect(result.fields).toHaveProperty('Content-Type', 'image/jpeg');
       expect(result.fields).toHaveProperty('key');
     });
 
-    it("should preserve file extension", async () => {
-      const result = await service.createPresignedPost("document.pdf", "application/pdf", {});
-      
-      expect(result.key).toMatch(/^uploads\/.+\.pdf$/);
+    it("should reject unsupported active or document MIME types", async () => {
+      await expect(service.createPresignedPost("document.pdf", "application/pdf", {})).rejects.toThrow();
+      await expect(service.createPresignedPost("page.svg", "image/svg+xml", {})).rejects.toThrow();
     });
 
-    it("should handle files without extension", async () => {
-      const result = await service.createPresignedPost("testfile", "text/plain", {});
-      
-      // Files without extension get the whole filename as the extension
-      expect(result.key).toMatch(/^uploads\/[a-zA-Z0-9_-]+/);
+    it("should reject traversal-like public keys", () => {
+      expect(() => service.getPublicUrl("../../etc/passwd")).toThrow("Invalid storage key");
     });
   });
 

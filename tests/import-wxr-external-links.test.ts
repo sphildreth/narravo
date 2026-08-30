@@ -2,6 +2,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { importWxr } from "../scripts/import-wxr";
 
+const { mockDownloadRemoteBytes } = vi.hoisted(() => ({ mockDownloadRemoteBytes: vi.fn() }));
+vi.mock("@/lib/safe-remote-fetch", () => ({
+  normalizeAllowedHosts: (hosts: string[]) => hosts,
+  downloadRemoteBytes: (...args: unknown[]) => mockDownloadRemoteBytes(...args),
+}));
+
 // Mock fs to return a simple WXR with one post containing external and media links
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(async () => `<?xml version="1.0" encoding="UTF-8"?>
@@ -81,6 +87,8 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 describe("WXR Import external links handling", () => {
   beforeEach(() => {
     putCalls.length = 0;
+    mockDownloadRemoteBytes.mockReset();
+    mockDownloadRemoteBytes.mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => {
@@ -96,11 +104,10 @@ describe("WXR Import external links handling", () => {
     });
 
     // Should only attempt to fetch the PDF, not the HTML page link
-    expect(putCalls.length).toBe(1);
+    expect(putCalls.length).toBe(0);
 
     // The media map should contain the PDF URL but not the external page URL
-    expect(result.mediaUrls.has("https://files.example.com/report.pdf")).toBe(true);
+    expect(result.mediaUrls.has("https://files.example.com/report.pdf")).toBe(false);
     expect(result.mediaUrls.has("https://external.example.com/page")).toBe(false);
   });
 });
-

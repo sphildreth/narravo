@@ -7,12 +7,18 @@ import { eq } from "drizzle-orm";
 import { verifyWebAuthnRegistration } from "@/lib/2fa/webauthn";
 import { generateRecoveryCodes, hashRecoveryCode } from "@/lib/2fa/totp";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
+import { createMfaSessionGrant, getMfaSessionContext } from "@/lib/2fa/session-grant";
+import { consumeWebAuthnChallenge, extractClientDataChallenge } from "@/lib/2fa/webauthn-challenge";
 import type { RegistrationResponseJSON } from "@simplewebauthn/server";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAdmin();
-    const userId = (session.user as any).id;
+    const context = getMfaSessionContext(session);
+    if (!context) {
+      return NextResponse.json({ error: "MFA session is invalid or expired" }, { status: 401 });
+    }
+    const { userId } = context;
     const twoFactorEnabled = (session.user as any).twoFactorEnabled;
 
     // This endpoint is only for initial 2FA setup via passkey
@@ -24,14 +30,23 @@ export async function POST(req: NextRequest) {
     }
 
     const body: RegistrationResponseJSON = await req.json();
-    const expectedChallenge = body.response.clientDataJSON;
+    const responseChallenge = extractClientDataChallenge(body.response.clientDataJSON);
+    if (!responseChallenge) {
+      return NextResponse.json({ error: "Invalid WebAuthn challenge" }, { status: 400 });
+    }
+
+    const challenge = await consumeWebAuthnChallenge({
+      userId,
+      sessionId: context.sessionId,
+      ceremony: "registration",
+      responseChallenge,
+    });
+    if (!challenge) {
+      return NextResponse.json({ error: "WebAuthn challenge is missing, expired, consumed, or bound to another session" }, { status: 400 });
+    }
 
     // Verify the registration
-    const verification = await verifyWebAuthnRegistration(
-      body,
-      // Extract challenge from clientDataJSON
-      JSON.parse(Buffer.from(body.response.clientDataJSON, "base64").toString()).challenge
-    );
+    const verification = await verifyWebAuthnRegistration(body, challenge.challenge);
 
     if (!verification.verified || !verification.registrationInfo) {
       return NextResponse.json(
@@ -77,6 +92,10 @@ export async function POST(req: NextRequest) {
       );
     });
 
+    // Initial passkey enrollment is also a successful second factor for this
+    // exact session. The normal JWT update callback consumes this grant.
+    await createMfaSessionGrant(context);
+
     // Log activity
     await logSecurityActivity(userId, "2fa_enabled");
     await logSecurityActivity(userId, "passkey_added");
@@ -89,7 +108,7 @@ export async function POST(req: NextRequest) {
       recoveryCodes,
     });
   } catch (error: any) {
-    console.error("Error confirming passkey registration:", error);
+    console.error("Error confirming passkey registration");
     return NextResponse.json(
       { error: error.message || "Failed to enable 2FA with passkey" },
       { status: 500 }

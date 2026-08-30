@@ -2,6 +2,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { importWxr } from "../scripts/import-wxr";
 
+const { mockDownloadRemoteBytes } = vi.hoisted(() => ({ mockDownloadRemoteBytes: vi.fn() }));
+vi.mock("@/lib/safe-remote-fetch", () => ({
+  normalizeAllowedHosts: (hosts: string[]) => hosts,
+  downloadRemoteBytes: (...args: unknown[]) => mockDownloadRemoteBytes(...args),
+}));
+
 // Test WXR content with WordPress dimensional images
 const SAMPLE_WXR = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
@@ -119,6 +125,10 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 describe("WordPress Dimension URL Handling", () => {
   beforeEach(() => {
     putCalls.length = 0;
+    mockDownloadRemoteBytes.mockReset();
+    mockDownloadRemoteBytes.mockImplementation(async (url: string) => url.endsWith(".pdf")
+      ? new Uint8Array([0x25, 0x50, 0x44, 0x46])
+      : new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => {
@@ -133,18 +143,18 @@ describe("WordPress Dimension URL Handling", () => {
       allowedHosts: ["www.shildreth.com"],
     });
 
-    // Should download 3 original images (without dimensions)
-    expect(putCalls.length).toBe(3);
+    // Should download the two supported original images (without dimensions).
+    // The PDF is an active/document format and is rejected by byte validation.
+    expect(putCalls.length).toBe(2);
 
     // Verify that fetch was called with original URLs, not dimensioned ones
-    expect(fetchMock).toHaveBeenCalledWith("http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934.jpg", expect.any(Object));
-    expect(fetchMock).toHaveBeenCalledWith("https://www.shildreth.com/wp-content/uploads/2019/11/photo.png", expect.any(Object));
-    expect(fetchMock).toHaveBeenCalledWith("https://www.shildreth.com/wp-content/uploads/2020/01/document.pdf", expect.any(Object));
+    expect(mockDownloadRemoteBytes).toHaveBeenCalledWith("http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934.jpg", ["www.shildreth.com"], expect.any(Number));
+    expect(mockDownloadRemoteBytes).toHaveBeenCalledWith("https://www.shildreth.com/wp-content/uploads/2019/11/photo.png", ["www.shildreth.com"], expect.any(Number));
 
     // Verify that dimensioned URLs were NOT fetched
-    expect(fetchMock).not.toHaveBeenCalledWith("http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934-300x169.jpg", expect.any(Object));
-    expect(fetchMock).not.toHaveBeenCalledWith("https://www.shildreth.com/wp-content/uploads/2019/11/photo-501x1024.png", expect.any(Object));
-    expect(fetchMock).not.toHaveBeenCalledWith("https://www.shildreth.com/wp-content/uploads/2020/01/document-150x75.pdf", expect.any(Object));
+    expect(mockDownloadRemoteBytes).not.toHaveBeenCalledWith("http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934-300x169.jpg", expect.anything(), expect.anything());
+    expect(mockDownloadRemoteBytes).not.toHaveBeenCalledWith("https://www.shildreth.com/wp-content/uploads/2019/11/photo-501x1024.png", expect.anything(), expect.anything());
+    expect(mockDownloadRemoteBytes).not.toHaveBeenCalledWith("https://www.shildreth.com/wp-content/uploads/2020/01/document-150x75.pdf", expect.anything(), expect.anything());
   });
 
   it("creates media mappings for original URLs", async () => {
@@ -157,7 +167,7 @@ describe("WordPress Dimension URL Handling", () => {
     // Verify mappings exist for original URLs
     expect(result.mediaUrls.has("http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934.jpg")).toBe(true);
     expect(result.mediaUrls.has("https://www.shildreth.com/wp-content/uploads/2019/11/photo.png")).toBe(true);
-    expect(result.mediaUrls.has("https://www.shildreth.com/wp-content/uploads/2020/01/document.pdf")).toBe(true);
+    expect(result.mediaUrls.has("https://www.shildreth.com/wp-content/uploads/2020/01/document.pdf")).toBe(false);
 
     // Verify mappings do not exist for dimensioned URLs
     expect(result.mediaUrls.has("http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934-300x169.jpg")).toBe(false);
