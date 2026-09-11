@@ -7,7 +7,7 @@ Narravo is a self-hostable blog engine built with Next.js App Router, React, Typ
 
 [![CI](https://github.com/sphildreth/narravo/actions/workflows/ci.yml/badge.svg)](https://github.com/sphildreth/narravo/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.2-blue)
+![Version](https://img.shields.io/badge/version-1.0.3-blue)
 ![Node](https://img.shields.io/badge/Node.js-22.x-339933?logo=node.js&logoColor=white)
 ![pnpm](https://img.shields.io/badge/pnpm-11.5.2-f69220?logo=pnpm&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-16.2-black?logo=next.js&logoColor=white)
@@ -232,6 +232,9 @@ Use a cron job or scheduled task for production sites with active editing.
 | `pnpm typecheck` | Generate `src/version.ts` and run `tsc --noEmit`. |
 | `pnpm test` | Run the Vitest suite. |
 | `pnpm test:watch` | Run Vitest in watch mode. |
+| `pnpm prechecks` | Run every local quality gate in fail-fast order. |
+| `pnpm prechecks:quick` | Static gates plus typecheck only (skips build and tests). |
+| `pnpm spdx:add` | Add missing `Apache-2.0` SPDX headers. |
 | `pnpm wxr:import -- path=...` | Run the WordPress WXR importer. |
 | `pnpm backup` | Create a backup ZIP. |
 | `pnpm restore -- <file>` | Restore or preview a backup archive. |
@@ -241,6 +244,41 @@ Use a cron job or scheduled task for production sites with active editing.
 | `pnpm perf:benchmark` | Run the combined performance benchmark suite. |
 | `pnpm perf:analyze` | Build with bundle analyzer enabled. |
 | `pnpm perf:weekly` | Produce a weekly performance rollup report. |
+
+## Pre-Commit Quality Gate
+
+`scripts/do-prechecks.py` runs the local gates in fail-fast order, cheapest first,
+and stops at the first failure:
+
+| Gate | Command | Notes |
+| --- | --- | --- |
+| Toolchain | in-process | `pnpm`, Node/pnpm `engines`, lockfile, installed workspace |
+| Release metadata | in-process | `package.json` SemVer, README version badge, CHANGELOG entry |
+| Migration journal | in-process | `drizzle/migrations` ordering, journal/file parity |
+| SPDX headers | in-process | `src/` and `scripts/` must carry the `Apache-2.0` header |
+| Repository hygiene | in-process | tracked-but-ignored files, committed secret material |
+| Precheck utility tests | `python3 scripts/test_do_prechecks.py` | covers the gate tooling itself |
+| Lockfile sync | `pnpm install --frozen-lockfile --ignore-scripts` | lockfile matches `package.json` |
+| TypeScript | `pnpm typecheck` | includes the `pretypecheck` version stamp |
+| ESLint | `pnpm lint` | skipped until a lint script and config exist |
+| Production build | `pnpm build` | fails on warnings, including Next.js `⚠` output |
+| Unit tests | `pnpm test` | full Vitest suite |
+
+```bash
+pnpm prechecks                 # everything (~35 seconds)
+pnpm prechecks:quick           # static gates + typecheck (~7 seconds)
+python3 scripts/do-prechecks.py --skip Lockfile   # drop one gate
+python3 scripts/do-prechecks.py --database        # also run pnpm drizzle:check
+python3 scripts/do-prechecks.py --include-e2e     # add Playwright when it lands
+python3 scripts/do-prechecks.py --install-hook    # run it from git pre-commit
+```
+
+`--install-hook` writes `.git/hooks/pre-commit` (bypass a single commit with
+`git commit --no-verify`, or change the default arguments with
+`NARRAVO_PRECHECKS_ARGS`). CI remains the authority — it installs from the
+lockfile, migrates, typechecks, builds, and tests — and these gates only move
+that feedback, plus the metadata checks CI cannot see before a push, in front of
+the commit.
 
 ## Project Structure
 

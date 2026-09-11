@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // iframe-allowlist.ts
 // Drop-in utility to validate, protect, and restore <iframe> elements using a configurable provider allowlist.
 // Usage:

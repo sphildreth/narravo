@@ -14,6 +14,8 @@ pnpm start              # Start production server
 pnpm typecheck          # TypeScript compilation check
 pnpm test               # Run tests
 pnpm test:watch         # Run tests in watch mode
+pnpm prechecks          # All local quality gates, fail-fast
+pnpm prechecks:quick    # Static gates + typecheck only
 
 # Database
 pnpm drizzle:generate   # Generate migration from schema changes
@@ -30,6 +32,29 @@ pnpm wxr:import path=./wxr/sample.wxr  # Import WordPress WXR file
 - Unit tests do not require a running database. They use in-memory fallbacks and avoid live connections.
 - The production build (pnpm build) succeeds even if the database is down. Pages that depend on DB are rendered dynamically at request time or fall back to safe defaults during build.
 - If DATABASE_URL is not set, any attempt to use the db object at runtime will throw a clear error. During build, DB-backed pages/components are gated to avoid crashing the build.
+
+### Pre-commit quality gate
+
+`pnpm prechecks` (scripts/do-prechecks.py) runs the local gates in fail-fast
+order: toolchain, release metadata, migration journal, SPDX headers, repository
+hygiene, the gate tooling's own tests, lockfile sync, typecheck, ESLint, the
+production build, then the Vitest suite. It stops on the first failing gate, so
+fast checks surface before the slow ones. See README.md for the full gate table.
+
+Notes for specific gates:
+
+- **Release metadata** – bumping `package.json` requires a matching `## [x.y.z]`
+  section in CHANGELOG.md and a matching README version badge.
+- **Migration journal** – validates drizzle/migrations offline. Run
+  `pnpm drizzle:generate` after editing `drizzle/schema.ts`; never edit a
+  committed migration by hand. Add `--database` (with `DATABASE_URL` exported)
+  to additionally run `pnpm drizzle:check` against a live database.
+- **Production build** – warnings are treated as failures, including the Next.js
+  `⚠` output that still exits zero.
+- **ESLint** – reported as SKIP until the repository gains a `lint` script and an
+  ESLint configuration file; the gate activates automatically once both exist.
+- `--install-hook` writes `.git/hooks/pre-commit`; `git commit --no-verify`
+  bypasses it once, and `NARRAVO_PRECHECKS_ARGS` overrides the default arguments.
 
 ### Project Structure Patterns
 

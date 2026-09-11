@@ -29,7 +29,9 @@ This guide outlines **what tasks are safe to automate**, constraints to follow, 
 
 ## Definition of done (per task)
 
-- Code compiles (`pnpm typecheck`) and passes linters/formatters.
+- `pnpm prechecks` passes (typecheck, build with no warnings, tests, release
+  metadata, SPDX headers, migration journal). Use `pnpm prechecks:quick` while
+  iterating.
 - Tests added/updated: unit + integration if behavior changes.
 - Docs updated if user-visible change (README or a doc under `/docs`).
 - Screenshots/gifs for UI changes in the PR description.

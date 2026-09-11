@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { ConfigServiceImpl } from "./config";
 import { db } from "./db";
 import { consumeSharedRateLimit, peekSharedRateLimit } from "./shared-rate-limit";

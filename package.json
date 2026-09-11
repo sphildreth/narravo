@@ -2,7 +2,6 @@
   "name": "narravo-next",
   "private": true,
   "version": "1.0.3",
-  "tiptap-markdown": "0.9.0",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=22.13",
@@ -17,6 +16,8 @@
     "start": "next start",
     "test": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vitest run",
     "test:watch": "vitest",
+    "prechecks": "python3 scripts/do-prechecks.py",
+    "prechecks:quick": "python3 scripts/do-prechecks.py --quick",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:migrate": "tsx scripts/migrate.ts",
     "drizzle:push": "drizzle-kit push",

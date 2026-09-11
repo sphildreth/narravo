@@ -4,6 +4,72 @@ This file records notable project changes. It follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format and uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `scripts/do-prechecks.py` runs the local quality gates in fail-fast order
+  (`pnpm prechecks`, `pnpm prechecks:quick`), including static release-metadata,
+  SPDX, migration-journal, and repository-hygiene checks that CI cannot catch
+  before a push. `--install-hook` wires it to `git pre-commit`.
+- `scripts/test_do_prechecks.py` covers the precheck tooling itself and runs as
+  one of its gates.
+
+### Fixed
+
+- Removed the stray top-level `tiptap-markdown` field from `package.json`, which
+  duplicated the `devDependencies` entry and was ignored by npm/pnpm.
+- Synced the README version badge with `package.json` (1.0.3).
+- Added the missing `Apache-2.0` SPDX headers to `src/lib/rateLimit.ts` and
+  `scripts/iframe-allowlist.ts`.
+
+### Chores
+
+- Ignore `__pycache__/` and `*.py[cod]` so the Python gate tooling leaves no
+  noise in `git status`.
+
+## [1.0.3] - 2026-08-30
+
+### Security
+
+- Outbound fetches now go through `src/lib/safe-remote-fetch.ts`, which rejects
+  internal and non-allowlisted targets before the WXR import action and the
+  `wxr:import` script dereference a caller-supplied URL.
+- TOTP secrets are encrypted at rest (AES-256-GCM, `enc:v1:` prefix) by
+  `src/lib/2fa/totp-secret.ts`. Deployments must set `TOTP_ENCRYPTION_KEY` to a
+  32-byte key; existing plaintext secrets are re-wrapped on next use.
+- WebAuthn challenges are stored server-side and bound to the ceremony that
+  created them (`src/lib/2fa/webauthn-challenge.ts`, migration
+  `0021_bound_webauthn_challenges`) instead of travelling through client state.
+- MFA verification now yields a short-lived (5 minute) session grant
+  (`src/lib/2fa/session-grant.ts`, migration `0019_lowly_reavers`), with
+  stale grants purged by `0023_parched_amazoness`, and a WebAuthn step-up
+  options endpoint at `POST /api/2fa/step-up/webauthn/options`.
+- Rate limiting moved from per-process memory to the shared `rate_limit_bucket`
+  table (migration `0020_security_hardening`) via `src/lib/shared-rate-limit.ts`,
+  so limits hold across server instances.
+- Uploads must pass byte-level type detection and signed completion
+  (`src/lib/upload-validation.ts`, `src/lib/upload-signing.ts`,
+  `POST /api/r2/complete`), and locally stored uploads are served by the
+  hardened `src/app/uploads/[...path]/route.ts` handler.
+
+### Added
+
+- `src/lib/api-error.ts` maps error messages to HTTP status codes and is now
+  used across the API routes and server actions.
+- Analytics retention support, including the `post_view_events_ts_idx` index
+  from migration `0022_analytics_retention`.
+
+### Changed
+
+- Vitest configuration renamed `vitest.config.ts` -> `vitest.config.mts`.
+
+### Tests
+
+- Nine new security-focused suites: SSRF guard, TOTP secret encryption, WebAuthn
+  challenge lifecycle, MFA grant binding/consumption, shared rate limiting,
+  upload byte validation, R2 completion, and local upload serving.
+
 ## [1.0.2] - 2026-08-04
 
 ### Security
