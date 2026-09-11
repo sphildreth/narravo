@@ -17,13 +17,21 @@ ignoredBuiltDependencies:
 
 peerDependencyRules:
   allowedVersions:
-    "@simplewebauthn/browser": "13"
-    "@simplewebauthn/server": "13"
-    eslint: "10"
+    # @auth/core/next-auth still declare @simplewebauthn ^9 peers; the app uses
+    # its own 2FA implementation, so track the version actually installed here.
+    "@simplewebauthn/browser": ">=14"
+    "@simplewebauthn/server": ">=14"
+    # eslint-config-next still pulls eslint-plugin-react / eslint-plugin-jsx-a11y,
+    # whose peer ranges stop at ESLint ^9 (ESLint 10 removed context.getFilename),
+    # so the linter stays on the 9.x line until those plugins catch up.
+    eslint: ">=9 <10"
 
 overrides:
   esbuild: ">=0.25.0"
-  postcss: "8.5.26"
+  postcss: "8.5.28"
+  # qs < 6.16.0 is reachable only through @lhci/cli > express (dev-only), but the
+  # DoS/prototype advisories still fail `pnpm audit`; pin the patched line.
+  qs: ">=6.16.0"
   prismjs: ">=1.30.0"
   tmp: ">=0.2.4"
   vite: "$vite"
