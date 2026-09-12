@@ -98,13 +98,13 @@ const config = [
     },
   },
   {
-    // STAGED ADOPTION (tech debt): components that sync external state (theme
-    // attribute, portal mount, Server-Timing entries, upload preview) with setState
-    // inside an effect. React's compiler rules want useSyncExternalStore or
-    // event-driven resets here; each change alters rendering, so they are scheduled
-    // separately from this dependency refresh.
+    // STAGED ADOPTION (tech debt): components that sync external state (portal mount,
+    // Server-Timing entries, upload preview) with setState inside an effect. React's
+    // compiler rules want useSyncExternalStore or event-driven resets here; each
+    // change alters rendering, so they are scheduled separately.
+    // CodeBlock used to be here: it now subscribes to <html data-theme> through
+    // useSyncExternalStore, which also fixed palettes not following ThemeToggle.
     files: [
-      "src/components/CodeBlock.tsx",
       "src/components/ImageLightbox.tsx",
       "src/components/RenderTimeBadge.tsx",
       "src/components/admin/posts/PostForm.tsx",

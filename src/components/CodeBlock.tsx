@@ -12,18 +12,39 @@ interface CodeBlockProps {
   showLineNumbers?: boolean;
 }
 
+/**
+ * The active theme lives on `<html data-theme>` and ThemeToggle changes it in place,
+ * without a navigation, so the highlighter palette has to follow that attribute
+ * instead of sampling it once on mount. useSyncExternalStore keeps the read out of
+ * render and re-renders on attribute or OS-preference changes.
+ */
+function isDarkTheme(): boolean {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "dark") return true;
+  if (attr === "light") return false;
+  // No explicit choice recorded: fall back to the OS preference.
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function subscribeToTheme(onStoreChange: () => void): () => void {
+  const observer = new MutationObserver(onStoreChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  const media = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  media?.addEventListener("change", onStoreChange);
+  return () => {
+    observer.disconnect();
+    media?.removeEventListener("change", onStoreChange);
+  };
+}
+
 export default function CodeBlock({ 
   children, 
   className = "", 
   language = "", 
   showLineNumbers = false 
 }: CodeBlockProps) {
-  const [isDark, setIsDark] = React.useState(false);
-  React.useEffect(() => {
-    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark' ||
-      (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.getAttribute('data-theme') !== 'light');
-    setIsDark(isDarkMode);
-  }, []);
+  // Server output always uses the light palette; the client store takes over at hydration.
+  const isDark = React.useSyncExternalStore(subscribeToTheme, isDarkTheme, () => false);
   
   // Extract language from className if provided (e.g., "lang-javascript" or "language-javascript")
   const detectedLanguage = language || 

@@ -80,10 +80,13 @@ per file, not globally. Each needs a real change with its own review:
   render, reads and writes refs in the render body, and builds its upload session id
   with `Date.now()`/`Math.random()`. Hoisting them changes editor initialisation
   order, so do it with the skipped Playwright specs enabled.
-- `react-hooks/set-state-in-effect` – `CodeBlock`, `ImageLightbox`,
-  `RenderTimeBadge` and `PostForm` sync external state (theme attribute, portal
-  mount, `Server-Timing`, object-URL previews) with `setState` inside an effect.
-  `useSyncExternalStore` or event-driven resets are the intended replacements.
+- `react-hooks/set-state-in-effect` – `ImageLightbox`, `RenderTimeBadge` and
+  `PostForm` sync external state (portal mount, `Server-Timing`, object-URL
+  previews) with `setState` inside an effect; `useSyncExternalStore` or event-driven
+  resets are the intended replacements. `CodeBlock` was the fourth case and is done:
+  it sampled `<html data-theme>` once on mount, so toggling the theme left rendered
+  code in the old palette until reload (covered by
+  `tests/components/CodeBlockTheme.test.tsx`).
 - `react-hooks/purity` on the post page – it times its own server render with
   `performance.now()`.
 
