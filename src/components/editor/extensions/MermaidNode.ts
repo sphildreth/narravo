@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Plugin, PluginKey, Transaction, EditorState } from '@tiptap/pm/state'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import logger from '@/lib/logger';
 
 declare global {

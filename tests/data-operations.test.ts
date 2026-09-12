@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { db } from "@/lib/db";
-import { dataOperationLogs, posts, comments } from "@/drizzle/schema";
-import { eq, isNull } from "drizzle-orm";
-
+import { dataOperationLogs } from "@/drizzle/schema";
 import { Readable } from "node:stream";
 
 // Mock the auth requirement

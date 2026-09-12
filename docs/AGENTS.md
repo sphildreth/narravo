@@ -96,6 +96,7 @@ Use these current paths:
 
 ```bash
 pnpm install
+pnpm lint        # eslint . --max-warnings=0 (warnings are failures)
 pnpm typecheck
 pnpm test
 pnpm build

@@ -208,14 +208,7 @@ describe("2FA Trusted Device", () => {
     });
 
     it("should reject expired device", async () => {
-      const expiredDate = new Date(Date.now() - 24 * 60 * 60 * 1000); // Yesterday
-      const mockDevice = {
-        id: testDeviceId,
-        userId: testUserId,
-        tokenHash: testTokenHash,
-        expiresAt: expiredDate,
-        revokedAt: null,
-      };
+      // The query filters by expiry, so an expired device never comes back.
 
       // The query should filter out expired devices, so return empty array
       mockLimit.mockResolvedValue([]);
@@ -226,13 +219,7 @@ describe("2FA Trusted Device", () => {
     });
 
     it("should reject revoked device", async () => {
-      const mockDevice = {
-        id: testDeviceId,
-        userId: testUserId,
-        tokenHash: testTokenHash,
-        expiresAt: futureDate,
-        revokedAt: new Date(),
-      };
+      // The query filters by revocation, so a revoked device never comes back.
 
       // The query should filter out revoked devices, so return empty array
       mockLimit.mockResolvedValue([]);
@@ -294,7 +281,6 @@ describe("2FA Trusted Device", () => {
 
     it("should set revokedAt to current timestamp", async () => {
       mockUpdateWhere.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: testDeviceId }]) });
-      const beforeRevoke = Date.now();
 
       await revokeTrustedDevice(testDeviceId, testUserId);
 
@@ -332,7 +318,6 @@ describe("2FA Trusted Device", () => {
 
     it("should set revokedAt to current timestamp for all devices", async () => {
       mockUpdateWhere.mockResolvedValue(undefined);
-      const beforeRevoke = Date.now();
 
       await revokeAllTrustedDevices(testUserId);
 

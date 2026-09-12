@@ -88,7 +88,7 @@ export default async function RecoveryCodesPage() {
           </li>
           <li className="flex gap-2">
             <span className="text-primary">•</span>
-            <span>If you run out of codes and lose your authenticator, you'll need to contact support.</span>
+            <span>If you run out of codes and lose your authenticator, you&apos;ll need to contact support.</span>
           </li>
         </ul>
       </div>

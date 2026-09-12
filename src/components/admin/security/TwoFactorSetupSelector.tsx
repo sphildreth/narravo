@@ -56,7 +56,7 @@ export default function TwoFactorSetupSelector() {
           </div>
           <h3 className="mb-2 text-lg font-semibold">Passkey (WebAuthn)</h3>
           <p className="text-sm text-muted">
-            Use your device's biometrics, security key, or password manager (like Bitwarden) for phishing-resistant authentication.
+            Use your device&apos;s biometrics, security key, or password manager (like Bitwarden) for phishing-resistant authentication.
           </p>
           <ul className="mt-4 space-y-1 text-sm text-muted">
             <li className="flex items-center gap-2">

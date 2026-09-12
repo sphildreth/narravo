@@ -2,7 +2,6 @@
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import { getPostBySlug, getPostBySlugWithReactions, getPreviousPost, getNextPost } from "@/lib/posts";
 import { getSession } from "@/lib/auth";
 import { getSiteMetadata } from "@/lib/rss";
@@ -18,7 +17,7 @@ import UnpublishPostButton from "@/components/admin/posts/UnpublishPostButton";
 import Link from "next/link";
 import Prose from "@/components/Prose";
 import { RenderTimeBadge } from "@/components/RenderTimeBadge";
-import { measureAsync, createServerTimingHeader } from "@/lib/performance";
+import { measureAsync } from "@/lib/performance";
 import { formatDateSafe } from "@/lib/dateFormat";
 import { sanitizeHtml } from "@/lib/sanitize";
 
@@ -57,7 +56,7 @@ export default async function PostPage({ params }: Props) {
   const resolvedParams = await params;
   
   // Measure config loading
-  const { result: config, duration: configDuration } = await measureAsync(
+  const { result: config } = await measureAsync(
     'config-load',
     async () => new ConfigServiceImpl({ db })
   );
@@ -67,7 +66,7 @@ export default async function PostPage({ params }: Props) {
   const showRenderBadge = await config.getBoolean("VIEW.PUBLIC-SHOW-RENDER-BADGE") ?? false;
   
   // Measure session loading
-  const { result: session, duration: sessionDuration } = await measureAsync(
+  const { result: session } = await measureAsync(
     'session-load',
     async () => getSession()
   );
@@ -77,7 +76,7 @@ export default async function PostPage({ params }: Props) {
   const canReact = Boolean(session?.user?.id);
 
   // Measure post loading (main data fetch)
-  const { result: post, duration: postDuration } = await measureAsync(
+  const { result: post } = await measureAsync(
     'post-load',
     async () => getPostBySlugWithReactions(resolvedParams.slug, userId, isAdmin)
   );
@@ -124,7 +123,7 @@ export default async function PostPage({ params }: Props) {
   }
   
   // Measure navigation data loading
-  const { result: [previousPost, nextPost], duration: navDuration } = await measureAsync(
+  const { result: [previousPost, nextPost] } = await measureAsync(
     'navigation-load',
     async () => Promise.all([
       getPreviousPost(post.id),
@@ -142,18 +141,8 @@ export default async function PostPage({ params }: Props) {
   const { title: siteName, url: siteUrl } = getSiteMetadata();
   const jsonLd = generatePostJsonLd(post, siteUrl, siteName);
 
-  // Calculate total render time and set Server-Timing header
-  const renderEnd = performance.now();
-  const totalRenderTime = renderEnd - renderStart;
-  const totalDbTime = configDuration + postDuration + navDuration;
-  
-  // Set Server-Timing header for performance monitoring
-  const headersList = headers();
-  const serverTimingHeader = createServerTimingHeader({
-    srt: totalRenderTime,
-    dbTime: totalDbTime,
-    cacheStatus: 'MISS', // TODO: Determine actual cache status
-  });
+  // Total server render time (surfaced through the render-time badge)
+  const totalRenderTime = performance.now() - renderStart;
 
   // Format view count for display
   const formatViewCount = (count: number): string => {

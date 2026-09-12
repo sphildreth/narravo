@@ -27,7 +27,7 @@ export async function getRedirects(): Promise<Redirect[]> {
       fromPath: r.fromPath,
       toPath: r.toPath,
     }));
-  } catch (err) {
+  } catch {
     if (process.env.NODE_ENV !== "test") {
       logger.warn("Redirects: DB unavailable, returning empty list");
     }

@@ -29,11 +29,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 interface TagPageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ page?: string }>;
 }
 
-export default async function TagPage({ params, searchParams }: TagPageProps) {
-  const [resolvedParams, resolvedSearchParams] = await Promise.all([params, searchParams]);
+export default async function TagPage({ params }: TagPageProps) {
+  const resolvedParams = await params;
   
   // Fetch tag details and posts in parallel
   const [tag, postsResult] = await Promise.all([
@@ -46,8 +45,6 @@ export default async function TagPage({ params, searchParams }: TagPageProps) {
     notFound();
   }
   
-  const page = parseInt(resolvedSearchParams.page || "1", 10);
-
   return (
     <main className="max-w-screen mx-auto px-6 my-7">
       <div className="mb-8">
@@ -60,7 +57,7 @@ export default async function TagPage({ params, searchParams }: TagPageProps) {
         </nav>
         
         <h1 className="text-4xl font-extrabold text-fg mb-2">
-          Posts tagged with "{tag.name}"
+          Posts tagged with &quot;{tag.name}&quot;
         </h1>
         <p className="text-muted">
           {postsResult.items.length} {postsResult.items.length === 1 ? 'post' : 'posts'} found

@@ -68,7 +68,7 @@ export default function AddPasskeyButton() {
       setShowNamePrompt(false);
       setPasskeyName("");
       router.refresh();
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setIsLoading(false);

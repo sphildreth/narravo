@@ -38,8 +38,6 @@ export default function Sparkline({
     return `${x},${y}`;
   }).join(' ');
 
-  const pathData = `M ${points}`;
-
   return (
     <svg 
       width={width} 

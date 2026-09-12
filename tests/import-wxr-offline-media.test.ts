@@ -123,7 +123,7 @@ describe("WXR Importer - Offline Media", () => {
   });
 
   it("should copy local media, rewrite URL, and import the post", async () => {
-    const consoleSpy = vi.spyOn(console, "log");
+    vi.spyOn(console, "log");
     const options: ImportOptions = {
       dryRun: false,
       verbose: true,

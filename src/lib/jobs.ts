@@ -107,7 +107,7 @@ export async function enqueueVideoPosterGeneration(
  */
 export async function validateVideoDuration(
   videoUrl: string,
-  maxDurationSeconds: number
+  _maxDurationSeconds: number
 ): Promise<boolean> {
   // In production, this would:
   // 1. Download video metadata

@@ -7,7 +7,6 @@ import { db } from "@/lib/db";
 import { posts } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { revalidateTag, revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import logger from '@/lib/logger';
 import { z } from "zod";
 

@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-
 // Import the helpers by re-requiring the file; in real project you may export them explicitly.
 // Here we will duplicate the regex functions for the sake of unit tests without changing exports.
 

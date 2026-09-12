@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
-import path from "path";
 import logger from '@/lib/logger';
 import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -40,8 +39,6 @@ const purgeRequestSchema = z.object({
   // Confirmation for hard delete
   confirmationPhrase: z.string().optional(),
 });
-
-type PurgeRequest = z.infer<typeof purgeRequestSchema>;
 
 export async function POST(req: NextRequest) {
   try {
@@ -116,7 +113,7 @@ export async function POST(req: NextRequest) {
 
       if (type === "post") {
         // Build query conditions
-        let whereConditions: any[] = [];
+        const whereConditions: any[] = [];
 
         if (id) {
           whereConditions.push(eq(posts.id, id));
@@ -255,7 +252,7 @@ export async function POST(req: NextRequest) {
 
       } else if (type === "comment") {
         // Similar logic for comments
-        let whereConditions: any[] = [];
+        const whereConditions: any[] = [];
 
         if (id) {
           whereConditions.push(eq(comments.id, id));

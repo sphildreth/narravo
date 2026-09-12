@@ -51,10 +51,38 @@ Notes for specific gates:
   to additionally run `pnpm drizzle:check` against a live database.
 - **Production build** – warnings are treated as failures, including the Next.js
   `⚠` output that still exits zero.
-- **ESLint** – reported as SKIP until the repository gains a `lint` script and an
-  ESLint configuration file; the gate activates automatically once both exist.
+- **ESLint** – `eslint . --max-warnings=0` across the workspace with
+  `eslint.config.mjs` (`eslint-config-next` core-web-vitals + TypeScript rules).
+  `pnpm lint:fix` applies autofixes. Every relaxation in the config is scoped to
+  named files and says why; extend a scope deliberately, do not un-scope rules.
+  Two dependency pins are load-bearing: ESLint stays on 9.x because
+  eslint-plugin-react/jsx-a11y peer ranges stop at `^9` (ESLint 10 removed
+  `context.getFilename`), and TypeScript stays on 6.x because `typescript-eslint`
+  hard-errors on the TypeScript 7 native API. Drop the pins in
+  `pnpm-workspace.yaml`/`package.json` only when the upstream packages allow it.
 - `--install-hook` writes `.git/hooks/pre-commit`; `git commit --no-verify`
   bypasses it once, and `NARRAVO_PRECHECKS_ARGS` overrides the default arguments.
+
+#### Deferred lint work
+
+The gate is green today because four families of pre-existing patterns are exempted
+per file, not globally. Each needs a real change with its own review:
+
+- `@next/next/no-img-element` – avatars (Gravatar), imported WordPress media and
+  admin previews use plain `<img>`. Switching to `next/image` first needs an
+  `images.remotePatterns` allowlist in `next.config.mjs`, since the optimizer
+  proxies those remote URLs.
+- `react-hooks/rules-of-hooks`, `static-components`, `refs`, `purity`,
+  `immutability` – `TiptapEditor` declares `EditorToolbar`/`ImageBubbleMenu` inside
+  render, reads and writes refs in the render body, and builds its upload session id
+  with `Date.now()`/`Math.random()`. Hoisting them changes editor initialisation
+  order, so do it with the skipped Playwright specs enabled.
+- `react-hooks/set-state-in-effect` – `CodeBlock`, `ImageLightbox`,
+  `RenderTimeBadge` and `PostForm` sync external state (theme attribute, portal
+  mount, `Server-Timing`, object-URL previews) with `setState` inside an effect.
+  `useSyncExternalStore` or event-driven resets are the intended replacements.
+- `react-hooks/purity` on the post page – it times its own server render with
+  `performance.now()`.
 
 ### Project Structure Patterns
 

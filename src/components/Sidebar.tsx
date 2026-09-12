@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import Link from "next/link";
-import { getArchiveMonths, getRecentPosts, type ArchiveMonth, type RecentPost } from "@/lib/sidebar";
+import { getArchiveMonths, getRecentPosts, type RecentPost } from "@/lib/sidebar";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import TrendingPosts from "@/components/analytics/TrendingPosts";

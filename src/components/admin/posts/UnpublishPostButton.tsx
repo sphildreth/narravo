@@ -27,7 +27,7 @@ export default function UnpublishPostButton({ postId, isPublished }: UnpublishPo
           setIsUnpublished(true);
           setShowConfirm(false);
         }
-      } catch (err) {
+      } catch {
         setError("Failed to unpublish post");
         setShowConfirm(false);
       }

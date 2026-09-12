@@ -95,8 +95,8 @@ export default async function PasskeysPage() {
           About Passkeys
         </h3>
         <p className="mt-2 text-xs text-muted">
-          Passkeys use your device's built-in security (Face ID, Touch ID, Windows Hello, or a hardware security key) 
-          to verify your identity. They're more secure than passwords and can't be phished.
+          Passkeys use your device&apos;s built-in security (Face ID, Touch ID, Windows Hello, or a hardware security key) 
+          to verify your identity. They&apos;re more secure than passwords and can&apos;t be phished.
         </p>
       </div>
     </div>

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAdmin, requireAdmin2FA, requireRecentLogin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerTotp, users } from "@/drizzle/schema";
@@ -8,7 +8,7 @@ import { generateTotpSecret, generateTotpUri, generateQrCodeDataUrl } from "@/li
 import { encryptTotpSecret } from "@/lib/2fa/totp-secret";
 import { safeApiError } from "@/lib/api-error";
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     let session = await requireAdmin();
     const userId = (session.user as any).id;

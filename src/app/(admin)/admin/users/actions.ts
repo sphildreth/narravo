@@ -3,8 +3,8 @@
 
 import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { users, comments, reactions } from "@/drizzle/schema";
-import { eq, like, desc, asc, sql, and, or, count } from "drizzle-orm";
+import { users, comments } from "@/drizzle/schema";
+import { eq, like, desc, asc, sql, and, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { isEmailAdmin } from "@/lib/admin";

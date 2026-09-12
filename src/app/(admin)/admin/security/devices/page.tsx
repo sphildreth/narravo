@@ -33,7 +33,7 @@ export default async function TrustedDevicesPage() {
       <div>
         <h1 className="text-2xl font-bold">Trusted Devices</h1>
         <p className="mt-2 text-muted">
-          Devices that you've chosen to remember won't require 2FA verification for 30 days.
+          Devices that you&apos;ve chosen to remember won&apos;t require 2FA verification for 30 days.
         </p>
       </div>
 
@@ -99,7 +99,7 @@ export default async function TrustedDevicesPage() {
           <div className="mt-6 rounded-md border border-dashed border-border bg-muted/10 p-8 text-center">
             <Monitor className="mx-auto h-12 w-12 text-muted" />
             <p className="mt-3 text-sm text-muted">
-              No trusted devices yet. Check "Remember this device" when logging in with 2FA to skip verification for 30 days.
+              No trusted devices yet. Check &quot;Remember this device&quot; when logging in with 2FA to skip verification for 30 days.
             </p>
           </div>
         )}
@@ -110,8 +110,8 @@ export default async function TrustedDevicesPage() {
           About Trusted Devices
         </h3>
         <p className="mt-2 text-xs text-muted">
-          When you select "Remember this device" during 2FA login, that device will be trusted for 30 days. 
-          You won't need to enter a verification code on trusted devices. Revoke devices if you no longer use them or suspect unauthorized access.
+          When you select &quot;Remember this device&quot; during 2FA login, that device will be trusted for 30 days. 
+          You won&apos;t need to enter a verification code on trusted devices. Revoke devices if you no longer use them or suspect unauthorized access.
         </p>
       </div>
     </div>

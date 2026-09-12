@@ -6,7 +6,6 @@ export default async function CommentThread({
   nodes,
   childrenMap,
   nextCursor,
-  limitReplies,
   canReact = false,
 }: {
   postId: string;

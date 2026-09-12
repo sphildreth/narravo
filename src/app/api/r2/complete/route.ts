@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     }
     completed = true;
     return json({ ok: true, key, url: publicUrl, mimeType: detected.mimeType, size: bytes.byteLength });
-  } catch (error) {
+  } catch {
     if (!completed && service && key) {
       try { await service.deleteObject(key); } catch { /* best effort cleanup */ }
     }

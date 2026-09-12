@@ -6,7 +6,6 @@ import { db } from "@/lib/db";
 import { posts, uploads } from "@/drizzle/schema";
 import { eq, like, desc, asc, sql, and, isNull, isNotNull, or, inArray } from "drizzle-orm";
 import { revalidateTag, revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import slugify from "slugify";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { markdownToHtmlSync } from "@/lib/markdown";
@@ -298,7 +297,7 @@ export async function createPost(formData: FormData) {
   if (tagsJson) {
     try {
       tagNames = JSON.parse(tagsJson) as string[];
-    } catch (e) {
+    } catch {
       return { error: "Invalid tags data" };
     }
   }
@@ -443,7 +442,7 @@ export async function updatePost(formData: FormData) {
   if (tagsJson) {
     try {
       tagNames = JSON.parse(tagsJson) as string[];
-    } catch (e) {
+    } catch {
       return { error: "Invalid tags data" };
     }
   }
@@ -707,7 +706,7 @@ export async function generateSlugFromTitle(title: string, excludeId?: string) {
   try {
     const slug = await generateUniqueSlug(title, excludeId);
     return { success: true, slug };
-  } catch (error) {
+  } catch {
     return { error: "Failed to generate slug" };
   }
 }
@@ -728,7 +727,7 @@ export async function checkSlugAvailability(slug: string, excludeId?: string) {
     const existing = await db.select({ id: posts.id }).from(posts).where(where).limit(1);
     
     return { available: existing.length === 0 };
-  } catch (error) {
+  } catch {
     return { available: false, error: "Failed to check slug availability" };
   }
 }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import Link from "next/link";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import LoadMore from "@/components/LoadMore";
@@ -69,7 +70,7 @@ export default async function Page() {
       <footer className="mt-10 border-t border-border px-6 py-6 text-center text-muted">
         Proudly powered by <a href="https://github.com/sphildreth/narravo" target="_blank">Narravo</a>.
         {disclaimerEnabled && (
-          <><span className="mx-2">|</span><a href="/disclaimer">Disclaimer</a></>
+          <><span className="mx-2">|</span><Link href="/disclaimer">Disclaimer</Link></>
         )}
         <span className="mx-2">|</span><a href="/feed.xml">RSS</a>
       </footer>

@@ -152,7 +152,7 @@ export default async function ImportJobDetailsPage({ params }: Props) {
           </h2>
           
           <div className="space-y-4">
-            {errors.map((error: any, index: number) => (
+            {errors.map((error: any) => (
               <div key={error.id} className="border border-red-200 rounded p-4 bg-red-50">
                 <div className="flex justify-between items-start mb-2">
                   <div className="font-medium text-red-800">

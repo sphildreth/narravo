@@ -33,7 +33,7 @@ export default function RegenerateRecoveryCodesButton({ currentCount }: Regenera
       const data = await response.json();
       setNewCodes(data.recoveryCodes);
       setIsConfirming(false);
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setIsRegenerating(false);
@@ -70,7 +70,7 @@ export default function RegenerateRecoveryCodesButton({ currentCount }: Regenera
             ✓ Recovery Codes Regenerated
           </h3>
           <p className="mt-2 text-sm text-muted">
-            Your new recovery codes are shown below. Save them immediately — they won't be shown again.
+            Your new recovery codes are shown below. Save them immediately — they won&apos;t be shown again.
           </p>
           <p className="mt-2 text-sm font-medium text-yellow-600 dark:text-yellow-500">
             ⚠️ All previous recovery codes have been invalidated.
@@ -105,7 +105,7 @@ export default function RegenerateRecoveryCodesButton({ currentCount }: Regenera
             onClick={handleDone}
             className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg hover:bg-primary/90"
           >
-            I've Saved My Codes
+            I&apos;ve Saved My Codes
           </button>
         </div>
       </div>

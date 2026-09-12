@@ -80,7 +80,7 @@ describe('WXR Importer', () => {
         });
 
         it('should handle missing attachments', async () => {
-            const logSpy = vi.spyOn(console, 'log');
+            vi.spyOn(console, 'log');
             const fixtureContent = loadFixture('wxr_attachment_missing_file.xml');
             const parsed = await parser.parseStringPromise(fixtureContent);
             const wxrItems = parsed.rss.channel[0].item;

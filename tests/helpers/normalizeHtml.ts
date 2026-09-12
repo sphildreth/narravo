@@ -64,14 +64,14 @@ export function normalizeHtml(html: string): string {
   if (!html || html.trim() === '') return '';
 
   // 1. Normalize line endings first
-  let normalized = normalizeLineEndings(html);
+  const normalized = normalizeLineEndings(html);
 
   // 1a. Fast path: if there is no actual markup (no literal < or >), treat input as text
   // and decode common entities exactly once without going through a DOM parser which
   // would auto-balance tags (e.g., turning <div> into <div></div>), which some tests
   // explicitly do not want.
   if (!/[<>]/.test(normalized)) {
-    let textOnly = normalized
+    const textOnly = normalized
       .replace(/&nbsp;/g, ' ') // normalize NBSP to space first
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')

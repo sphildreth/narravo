@@ -32,7 +32,7 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
       });
       nextCursor = postResult.nextCursor;
     } while (nextCursor);
-  } catch (err) {
+  } catch {
     if (process.env.NODE_ENV !== 'test' && !isBuildPhase()) {
       logger.warn('Sitemap: failed to list posts; continuing with partial sitemap');
     }
@@ -42,7 +42,7 @@ export async function generateSitemap(siteUrl: string): Promise<string> {
   let archiveMonths: Array<{ year: number; month: number }> = [];
   try {
     archiveMonths = await listArchiveMonths();
-  } catch (err) {
+  } catch {
     if (process.env.NODE_ENV !== 'test' && !isBuildPhase()) {
       logger.warn('Sitemap: failed to list archive months; continuing without archives');
     }

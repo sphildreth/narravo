@@ -49,7 +49,6 @@ export async function getModerationQueue(
 
   // Build WHERE clause based on filter
   const whereConditions: any[] = [];
-  const parameters: any[] = [];
 
   if (filter.status) {
     whereConditions.push(sql`c.status = ${filter.status}`);

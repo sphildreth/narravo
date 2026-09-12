@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { importWxr, parseWxrItem } from "../../scripts/import-wxr";
+import { importWxr } from "../../scripts/import-wxr";
 import { loadFixture } from "../helpers/fixtures";
 import path from "path";
 import fs from "fs/promises";
 import os from "os";
-import { parseStringPromise } from "xml2js";
-
 // Mock dependencies with side-effects
 vi.mock("@/lib/db", () => ({ db: { execute: vi.fn(), update: vi.fn(), insert: vi.fn(), delete: vi.fn(), select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => []) })) })), transaction: vi.fn(async (callback) => await callback({ execute: vi.fn(), update: vi.fn(), insert: vi.fn(() => ({ values: vi.fn(() => ({ onConflictDoUpdate: vi.fn(() => ({ returning: vi.fn(() => [{id: 'post-id-1'}]) })) })) })), delete: vi.fn() })) } }));
 vi.mock("@/lib/s3", () => ({ getS3Config: vi.fn(), S3Service: vi.fn() }));

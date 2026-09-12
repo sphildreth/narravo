@@ -24,7 +24,7 @@ export default async function EditPostPage({ params }: EditPostPageProps) {
     <main className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Edit Post</h1>
-        <p className="text-muted-foreground">Edit "{post.title}"</p>
+        <p className="text-muted-foreground">Edit &quot;{post.title}&quot;</p>
       </div>
 
       <PostForm post={post} />

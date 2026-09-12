@@ -12,11 +12,6 @@ interface Term {
     parent?: string;
 }
 
-interface Post {
-    title: string;
-    terms: Term[];
-}
-
 describe('WXR Importer', () => {
     const FIXTURE_DIR = path.resolve(__dirname, 'fixtures', 'wxr');
     const parser = new Parser({ explicitCharkey: true });

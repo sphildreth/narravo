@@ -10,21 +10,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 
 describe('Transaction Handling', () => {
-  let mockClient: any;
   let db: NodePgDatabase<any>;
 
   beforeEach(() => {
-    // Mock pg Client with transaction support
-    mockClient = {
-      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
-      release: vi.fn(),
-    };
-
     // Create a mock database instance
     db = {
       transaction: vi.fn(),
@@ -43,7 +35,6 @@ describe('Transaction Handling', () => {
   describe('Multi-table operations', () => {
     it('should execute multiple operations within a single transaction', async () => {
       // Arrange
-      const operations = vi.fn().mockResolvedValue(undefined);
       const mockTx = {
         insert: vi.fn().mockReturnValue({
           values: vi.fn().mockResolvedValue([{ id: 1 }]),
@@ -405,7 +396,7 @@ describe('Transaction Handling', () => {
             const result = await fn(mockTx);
             await mockTx.execute('RELEASE SAVEPOINT nested');
             return result;
-          } catch (error) {
+          } catch {
             await mockTx.execute('ROLLBACK TO SAVEPOINT nested');
             // Don't re-throw - allow parent transaction to continue
             return null;

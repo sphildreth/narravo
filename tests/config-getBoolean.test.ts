@@ -17,7 +17,7 @@ class FakeRepo implements Repo {
   async getGlobalMeta(): Promise<any> { return null; }
   async upsertUser(): Promise<void> { throw new Error('not implemented'); }
   async deleteUser(): Promise<void> { throw new Error('not implemented'); }
-  async getGlobalNumber(key: string): Promise<number | null> {
+  async getGlobalNumber(_key: string): Promise<number | null> {
     // Only TTL key may be requested; return null to keep defaults
     return null;
   }

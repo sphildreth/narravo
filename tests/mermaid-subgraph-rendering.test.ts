@@ -93,16 +93,8 @@ describe('Mermaid Subgraph Rendering', () => {
 
   it('should use correct Mermaid configuration for subgraph diagrams', async () => {
     // Test the actual configuration logic without React rendering
-    const lines = complexSubgraphDiagram.split(/\r?\n/);
-    const firstLine = lines.find(l => l.trim() && !l.trim().startsWith('%%')) || '';
-    const keyword = firstLine.split(/\s+/)[0]?.toLowerCase() || '';
-    
-    const complexTypes = new Set(['gantt','timeline','quadrantchart','gitgraph','mindmap','requirementdiagram','journey']);
-    const isComplexType = complexTypes.has(keyword);
-    
     const hasSubgraphs = /subgraph\s+\w+/.test(complexSubgraphDiagram);
     const hasCrossSubgraphConnections = hasSubgraphs && /^\s*\w+\s*-->.*\w+\s*$/m.test(complexSubgraphDiagram);
-    const hasHtmlTags = /<br\/?>/i.test(complexSubgraphDiagram) || /<small>/i.test(complexSubgraphDiagram);
 
     // Mock window.mermaid
     (global.window as any).mermaid = mockMermaid;
@@ -178,27 +170,6 @@ describe('Mermaid Subgraph Rendering', () => {
     // This test specifically addresses the issue where Mermaid renders successfully
     // but raw code still appears below the diagram
     
-    const mockEditor = {
-      commands: {
-        setNodeSelection: vi.fn(),
-        updateAttributes: vi.fn()
-      },
-      view: {
-        state: {
-          doc: {
-            content: {
-              size: 1000
-            }
-          },
-          schema: {
-            nodes: {
-              mermaid: { create: vi.fn() },
-              codeBlock: { create: vi.fn() }
-            }
-          }
-        }
-      }
-    };
 
     // Mock successful rendering
     mockMermaid.render.mockResolvedValue({ 

@@ -159,7 +159,7 @@ describe("UserMenu", () => {
         image: null,
       };
 
-      const { container } = render(<UserMenu user={user} />);
+      render(<UserMenu user={user} />);
 
       const nameElement = screen.getByText("Very Long Name That Should Be Truncated");
       expect(nameElement).toHaveClass("truncate");
@@ -224,7 +224,7 @@ describe("UserMenu", () => {
         image: null,
       };
 
-      const { container } = render(
+      render(
         <div>
           <UserMenu user={user} />
           <div data-testid="outside">Outside Element</div>

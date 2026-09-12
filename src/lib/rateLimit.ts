@@ -136,8 +136,6 @@ export async function checkRateLimit(options: RateLimitOptions): Promise<RateLim
     throw new Error(`Missing required config: ${configKey}`);
   }
   
-  const windowMs = 60 * 1000; // 1 minute in milliseconds
-  
   // Authenticated flows are keyed by stable user identity. Forwarding headers
   // are intentionally excluded: without a configured trusted-proxy boundary,
   // a client can rotate X-Forwarded-For to create unlimited buckets.
@@ -330,7 +328,7 @@ export async function validateAntiAbuse(
       rateLimitInfo: rateLimitCheck
     };
     
-  } catch (error) {
+  } catch {
     return {
       valid: false,
       error: 'Validation failed'

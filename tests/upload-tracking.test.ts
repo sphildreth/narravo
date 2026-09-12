@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, afterAll } from 'vitest';
 import { db } from '../src/lib/db';
 import { uploads, posts, users } from '../drizzle/schema';
 import { eq } from 'drizzle-orm';

@@ -13,7 +13,7 @@ export async function GET() {
         "Cache-Control": "public, max-age=30, s-maxage=30",
       },
     });
-  } catch (err) {
+  } catch {
     if (process.env.NODE_ENV !== 'test') {
       logger.warn("Failed to load redirects; returning empty list");
     }

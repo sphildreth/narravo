@@ -15,8 +15,6 @@ export async function generateMetadata(): Promise<Metadata> {
     try {
         const config = new ConfigServiceImpl({ db });
         const siteName = (await config.getString("SITE.NAME")) ?? "Narravo";
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-        
         return {
             title: siteName,
             manifest: "/site.webmanifest",
@@ -30,7 +28,6 @@ export async function generateMetadata(): Promise<Metadata> {
             },
         };
     } catch {
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
         return {
             title: "Narravo",
             manifest: "/site.webmanifest",

@@ -45,7 +45,7 @@ export default function DeletePostButton({ postId, postTitle }: DeletePostButton
     return (
       <div className="inline-flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
         <span className="text-sm text-red-800">
-          Delete "{postTitle}"?
+          Delete &quot;{postTitle}&quot;?
         </span>
         <button
           onClick={handleDelete}

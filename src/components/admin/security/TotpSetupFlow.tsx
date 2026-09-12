@@ -35,7 +35,7 @@ export default function TotpSetupFlow() {
       setQrCode(data.qrCode);
       setSecret(data.secret);
       setStep("verify");
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setIsLoading(false);
@@ -63,7 +63,7 @@ export default function TotpSetupFlow() {
       const data = await response.json();
       setRecoveryCodes(data.recoveryCodes);
       setStep("codes");
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setIsLoading(false);
@@ -93,7 +93,7 @@ export default function TotpSetupFlow() {
       <div className="rounded-lg border border-border bg-card p-6">
         <h2 className="text-lg font-semibold">Step 1: Install an Authenticator App</h2>
         <p className="mt-2 text-sm text-muted">
-          You'll need an authenticator app on your phone or computer. We recommend:
+          You&apos;ll need an authenticator app on your phone or computer. We recommend:
         </p>
         <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-muted">
           <li>Google Authenticator (iOS, Android)</li>

@@ -106,7 +106,7 @@ Try the toolbar features:
             <li>• Enhanced image support with alignment and captions</li>
             <li>• Comprehensive toolbar with ARIA labels and tooltips</li>
             <li>• Secure paste handling with DOMPurify sanitization</li>
-            <li>• Safe external link handling (rel="noopener noreferrer")</li>
+            <li>• Safe external link handling (rel=&quot;noopener noreferrer&quot;)</li>
             <li>• Dynamic language loading for optimal performance</li>
             <li>• Markdown round-trip with HTML support for alignment</li>
             <li>• Keyboard shortcuts (Ctrl+B, Ctrl+I, etc.)</li>

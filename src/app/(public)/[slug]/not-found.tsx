@@ -8,7 +8,7 @@ export default function NotFound() {
       <div className="text-center py-12">
         <h1 className="text-4xl font-extrabold text-fg mb-4">Post Not Found</h1>
         <p className="text-lg text-muted mb-6">
-          The post you're looking for doesn't exist or may have been moved.
+          The post you&apos;re looking for doesn&apos;t exist or may have been moved.
         </p>
         <Link 
           href="/" 

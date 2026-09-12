@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, vi } from "vitest";
-import { upsertTag, upsertCategory, getTagBySlug, getCategoryBySlug } from "@/lib/taxonomy";
+import { upsertTag, getTagBySlug, getCategoryBySlug } from "@/lib/taxonomy";
 import { db } from "@/lib/db";
 
 // Mock the database

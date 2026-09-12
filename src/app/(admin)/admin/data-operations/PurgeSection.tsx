@@ -234,7 +234,7 @@ export function PurgeSection() {
                   ? "text-red-600"
                   : "text-orange-600"
               }`}>
-                This was a preview. Uncheck "Dry run" to apply these changes.
+                This was a preview. Uncheck &quot;Dry run&quot; to apply these changes.
               </p>
             )}
           </div>

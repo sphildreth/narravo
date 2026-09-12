@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
-import { reactions, posts, comments } from "@/drizzle/schema";
-import { and, eq, count, sql } from "drizzle-orm";
+import { reactions, comments } from "@/drizzle/schema";
+import { and, eq, count } from "drizzle-orm";
 import logger from "@/lib/logger";
 
 export type TargetType = "post" | "comment";

@@ -35,7 +35,6 @@ describe("Post Access Control - Unpublished Post Protection", () => {
 
   it("should return unpublished post to admin user", async () => {
     const { db } = await import("@/lib/db");
-    const now = new Date();
     
     // Mock db.execute to return unpublished post for admin
     const mockPost = {
@@ -78,7 +77,6 @@ describe("Post Access Control - Unpublished Post Protection", () => {
 
   it("should return unpublished post with reactions to admin user", async () => {
     const { db } = await import("@/lib/db");
-    const now = new Date();
     
     // Mock the database queries for post with reactions
     const mockPost = {

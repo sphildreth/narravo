@@ -46,9 +46,10 @@ export function verifyTotpCode(secret: string, code: string): number | null {
 }
 
 /**
- * Check if a TOTP code is valid within a ±1 step window
+ * Check if a TOTP code is valid. The verification window is the one configured
+ * on the shared otplib authenticator (±1 step by default).
  */
-export function isTotpCodeValid(secret: string, code: string, window: number = 1): boolean {
+export function isTotpCodeValid(secret: string, code: string): boolean {
   try {
     return authenticator.check(code, secret);
   } catch {

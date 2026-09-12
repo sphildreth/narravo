@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { NextRequest } from "next/server";
 import { requireAdmin2FA } from "@/lib/auth";
-import { moderateComments, type ModerateInput, type ModerationRepo } from "@/lib/adminModeration";
+import { moderateComments, type ModerationRepo } from "@/lib/adminModeration";
 import { db } from "@/lib/db";
 import { comments, commentAttachments } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";

@@ -68,7 +68,6 @@ export async function createComment(params: {
 
     // Validate config
     const config = new ConfigServiceImpl({ db });
-    const maxDepth = await config.getNumber("COMMENTS.MAX-DEPTH") ?? 5;
 
     // Check if comments should be auto-approved
     const autoApprove = await config.getBoolean("COMMENTS.AUTO-APPROVE") ?? false;

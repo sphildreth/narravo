@@ -105,7 +105,7 @@ const config: NextAuthConfig = {
             if (trustedToken) {
               isTrustedDevice = await verifyTrustedDevice(dbUser.id, trustedToken);
             }
-          } catch (error) {
+          } catch {
             // Ignore cookie read errors
           }
           

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerTotp, ownerWebAuthnCredential, ownerRecoveryCode } from "@/drizzle/schema";
-import { eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { safeApiError } from "@/lib/api-error";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const session = await requireAdmin();
     const userId = (session.user as any).id;

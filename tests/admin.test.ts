@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { parseAdminAllowlist, isEmailAdmin } from "@/lib/admin";
 
 describe("admin.ts utilities", () => {

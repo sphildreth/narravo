@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { performBulkAction, type PostsFilter, type PostsSortOptions } from "@/app/(admin)/admin/posts/actions";
@@ -39,11 +39,10 @@ interface PostsManagerProps {
   page: number;
 }
 
-export default function PostsManager({ initialData, filter, sort, page }: PostsManagerProps) {
+export default function PostsManager({ initialData, filter, sort }: PostsManagerProps) {
   const router = useRouter();
   const fmt = useDateFormat();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
 

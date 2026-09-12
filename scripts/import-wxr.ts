@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-/* eslint-disable no-console */
 import { parseStringPromise } from "xml2js";
 import { db } from "@/lib/db";
 import { posts, redirects, categories, tags, postTags, comments, users, importJobs, importJobErrors } from "@/drizzle/schema";
@@ -337,7 +336,7 @@ async function handleLocalMedia(
 
     relativePath = urlPath.substring(match.index + match[0].length);
 
-  } catch (e) {
+  } catch {
     if (verbose) logger.warn(`  ⚠️ Could not parse URL, skipping: ${url}`);
     return { isLocal: true, url: null };
   }
@@ -576,7 +575,6 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
   const videoShortcodeRe = /\\\[video([^\\]*)\\\](?:\\s*\\\\[\/video\\\\])?/gi;
   rewritten = rewritten.replace(videoShortcodeRe, (match, attrStr) => {
     let newMatch = match;
-    let shortcodeChanged = false;
     
     // Extract attributes from shortcode
     const attrRe = /(\\w+)=( "[^"]*" | '[^']*' |[^\s"']+)/g;
@@ -604,7 +602,6 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
           const newAttr = `${key}=${quote}${newUrl}${quote}`;
           const oldAttr = `${key}=${originalValue}`;
           newMatch = newMatch.replace(oldAttr, newAttr);
-          shortcodeChanged = true;
           replacementCount++;
           
           if (verbose) {
@@ -671,7 +668,6 @@ function rewriteMediaUrls(html: string, mediaUrlMap: Map<string, string>, verbos
   ];
   
   for (const { pattern, group } of attributePatterns) {
-    let match: RegExpExecArray | null;
     const regex = new RegExp(pattern.source, pattern.flags);
     
     rewritten = rewritten.replace(regex, (fullMatch, ...groups) => {
@@ -988,15 +984,6 @@ function transformSyntaxHighlighting(html: string): string {
   );
 }
 
-/**
- * Escapes special characters in a string for use in a regular expression.
- * @param input The string to escape.
- * @returns The escaped string.
- */
-function escapeRegExp(input: string): string {
-  // Escape special regex characters: . * + ? ^ $ { } ( ) | [ ] \
-  return input.replace(/[.*+?^${}()|[\\]/g, '\\$&');
-}
 
 /**
  * Generates a unique slug by appending a counter if the base slug already exists.
