@@ -7,11 +7,11 @@ Narravo is a self-hostable blog engine built with Next.js App Router, React, Typ
 
 [![CI](https://github.com/sphildreth/narravo/actions/workflows/ci.yml/badge.svg)](https://github.com/sphildreth/narravo/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.3-blue)
+![Version](https://img.shields.io/badge/version-1.0.4-blue)
 ![Node](https://img.shields.io/badge/Node.js-22.x-339933?logo=node.js&logoColor=white)
 ![pnpm](https://img.shields.io/badge/pnpm-11.5.2-f69220?logo=pnpm&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-16.2-black?logo=next.js&logoColor=white)
-![React](https://img.shields.io/badge/React-19.2-61dafb?logo=react&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js&logoColor=white)
+![React](https://img.shields.io/badge/React-19.3-61dafb?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue?logo=typescript&logoColor=white)
 
 Demo site: [Knowledge Tome](https://www.shildreth.com)
