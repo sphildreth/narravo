@@ -44,7 +44,7 @@ const insert = vi.fn((table: any) => {
     onConflictDoUpdate() {
       return builder;
     },
-    returning(selection: any) {
+    returning() {
       if (!state.values) return Promise.resolve([]);
       if (table === usersTable) {
         return Promise.resolve(state.values.map((value: any, idx: number) => ({

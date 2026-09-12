@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Suspense } from "react";
+import Link from "next/link";
 import { countApprovedComments, getCommentTreeForPost } from "@/lib/comments";
 import { getSession } from "@/lib/auth";
 import CommentThread from "./CommentThread";
@@ -27,12 +28,12 @@ export default async function CommentsSection({ postId }: { postId: string }) {
       ) : (
         <div className="mb-8 p-4 border border-border rounded-lg bg-card text-center">
           <p className="text-muted mb-2">Sign in to join the conversation</p>
-          <a
+          <Link
             href="/login"
             className="text-brand hover:opacity-90 font-medium"
           >
             Sign in
-          </a>
+          </Link>
         </div>
       )}
       

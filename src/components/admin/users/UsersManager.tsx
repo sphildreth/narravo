@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useDateFormat } from "@/lib/dateFormat.client";
@@ -38,11 +38,10 @@ interface UsersManagerProps {
   page: number;
 }
 
-export default function UsersManager({ initialData, filter, sort, page }: UsersManagerProps) {
+export default function UsersManager({ initialData, filter, sort }: UsersManagerProps) {
   const fmt = useDateFormat();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
   const [selectedUser, setSelectedUser] = useState<UserWithStats | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 

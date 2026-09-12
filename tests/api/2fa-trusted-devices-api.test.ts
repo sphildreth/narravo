@@ -48,7 +48,7 @@ describe("2FA trusted devices", () => {
       { id: "td-1", userAgent: "Chrome", createdAt: now, lastSeenAt: now, expiresAt: now },
     ]);
 
-    const response = await trustedGet(makeRequest("http://localhost/api/2fa/trusted-devices"));
+    const response = await trustedGet();
     const payload = await response.json();
 
     expect(response.status).toBe(200);

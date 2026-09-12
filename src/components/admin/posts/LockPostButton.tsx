@@ -24,7 +24,7 @@ export default function LockPostButton({ postId, isLocked }: LockPostButtonProps
         } else if (result.success) {
           setCurrentLockState(result.isLocked ?? !currentLockState);
         }
-      } catch (err) {
+      } catch {
         setError("Failed to toggle post lock");
       }
     });

@@ -2,8 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalStorageService } from "@/lib/local-storage";
 import fs from "node:fs/promises";
-import path from "node:path";
-
 // Mock fs and path modules
 vi.mock("node:fs/promises");
 vi.mock("node:path", async () => {

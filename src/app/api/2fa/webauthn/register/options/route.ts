@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAdmin, requireAdmin2FA, requireRecentLogin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerWebAuthnCredential, users } from "@/drizzle/schema";
@@ -9,7 +9,7 @@ import { getMfaSessionContext } from "@/lib/2fa/session-grant";
 import { persistWebAuthnChallenge } from "@/lib/2fa/webauthn-challenge";
 import { safeApiError } from "@/lib/api-error";
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     // Initial enrollment is allowed before MFA exists. Adding another
     // credential to an already protected account requires the current session

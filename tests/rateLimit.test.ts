@@ -6,7 +6,6 @@ import {
   validateHoneypot,
   validateMinSubmitTime,
   validateAntiAbuse,
-  RateLimitError,
   __testables__
 } from "@/lib/rateLimit";
 

@@ -7,9 +7,8 @@ import { getModerationQueue, revalidateAfterModeration, type ModerationFilter } 
 import { moderateComments, type ModerateInput, type ModerationRepo } from "@/lib/adminModeration";
 import { db } from "@/lib/db";
 import { comments, commentAttachments, posts } from "@/drizzle/schema";
-import { eq, sql, desc, asc } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { ConfigServiceImpl } from "@/lib/config";
-import { sanitizeHtml } from "@/lib/sanitize";
 import { CommentError, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
 import logger from "@/lib/logger";
 

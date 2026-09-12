@@ -260,7 +260,7 @@ and stops at the first failure:
 | Precheck utility tests | `python3 scripts/test_do_prechecks.py` | covers the gate tooling itself |
 | Lockfile sync | `pnpm install --frozen-lockfile --ignore-scripts` | lockfile matches `package.json` |
 | TypeScript | `pnpm typecheck` | includes the `pretypecheck` version stamp |
-| ESLint | `pnpm lint` | skipped until a lint script and config exist |
+| ESLint | `pnpm lint` | `eslint . --max-warnings=0`; warnings fail the gate |
 | Production build | `pnpm build` | fails on warnings, including Next.js `⚠` output |
 | Unit tests | `pnpm test` | full Vitest suite |
 

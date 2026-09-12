@@ -138,7 +138,7 @@ export function RestoreSection() {
             </div>
             {restoreResult.dryRun && (
               <p className="mt-2 text-xs text-blue-700">
-                This was a preview. Uncheck "Dry run" to apply these changes.
+                This was a preview. Uncheck &quot;Dry run&quot; to apply these changes.
               </p>
             )}
           </div>

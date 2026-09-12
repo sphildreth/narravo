@@ -16,7 +16,7 @@ export async function GET() {
     const config = new ConfigServiceImpl({ db });
     const c = await config.getNumber("FEED.LATEST-COUNT");
     if (c != null) latestCount = c;
-  } catch (err) {
+  } catch {
     if (process.env.NODE_ENV !== 'test' && !isBuildPhase()) {
       logger.warn('feed.xml: falling back to default FEED.LATEST-COUNT due to config/db error');
     }
@@ -25,7 +25,7 @@ export async function GET() {
   let posts: Awaited<ReturnType<typeof getPostsForRSS>> = [];
   try {
     posts = await getPostsForRSS(latestCount);
-  } catch (err) {
+  } catch {
     if (process.env.NODE_ENV !== 'test' && !isBuildPhase()) {
       logger.warn('feed.xml: failed to load posts; returning empty feed');
     }

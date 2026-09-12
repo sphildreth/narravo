@@ -62,7 +62,7 @@ export async function GET(
               "Content-Length": stat.size.toString(),
             }
           });
-        } catch (fileError) {
+        } catch {
           return new Response(JSON.stringify({
             ok: false,
             error: { message: "Export file no longer available" }

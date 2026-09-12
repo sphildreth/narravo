@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import logger from '@/lib/logger';
 import { consumeSharedRateLimit } from "@/lib/shared-rate-limit";
 
-const runtime = "nodejs";
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface RUMMetric {

@@ -180,7 +180,7 @@ describe("2FA TOTP endpoints", () => {
     mockTotp.generateTotpUri.mockReturnValue("otpauth://totp/secret");
     mockTotp.generateQrCodeDataUrl.mockResolvedValue("data:image/png;base64,QR");
 
-    const response = await totpInitPost(makeJsonRequest("http://localhost/api/2fa/totp/init", {}));
+    const response = await totpInitPost();
     const payload = await response.json();
 
     expect(response.status).toBe(200);
@@ -208,7 +208,7 @@ describe("2FA TOTP endpoints", () => {
         }),
       }));
 
-    const response = await totpInitPost(makeJsonRequest("http://localhost/api/2fa/totp/init", {}));
+    const response = await totpInitPost();
     expect(response.status).toBe(400);
   });
 

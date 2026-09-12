@@ -11,7 +11,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Client } from 'pg';
 import * as path from 'path';
 import { createHash } from 'crypto';
 
@@ -256,7 +255,7 @@ describe('Migration Scripts', () => {
       // Act
       await mockClient.connect();
       
-      const trackedResult = await mockClient.query(`SELECT id FROM drizzle.__drizzle_migrations`);
+      await mockClient.query(`SELECT id FROM drizzle.__drizzle_migrations`);
       const tableCheck = await mockClient.query(`SELECT table_name FROM information_schema.tables WHERE table_name IN ('users', 'posts')`);
       
       const existingTables = tableCheck.rows.map((r: any) => r.table_name);
@@ -325,7 +324,7 @@ describe('Migration Scripts', () => {
       // Act
       await mockClient.connect();
       
-      const trackedResult = await mockClient.query(`SELECT id FROM drizzle.__drizzle_migrations`);
+      await mockClient.query(`SELECT id FROM drizzle.__drizzle_migrations`);
       const tableCheck = await mockClient.query(`SELECT table_name FROM information_schema.tables`);
       
       if (tableCheck.rows.length > 0 && process.env.CONFIRM_MIGRATION_SYNC === 'yes') {

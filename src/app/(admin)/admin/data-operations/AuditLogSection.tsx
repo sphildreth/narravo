@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { FileText, Download, Upload, Trash2, Clock } from "lucide-react";
-import logger from '@/lib/logger';
 
 interface AuditLogEntry {
   id: string;
@@ -18,24 +17,11 @@ interface AuditLogEntry {
 }
 
 export function AuditLogSection() {
-  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  const fetchLogs = async () => {
-    try {
-      // This would need to be implemented as an actual API endpoint
-      // For now, we'll show a placeholder
-      setLogs([]);
-    } catch (error) {
-      logger.error("Failed to fetch audit logs:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Placeholder: there is no audit-log endpoint to read from yet, so the list is
+  // always empty and nothing is ever pending. When the endpoint exists, fetch it in
+  // an effect and start `loading` as true.
+  const [logs] = useState<AuditLogEntry[]>([]);
+  const [loading] = useState(false);
 
   const getOperationIcon = (type: string) => {
     switch (type) {

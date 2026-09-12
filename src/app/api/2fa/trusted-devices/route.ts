@@ -5,7 +5,7 @@ import { getTrustedDevices, revokeTrustedDevice, revokeAllTrustedDevices } from 
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
 import { safeApiError } from "@/lib/api-error";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const session = await requireAdmin2FA();
     const userId = (session.user as any).id;

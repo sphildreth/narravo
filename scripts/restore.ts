@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import JSZip from "jszip";
 import { db } from "@/lib/db";
-import { posts, users, comments, commentAttachments, reactions, redirects, configuration } from "@/drizzle/schema";
+import { posts, users, configuration } from "@/drizzle/schema";
 import fs from "node:fs/promises";
-import { eq, and, sql, between } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import logger from "@/lib/logger";
 import type { BackupManifest } from "./backup";
 import { sanitizeHtml } from "@/lib/sanitize";

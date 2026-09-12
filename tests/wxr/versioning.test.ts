@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { MockInstance } from "vitest";
 import { importWxr } from "../../scripts/import-wxr";
 import { loadFixture } from "../helpers/fixtures";
 import path from "path";

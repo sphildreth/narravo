@@ -3,7 +3,6 @@ import JSZip from "jszip";
 import { db } from "@/lib/db";
 import { posts, users, comments, commentAttachments, reactions, redirects, configuration } from "@/drizzle/schema";
 import fs from "node:fs/promises";
-import path from "node:path";
 import crypto from "node:crypto";
 import logger from "@/lib/logger";
 

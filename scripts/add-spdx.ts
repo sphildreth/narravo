@@ -102,16 +102,6 @@ function hasSpdx(content: string): boolean {
   return content.includes("SPDX-License-Identifier:");
 }
 
-function isWhitespaceOrComment(line: string, style: "slash" | "hash" | "block" | "html"): boolean {
-  const l = line.trim();
-  if (l === "") return true;
-  if (style === "slash") return l.startsWith("//") || l.startsWith("/*");
-  if (style === "hash") return l.startsWith("#");
-  if (style === "block") return l.startsWith("/*");
-  if (style === "html") return l.startsWith("<!--");
-  return false;
-}
-
 function isUseDirective(line: string): boolean {
   const l = line.trim();
   // Match 'use client' or 'use server' with single/double quotes and optional semicolon
@@ -130,7 +120,7 @@ async function processFile(file: string): Promise<boolean> {
   if (shouldSkipFile(file)) return false;
   const styleInfo = getStyleForFile(file);
   if (!styleInfo) return false;
-  const { style, header } = styleInfo;
+  const { header } = styleInfo;
   const raw = await fs.readFile(file, "utf8");
   if (hasSpdx(raw)) return false;
 

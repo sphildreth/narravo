@@ -127,7 +127,7 @@ describe("2FA status and disable endpoints", () => {
         }),
       }));
 
-    const response = await statusGet(makeRequest("http://localhost/api/2fa/status"));
+    const response = await statusGet();
     const payload = await response.json();
 
     expect(response.status).toBe(200);
@@ -202,7 +202,7 @@ describe("2FA status and disable endpoints", () => {
   it("returns error when admin check fails", async () => {
     mockRequireAdmin.mockRejectedValueOnce(new Error("Unauthorized"));
 
-    const response = await statusGet(makeRequest("http://localhost/api/2fa/status"));
+    const response = await statusGet();
     expect(response.status).toBe(401);
   });
 

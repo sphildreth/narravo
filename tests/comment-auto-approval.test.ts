@@ -94,10 +94,8 @@ describe('Comment Auto-Approval', () => {
     };
     (mockConfigService as any).mockImplementation(function() { return mockConfigInstance; });
 
-    let capturedCommentData: any = null;
     mockCreateCommentCore.mockImplementation(async (deps: any, data: any) => {
-      // Capture the comment data that would be inserted
-      capturedCommentData = await deps.insertComment(data);
+      await deps.insertComment(data);
       return { id: 'test-comment-id' };
     });
 

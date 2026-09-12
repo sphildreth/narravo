@@ -168,18 +168,18 @@ export default function PostForm({ post }: PostFormProps) {
   const [featuredImageFile, setFeaturedImageFile] = useState<File | null>(null);
   const [featuredImagePreview, setFeaturedImagePreview] = useState<string | null>(null);
 
-  // Revoke object URL when file changes/removed
+  // Own the preview object URL for the selected file: create it when a file is
+  // picked, revoke it (and clear the preview) when the file changes or the form
+  // unmounts. The existing post's image is rendered from formData.featuredImageUrl,
+  // so this state only ever tracks the pending upload.
   useEffect(() => {
-    if (!featuredImageFile) {
-      if (featuredImagePreview) {
-        URL.revokeObjectURL(featuredImagePreview);
-      }
-      setFeaturedImagePreview(null);
-      return;
-    }
+    if (!featuredImageFile) return;
     const url = URL.createObjectURL(featuredImageFile);
     setFeaturedImagePreview(url);
-    return () => URL.revokeObjectURL(url);
+    return () => {
+      URL.revokeObjectURL(url);
+      setFeaturedImagePreview(null);
+    };
   }, [featuredImageFile]);
 
   // Validate slug format
@@ -552,7 +552,7 @@ export default function PostForm({ post }: PostFormProps) {
                       className="w-full px-3 py-2 text-left hover:bg-gray-50 text-sm text-blue-600"
                       disabled={isPending}
                     >
-                      Create new tag: "{tagInput.trim()}"
+                      Create new tag: &quot;{tagInput.trim()}&quot;
                     </button>
                   )}
                 </div>
@@ -636,7 +636,7 @@ export default function PostForm({ post }: PostFormProps) {
                       className="w-full px-3 py-2 text-left hover:bg-gray-50 text-sm text-green-600"
                       disabled={isPending}
                     >
-                      Create new category: "{categoryInput.trim()}"
+                      Create new category: &quot;{categoryInput.trim()}&quot;
                     </button>
                   )}
                 </div>

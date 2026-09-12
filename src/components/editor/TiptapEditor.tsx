@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import { createPortal } from "react-dom";
 import StarterKit from "@tiptap/starter-kit";
@@ -28,8 +28,6 @@ import 'highlight.js/styles/atom-one-dark.css';
 const lowlight = createLowlight();
 import DOMPurify from "dompurify";
 import { expandShortcodes } from "@/lib/markdown";
-import { cn } from "@/lib/utils";
-
 // Language loading for code blocks
 const SUPPORTED_LANGUAGES = [
   'typescript', 'javascript', 'tsx', 'jsx', 'bash', 'shell',
@@ -111,7 +109,7 @@ const loadLanguage = async (lang: string) => {
         lowlight.register('ruby', ruby.default);
         break;
     }
-  } catch (err) {
+  } catch {
     // Language loading failed, continue with plain text
   }
 };
@@ -293,7 +291,7 @@ export const toMarkdown = (editor?: Editor): string => {
     }
 
     return markdown;
-  } catch (e) {
+  } catch {
     return '';
   } finally {
     isConverting = false;
@@ -556,7 +554,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         const md = toMarkdown(editor);
         // Never sync to markdown state during normal typing - only call parent onChange
         onChange?.(md);
-      } catch (e) {
+      } catch {
         // Markdown extraction failed, continue
       }
     },
@@ -615,11 +613,11 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
           
           // Handle fenced code blocks in pasted content
           const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-          let processedHtml = sanitizedHtml;
+          const processedHtml = sanitizedHtml;
           let match;
           
           while ((match = codeBlockRegex.exec(sanitizedHtml)) !== null) {
-            const [fullMatch, lang, code] = match;
+            const lang = match[1];
             const language = lang || 'plaintext';
             
             // Load the language if we support it

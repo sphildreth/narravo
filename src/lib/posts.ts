@@ -5,7 +5,7 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import type { PostDTO } from "@/types/content";
-import { getReactionCounts, getUserReactions, type ReactionCounts, type UserReactions } from "./reactions";
+import { getReactionCounts, getUserReactions } from "./reactions";
 import { markdownToHtmlSync, extractExcerpt } from "./markdown";
 import { posts } from "@/drizzle/schema";
 import { getPostTags, getPostCategory } from "./taxonomy";
@@ -36,8 +36,6 @@ export async function listPosts(opts: { cursor?: { publishedAt: string; id: stri
     const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
     const c = opts.cursor;
     const includeViewsRequested = opts.includeViews ?? false;
-
-    const viewsSelect = includeViewsRequested ? sql`, p.views_total as "viewsTotal"` : sql``;
 
     // Helper to execute the query with a toggle for including views
     async function run(includeViews: boolean) {

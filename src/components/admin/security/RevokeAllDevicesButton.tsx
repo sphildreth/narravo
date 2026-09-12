@@ -32,7 +32,7 @@ export default function RevokeAllDevicesButton() {
         <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-lg">
           <h3 className="text-lg font-semibold">Revoke All Trusted Devices?</h3>
           <p className="mt-2 text-sm text-muted">
-            This will revoke trust from all devices. You'll need to complete 2FA verification on every device the next time you log in.
+            This will revoke trust from all devices. You&apos;ll need to complete 2FA verification on every device the next time you log in.
           </p>
 
           <div className="mt-6 flex gap-2">

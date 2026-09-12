@@ -195,9 +195,7 @@ describe("2FA recovery endpoints", () => {
       });
     });
 
-    const response = await recoveryRegeneratePost(
-      makeJsonRequest("http://localhost/api/2fa/recovery/regenerate", {})
-    );
+    const response = await recoveryRegeneratePost();
     const payload = await response.json();
 
     expect(response.status).toBe(200);

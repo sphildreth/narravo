@@ -137,7 +137,7 @@ describe("WordPress Dimension URL Handling", () => {
   });
 
   it("removes WordPress dimension suffixes before downloading", async () => {
-    const result = await importWxr("test.xml", {
+    await importWxr("test.xml", {
       dryRun: true,
       verbose: true,
       allowedHosts: ["www.shildreth.com"],

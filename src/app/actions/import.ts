@@ -151,7 +151,7 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
             skipped: result.summary.skipped,
           })
           .where(eq(importJobs.id, job.id));
-      } catch (error) {
+      } catch {
         await db.update(importJobs)
           .set({ 
             status: "failed",

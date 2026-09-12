@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import { tags, categories, postTags, commentTags } from "@/drizzle/schema";
+import { tags, categories, postTags } from "@/drizzle/schema";
 import type { TagDTO, CategoryDTO } from "@/types/content";
 import slugify from "slugify";
 

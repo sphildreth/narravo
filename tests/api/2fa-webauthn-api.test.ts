@@ -189,7 +189,7 @@ describe("WebAuthn 2FA endpoints", () => {
     const options = { challenge: "abc", rp: { name: "Narravo" } };
     mockWebauthn.generateWebAuthnRegistrationOptions.mockResolvedValue(options);
 
-    const response = await registerOptionsPost(makeJsonRequest("http://localhost/api/2fa/webauthn/register/options", {}));
+    const response = await registerOptionsPost();
     const payload = await response.json();
 
     expect(response.status).toBe(200);
@@ -258,9 +258,7 @@ describe("WebAuthn 2FA endpoints", () => {
     const options = { challenge: "auth-chal" };
     mockWebauthn.generateWebAuthnAuthenticationOptions.mockResolvedValue(options);
 
-    const response = await authenticateOptionsPost(
-      makeJsonRequest("http://localhost/api/2fa/webauthn/authenticate/options", {})
-    );
+    const response = await authenticateOptionsPost();
     const payload = await response.json();
 
     expect(response.status).toBe(200);

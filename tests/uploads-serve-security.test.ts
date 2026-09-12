@@ -11,7 +11,7 @@ const mockHandle = {
   close: vi.fn(),
 };
 vi.mock("node:fs/promises", () => ({
-  open: (...args: unknown[]) => mockHandle,
+  open: () => mockHandle,
   realpath: vi.fn(async (value: string) => value),
   stat: vi.fn(async () => ({ isFile: () => true })),
 }));

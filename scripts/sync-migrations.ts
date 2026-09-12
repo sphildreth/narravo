@@ -11,8 +11,6 @@
  * tables already exist in the database.
  */
 
-import { drizzle } from "drizzle-orm/node-postgres";
-import { sql } from "drizzle-orm";
 import { Client } from "pg";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
@@ -48,7 +46,6 @@ async function main() {
     console.log("🔌 Connecting to database...");
     await client.connect();
     
-    const db = drizzle(client);
     
     // Read the journal file to get list of migrations
     const journalPath = path.join(process.cwd(), "drizzle", "migrations", "meta", "_journal.json");

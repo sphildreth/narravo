@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { toggleReactionAction } from "./actions";
 import type { TargetType, ReactionKind, ReactionCounts, UserReactions } from "@/lib/reactions";
 import logger from "@/lib/logger";
@@ -43,8 +43,13 @@ export default function ReactionButtons({
   const [localCounts, setLocalCounts] = useState(counts);
   const [localUserReactions, setLocalUserReactions] = useState(userReactions);
   const [isPending, startTransition] = useTransition();
-  // Track when the component mounted to satisfy anti-abuse minimum submit time
-  const submitStartRef = useRef<number>(Date.now());
+  // Track when the component mounted to satisfy anti-abuse minimum submit time.
+  // Assigned in an effect (not during render) so rendering stays pure; effects run
+  // before any user interaction can reach the handler below.
+  const submitStartRef = useRef<number>(0);
+  useEffect(() => {
+    submitStartRef.current = Date.now();
+  }, []);
 
   const handleToggle = (kind: ReactionKind) => {
     if (isPending) return;
@@ -71,7 +76,9 @@ export default function ReactionButtons({
     startTransition(async () => {
       try {
         const result = await toggleReactionAction(targetType, targetId, kind, {
-          submitStartTime: submitStartRef.current,
+          // Fail closed: if the mount effect has not run yet, report "now" so the
+          // server's minimum-time check rejects instead of silently passing.
+          submitStartTime: submitStartRef.current || Date.now(),
         });
         if (result.error) {
           // Revert optimistic update on error

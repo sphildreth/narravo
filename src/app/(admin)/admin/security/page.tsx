@@ -2,7 +2,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerTotp, ownerWebAuthnCredential, ownerRecoveryCode, trustedDevice } from "@/drizzle/schema";
-import { eq, isNull, gt } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { ShieldCheck, Smartphone, Key, Fingerprint, Laptop } from "lucide-react";
 import DisableTwoFactorButton from "@/components/admin/security/DisableTwoFactorButton";

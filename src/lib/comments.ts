@@ -165,7 +165,7 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
 
   const parents = topSlice.map((t) => t.path);
   const childrenMap: Record<string, any[]> = {};
-  let allComments = [...topSlice];
+  const allComments = [...topSlice];
   
   // If there are top-level comments, fetch all their descendants in a single query.
   if (parents.length > 0) {
@@ -206,7 +206,7 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
   }
 
   // Fetch reaction data for all retrieved comments (top-level and children)
-  let reactionData: Record<string, { counts: ReactionCounts; userReactions: UserReactions }> = {};
+  const reactionData: Record<string, { counts: ReactionCounts; userReactions: UserReactions }> = {};
   if (allComments.length > 0) {
     const targets = allComments.map(comment => ({ targetType: "comment" as const, targetId: comment.id }));
     const allCounts = await getMultipleReactionCounts(targets);

@@ -14,7 +14,7 @@ describe("Backup and Restore Scripts", () => {
   afterAll(async () => {
     try {
       await fs.rm(testDir, { recursive: true });
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
   });

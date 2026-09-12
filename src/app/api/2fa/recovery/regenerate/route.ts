@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAdmin2FA } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ownerRecoveryCode } from "@/drizzle/schema";
@@ -8,7 +8,7 @@ import { generateRecoveryCodes, hashRecoveryCode } from "@/lib/2fa/totp";
 import { logSecurityActivity } from "@/lib/2fa/security-activity";
 import { safeApiError } from "@/lib/api-error";
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const session = await requireAdmin2FA();
     const userId = (session.user as any).id;

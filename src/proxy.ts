@@ -58,7 +58,6 @@ async function getCachedRedirects(request: NextRequest) {
 }
 
 export async function proxy(request: NextRequest) {
-  const startTime = performance.now();
   const pathname = request.nextUrl.pathname;
 
   logger.debug(`Processing: ${pathname}`);

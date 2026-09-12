@@ -127,7 +127,6 @@ export function createDatabaseInterceptor(): DatabaseInterceptor {
   
   return {
     onQueryStart: (query: string) => {
-      const queryId = `${Date.now()}-${Math.random()}`;
       queryStartTimes.set(query, performance.now());
     },
     

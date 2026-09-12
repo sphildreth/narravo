@@ -8,7 +8,7 @@ export default function NotFound() {
       <div className="text-center py-12">
         <h1 className="text-4xl font-extrabold text-fg mb-4">Tag Not Found</h1>
         <p className="text-lg text-muted mb-6">
-          The tag you're looking for doesn't exist.
+          The tag you&apos;re looking for doesn&apos;t exist.
         </p>
         <Link 
           href="/" 

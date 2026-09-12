@@ -69,7 +69,7 @@ export default function PasskeySetupFlow() {
       const data = await confirmResponse.json();
       setRecoveryCodes(data.recoveryCodes);
       setStep("codes");
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setIsLoading(false);
@@ -115,10 +115,10 @@ export default function PasskeySetupFlow() {
           </div>
           <h2 className="text-lg font-semibold">Register Your Passkey</h2>
           <p className="mt-2 text-sm text-muted">
-            When you click "Register Passkey", your browser or password manager (like Bitwarden) will prompt you to create a passkey using:
+            When you click &quot;Register Passkey&quot;, your browser or password manager (like Bitwarden) will prompt you to create a passkey using:
           </p>
           <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-muted">
-            <li>Your device's biometrics (Face ID, Touch ID, Windows Hello)</li>
+            <li>Your device&apos;s biometrics (Face ID, Touch ID, Windows Hello)</li>
             <li>A security key (YubiKey, etc.)</li>
             <li>Your password manager (Bitwarden, 1Password, etc.)</li>
           </ul>
@@ -136,7 +136,7 @@ export default function PasskeySetupFlow() {
               className="mt-2 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
             />
             <p className="mt-1 text-xs text-muted">
-              Give this passkey a name to identify it later (e.g., "My Laptop" or "Bitwarden")
+              Give this passkey a name to identify it later (e.g., &quot;My Laptop&quot; or &quot;Bitwarden&quot;)
             </p>
           </div>
 
@@ -160,7 +160,7 @@ export default function PasskeySetupFlow() {
             💡 Using Bitwarden?
           </h4>
           <p className="text-sm text-muted">
-            When you click "Register Passkey", Bitwarden will automatically detect the request and offer to save the passkey. 
+            When you click &quot;Register Passkey&quot;, Bitwarden will automatically detect the request and offer to save the passkey. 
             Make sure your Bitwarden extension is unlocked before proceeding.
           </p>
         </div>
@@ -187,7 +187,7 @@ export default function PasskeySetupFlow() {
           </h3>
           <p className="mt-2 text-sm text-muted">
             These codes are your backup if you lose access to your passkey. Save them in a secure location.
-            <strong className="block mt-2">You won't be able to see these codes again!</strong>
+            <strong className="block mt-2">You won&apos;t be able to see these codes again!</strong>
           </p>
 
           <div className="mt-4 rounded-md border border-border bg-bg p-4">

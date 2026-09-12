@@ -18,7 +18,7 @@ vi.mock('@/lib/db', () => ({
     }),
     transaction: vi.fn().mockImplementation(async (fn) => {
       const tx = {
-        insert: vi.fn().mockImplementation((table) => ({
+        insert: vi.fn().mockImplementation(() => ({
           values: vi.fn().mockImplementation((data) => {
             viewEventInserts.push(data);
             // Create a thenable object that also has onConflictDoUpdate
@@ -30,7 +30,7 @@ vi.mock('@/lib/db', () => ({
             return result;
           })
         })),
-        update: vi.fn().mockImplementation((table) => ({
+        update: vi.fn().mockImplementation(() => ({
           set: vi.fn().mockImplementation((data) => ({
             where: vi.fn().mockImplementation(() => {
               totalViewsUpdates.push(data);
@@ -130,8 +130,8 @@ describe("Analytics View Tracking Fix", () => {
     vi.mocked(db.transaction).mockImplementation(async (fn: any) => {
       // Create config mock that returns false for COUNT-BOTS
       const tx = {
-        insert: vi.fn().mockImplementation((table) => ({
-          values: vi.fn().mockImplementation((data) => {
+        insert: vi.fn().mockImplementation(() => ({
+          values: vi.fn().mockImplementation(() => {
             const result = Promise.resolve(undefined);
             (result as any).onConflictDoUpdate = vi.fn().mockImplementation(() => {
               return Promise.resolve(undefined);

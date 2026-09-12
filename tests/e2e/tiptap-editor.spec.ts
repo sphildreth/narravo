@@ -2,12 +2,6 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('TipTap Editor E2E Tests', () => {
-  test.beforeEach(async ({ page }) => {
-    // We would need to navigate to a page that includes the TipTap editor
-    // For now, this is a template for future implementation
-    // await page.goto('/admin/posts/new');
-  });
-
   test.skip('should display toolbar with all expected buttons', async ({ page }) => {
     // Wait for the editor to load
     await page.waitForSelector('[data-testid="tiptap-editor"]');
@@ -51,9 +45,6 @@ test.describe('TipTap Editor E2E Tests', () => {
 
   test.skip('should handle image upload with alt text prompt', async ({ page }) => {
     await page.waitForSelector('[data-testid="tiptap-editor"]');
-    
-    // Mock the file input
-    const fileInput = page.locator('input[type="file"][accept="image/*"]');
     
     // Set up dialog handler for alt text prompt
     page.on('dialog', dialog => dialog.accept('Test alt text'));

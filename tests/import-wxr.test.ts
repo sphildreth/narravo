@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import logger from '@/lib/logger';
-import path from "node:path";
 import { db } from "@/lib/db";
-import { posts, redirects, importJobs, importJobErrors } from "@/drizzle/schema";
-import { importWxr, parseWxrItem, type WxrItem, type ImportResult } from "../scripts/import-wxr";
+import { importWxr, parseWxrItem, type WxrItem } from "../scripts/import-wxr";
 
 // Mock fs at the top level properly
 vi.mock("node:fs/promises", () => ({
@@ -39,7 +37,7 @@ vi.mock("@/lib/sanitize", () => ({
 }));
 
 // Import fs after mocking
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 
 describe("WXR Import", () => {
   beforeEach(() => {
