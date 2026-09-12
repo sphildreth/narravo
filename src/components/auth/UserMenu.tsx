@@ -1,6 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 import * as React from "react";
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 
 type Props = {
@@ -11,8 +12,8 @@ function Avatar({ user }: Props) {
   const src = user.image ?? undefined;
   const initials = (user.name || user.email || "?").trim().slice(0, 2).toUpperCase();
   return (
-    <div className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-card text-sm font-semibold">
-      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <span>{initials}</span>}
+    <div className="relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-card text-sm font-semibold">
+      {src ? <Image src={src} alt="" fill sizes="36px" className="object-cover" /> : <span>{initials}</span>}
     </div>
   );
 }

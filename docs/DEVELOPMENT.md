@@ -68,19 +68,25 @@ Notes for specific gates:
 The gate is green today because four families of pre-existing patterns are exempted
 per file, not globally. Each needs a real change with its own review:
 
-- `@next/next/no-img-element` – avatars (Gravatar), imported WordPress media and
-  admin previews use plain `<img>`. Switching to `next/image` first needs an
-  `images.remotePatterns` allowlist in `next.config.mjs`, since the optimizer
-  proxies those remote URLs.
+- `@next/next/no-img-element` – five call sites keep `<img>`: the post featured
+  image and comment attachments (the uploads table stores no intrinsic width or
+  height, so `next/image` would need a fixed crop box instead of the natural-aspect
+  layout), the lightbox (deliberately the original bytes of arbitrary imported
+  media) and the two admin upload previews (`blob:` object URLs the optimizer cannot
+  proxy). Avatars and the site banner do use `next/image`; converting the featured
+  image properly starts with recording dimensions at upload time.
 - `react-hooks/rules-of-hooks`, `static-components`, `refs`, `purity`,
   `immutability` – `TiptapEditor` declares `EditorToolbar`/`ImageBubbleMenu` inside
   render, reads and writes refs in the render body, and builds its upload session id
   with `Date.now()`/`Math.random()`. Hoisting them changes editor initialisation
   order, so do it with the skipped Playwright specs enabled.
-- `react-hooks/set-state-in-effect` – `CodeBlock`, `ImageLightbox`,
-  `RenderTimeBadge` and `PostForm` sync external state (theme attribute, portal
-  mount, `Server-Timing`, object-URL previews) with `setState` inside an effect.
-  `useSyncExternalStore` or event-driven resets are the intended replacements.
+- `react-hooks/set-state-in-effect` – `ImageLightbox`, `RenderTimeBadge` and
+  `PostForm` sync external state (portal mount, `Server-Timing`, object-URL
+  previews) with `setState` inside an effect; `useSyncExternalStore` or event-driven
+  resets are the intended replacements. `CodeBlock` was the fourth case and is done:
+  it sampled `<html data-theme>` once on mount, so toggling the theme left rendered
+  code in the old palette until reload (covered by
+  `tests/components/CodeBlockTheme.test.tsx`).
 - `react-hooks/purity` on the post page – it times its own server render with
   `performance.now()`.
 

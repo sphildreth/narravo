@@ -38,8 +38,12 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
+      // Avatars come from the only two OAuth providers (GitHub, Google) and render
+      // through next/image, so their hosts must be listed here. Google serves
+      // account photos from lh3..lh6.googleusercontent.com and ggpht mirrors, hence
+      // the wildcard instead of a single host.
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
-      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      { protocol: 'https', hostname: '*.googleusercontent.com' },
       { protocol: 'https', hostname: 'i.pravatar.cc' },
       { protocol: 'https', hostname: 'stackoverflow.com' },
       ...(s3Hostname ? [{ protocol: 'https', hostname: s3Hostname }] : []),

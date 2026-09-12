@@ -6,27 +6,116 @@ This file records notable project changes. It follows the
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-12
+
 ### Added
 
+- ESLint is an enforced gate instead of a skipped one. `eslint.config.mjs` applies
+  `eslint-config-next` core-web-vitals plus the TypeScript rules to the whole
+  workspace, `pnpm lint` runs `eslint . --max-warnings=0` so warnings fail the
+  build, `pnpm lint:fix` applies autofixes, and `scripts/do-prechecks.py` runs the
+  gate between typecheck and the production build. Every relaxation is scoped to
+  named files and states why (`@next/next/no-img-element`, the `react-hooks/*`
+  families, `no-console` under `scripts/`, `no-require-imports` for the lazy jsdom
+  `require()`), and `docs/DEVELOPMENT.md` records the deferred work.
+- Two dependency pins are documented as load-bearing in the config and the dev
+  guide: ESLint stays on 9.x because eslint-plugin-react and eslint-plugin-jsx-a11y
+  peer ranges stop at `^9` (ESLint 10 removed `context.getFilename`), and
+  TypeScript stays on 6.x because typescript-eslint hard-errors on the TypeScript 7
+  native API.
 - `scripts/do-prechecks.py` runs the local quality gates in fail-fast order
   (`pnpm prechecks`, `pnpm prechecks:quick`), including static release-metadata,
   SPDX, migration-journal, and repository-hygiene checks that CI cannot catch
   before a push. `--install-hook` wires it to `git pre-commit`.
 - `scripts/test_do_prechecks.py` covers the precheck tooling itself and runs as
   one of its gates.
+- `tests/components/CodeBlockTheme.test.tsx` asserts the highlighter palette
+  follows a `<html data-theme>` flip with no navigation; it fails against the
+  previous mount-effect implementation.
+
+### Performance
+
+- The site banner and the fixed-size avatars now render through `next/image`
+  instead of `<img>`. `Banner` uses `fill` + `priority` + `sizes="100vw"` inside its
+  existing `relative h-64 overflow-hidden` wrapper and keeps the configured focal
+  point through `objectPosition`; `ArticleCard`, `UserMenu` and `UsersManager` pass
+  explicit 20-36px dimensions plus `sizes`, so a small avatar no longer downloads
+  the full-size OAuth photo.
+- `next.config.mjs` accepts `*.googleusercontent.com` in place of the single
+  `lh3.googleusercontent.com` host, so Google accounts served from another
+  `*.googleusercontent.com` host render instead of throwing while rendering the
+  post list.
+
+### Changed
+
+- Dependency refresh across the workspace (`pnpm update --latest`): Next 16.3.5
+  with `@next/bundle-analyzer`/`eslint-config-next` 16.3.5, React 19.3 and matching
+  React types, Tiptap 3.31.3, Mermaid 12, Zod 4.6.2, `@simplewebauthn/browser` 14
+  and `@simplewebauthn/server` 14.0.1, AWS SDK 3.1131, marked 18.0.12,
+  lucide-react 1.45, dompurify 3.4.15, jszip 3.10.2, and on the tooling side
+  Vitest 5 with `@vitest/coverage-v8` 5, Vite 8.3, Playwright 1.63 and
+  Puppeteer 25.10.
+- `pnpm-workspace.yaml` peer rules track what is actually installed:
+  `@simplewebauthn/browser`/`@simplewebauthn/server` `>=14` (next-auth/`@auth/core`
+  still declare older peers and this app runs its own 2FA implementation) and
+  `eslint` `>=9 <10`.
+- Internal anchors in the home page footer and the comment sign-in panel use
+  `next/link`, and 48 literal `"`/`'` characters in JSX text are escaped as
+  `&quot;`/`&apos;`.
+- README stack badges follow `package.json` (Next.js 16.3, React 19.3), the README
+  gate table and `docs/DEVELOPMENT.md` describe the now-active ESLint gate, and
+  `docs/AGENTS.md` lists `pnpm lint` with the other standard commands.
+- Tests follow the implementation: the `UserMenu` avatar assertion now expects the
+  optimizer URL carrying the original avatar in its `url` parameter and
+  `sizes="36px"`, and the remaining test edits drop unused bindings and
+  already-dead fixtures.
 
 ### Fixed
 
+- Code blocks follow theme changes. `CodeBlock` sampled `<html data-theme>` once in
+  a mount effect while `ThemeToggle` rewrites that attribute in place, so toggling
+  the theme left every already-rendered code block in the previous palette until a
+  reload. The palette now comes from a `useSyncExternalStore` subscription (a
+  `MutationObserver` on `data-theme` plus a
+  `matchMedia('(prefers-color-scheme: dark)')` listener), with the light palette as
+  the server snapshot so hydration output is unchanged and the `matchMedia` lookups
+  guarded for jsdom.
+- Reaction anti-abuse fails closed: `ReactionButtons` records its mount timestamp
+  in an effect, keeping render pure, and reports "now" if a handler somehow runs
+  first, so the server-side minimum submit-time check rejects instead of passing.
+- `src/app/api/rum/route.ts` exports `runtime = "nodejs"`; it had been a local
+  `const` that never configured the route.
+- `PostForm`'s featured-image preview effect no longer reads the state it owns: the
+  object URL is created and revoked strictly from the selected file.
 - Removed the stray top-level `tiptap-markdown` field from `package.json`, which
   duplicated the `devDependencies` entry and was ignored by npm/pnpm.
-- Synced the README version badge with `package.json` (1.0.3).
 - Added the missing `Apache-2.0` SPDX headers to `src/lib/rateLimit.ts` and
   `scripts/iframe-allowlist.ts`.
+
+### Removed
+
+- Dead code the lint run exposed: the `Server-Timing` header computation on the post
+  page that was never attached to a response, the placeholder audit-log fetch in
+  `AuditLogSection` (now an explicit "no endpoint yet" state), the per-request
+  `performance.now()` in `proxy()`, the unused query id in
+  `createDatabaseInterceptor()`, and unused imports, variables and `catch` bindings
+  across `src/` and `tests/`.
+
+### Security
+
+- `lodash-es` is overridden to `>=4.17.24`, closing GHSA-f23m-r3pf-42rh (prototype
+  pollution) reached through `mermaid -> chevrotain`; the override stays inside the
+  range chevrotain declares and dedupes with the copy `dagre-d3-es` already used.
+- `postcss` is pinned to 8.5.28 and `qs` overridden to `>=6.16.0` for the remaining
+  advisories; `qs` is reachable only through `@lhci/cli > express`, so it is
+  dev-only. `pnpm audit` now reports no known vulnerabilities in production and
+  development dependencies.
 
 ### Chores
 
 - Ignore `__pycache__/` and `*.py[cod]` so the Python gate tooling leaves no
   noise in `git status`.
+- Bumped the application version from `1.0.3` to `1.0.4`.
 
 ## [1.0.3] - 2026-08-30
 

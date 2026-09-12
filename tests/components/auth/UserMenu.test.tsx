@@ -36,7 +36,11 @@ describe("UserMenu", () => {
 
       const img = screen.getByAltText("");
       expect(img).toBeInTheDocument();
-      expect(img).toHaveAttribute("src", "https://example.com/avatar.jpg");
+      // The avatar goes through next/image, so `src` is the optimizer URL and the
+      // original avatar lives in its `url` parameter; `sizes` is what keeps the
+      // fetched variant small for a 36px box.
+      expect(decodeURIComponent(img.getAttribute("src") ?? "")).toContain("https://example.com/avatar.jpg");
+      expect(img).toHaveAttribute("sizes", "36px");
     });
 
     it("should display initials when image is not provided", () => {
