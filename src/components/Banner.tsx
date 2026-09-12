@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import Image from "next/image";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 
@@ -23,10 +24,13 @@ export default async function Banner() {
 
   return (
     <div className="relative w-full h-64 overflow-hidden">
-      <img
+      <Image
         src={bannerImageUrl}
         alt={bannerAlt}
-        className="w-full h-full object-cover"
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover"
         style={{
           objectPosition: `${bannerFocalX * 100}% ${bannerFocalY * 100}%`,
         }}

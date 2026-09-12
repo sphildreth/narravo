@@ -69,7 +69,14 @@ export default function ArticleCard({ post }: { post: ArticleCardPost }) {
         {post.author?.name && (
           <div className="mt-3 flex items-center gap-2 text-xs text-muted">
             {post.author?.image && (
-              <img src={post.author.image} alt="" className="h-5 w-5 rounded-full" />
+              <Image
+                src={post.author.image}
+                alt=""
+                width={20}
+                height={20}
+                sizes="20px"
+                className="h-5 w-5 rounded-full"
+              />
             )}
             <span className="font-medium text-fg">{post.author.name}</span>
           </div>

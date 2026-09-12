@@ -67,18 +67,21 @@ const config = [
     },
   },
   {
-    // STAGED ADOPTION (tech debt): these components render remote user-supplied or
-    // Gravatar images (`<img>`). Moving them to next/image first requires an
-    // `images.remotePatterns` policy, because the optimizer proxies those URLs.
+    // STAGED ADOPTION (tech debt): `<img>` is deliberate in these five places, for
+    // different reasons:
+    //   * Post featured image, comment attachments: uploads store no intrinsic
+    //     dimensions, so next/image would need a fixed crop box instead of the
+    //     natural-aspect layout these render with today.
+    //   * ImageLightbox: shows the original bytes of arbitrary imported (WordPress)
+    //     media; those hosts are not in images.remotePatterns on purpose.
+    //   * PostForm / AppearanceManager previews: `blob:` object URLs of a file that
+    //     has not been uploaded yet, which the optimizer cannot proxy.
+    // Avatars and the site banner already go through next/image; keep it that way.
     files: [
       "src/app/\\(public\\)/\\[slug\\]/page.tsx",
-      "src/components/ArticleCard.tsx",
-      "src/components/Banner.tsx",
       "src/components/ImageLightbox.tsx",
       "src/components/admin/appearance/AppearanceManager.tsx",
       "src/components/admin/posts/PostForm.tsx",
-      "src/components/admin/users/UsersManager.tsx",
-      "src/components/auth/UserMenu.tsx",
       "src/components/comments/CommentNode.tsx",
     ],
     rules: {

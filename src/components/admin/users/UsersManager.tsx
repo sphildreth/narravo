@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useDateFormat } from "@/lib/dateFormat.client";
 import { formatDateSafe } from "@/lib/dateFormat";
 import logger from '@/lib/logger';
@@ -281,9 +282,12 @@ export default function UsersManager({ initialData, filter, sort }: UsersManager
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-3">
                       {user.image && (
-                        <img 
-                          src={user.image} 
+                        <Image
+                          src={user.image}
                           alt={user.name || "User avatar"}
+                          width={32}
+                          height={32}
+                          sizes="32px"
                           className="w-8 h-8 rounded-full"
                         />
                       )}
