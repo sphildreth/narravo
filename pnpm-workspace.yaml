@@ -32,6 +32,10 @@ overrides:
   # qs < 6.16.0 is reachable only through @lhci/cli > express (dev-only), but the
   # DoS/prototype advisories still fail `pnpm audit`; pin the patched line.
   qs: ">=6.16.0"
+  # lodash-es <=4.17.23 is vulnerable to prototype pollution (GHSA-f23m-r3pf-42rh).
+  # It arrives through mermaid > chevrotain, which allows ^4.17.21, so this stays
+  # inside the declared range and dedupes with dagre-d3-es' copy.
+  lodash-es: ">=4.17.24"
   prismjs: ">=1.30.0"
   tmp: ">=0.2.4"
   vite: "$vite"
