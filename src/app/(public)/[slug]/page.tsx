@@ -191,9 +191,9 @@ export default async function PostPage({ params }: Props) {
                     <img
                         src={post.featuredImageUrl}
                         alt={post.featuredImageAlt || post.title}
-                        className="w-full h-auto object-cover"
+                        className="w-full h-auto object-contain"
                         loading="eager"
-                        style={{ maxHeight: '500px' }}
+                        style={{ maxHeight: '80vh' }}
                     />
                 </div>
             )}
