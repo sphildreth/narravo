@@ -21,10 +21,10 @@ peerDependencyRules:
     # its own 2FA implementation, so track the version actually installed here.
     "@simplewebauthn/browser": ">=14"
     "@simplewebauthn/server": ">=14"
-    # eslint-config-next still pulls eslint-plugin-react / eslint-plugin-jsx-a11y,
-    # whose peer ranges stop at ESLint ^9 (ESLint 10 removed context.getFilename),
-    # so the linter stays on the 9.x line until those plugins catch up.
-    eslint: ">=9 <10"
+    # eslint-plugin-react / eslint-plugin-jsx-a11y still declare peer ranges that
+    # stop at ESLint ^9, while the linter runs on the 10.x line (verified working
+    # with eslint-config-next >= 16.4.3). Allow the out-of-range declaration.
+    eslint: ">=9"
 
 overrides:
   esbuild: ">=0.25.0"
@@ -38,6 +38,10 @@ overrides:
   lodash-es: ">=4.17.24"
   prismjs: ">=1.30.0"
   tmp: ">=0.2.4"
+  # basic-ftp <=6.2.0 is vulnerable to CPU DoS in Client.list() (GHSA-c475-qrg2-pj4r).
+  # Dev-only: arrives through @lhci/cli > lighthouse > puppeteer-core > proxy-agent
+  # > get-uri (which declares ^5.3.1), and the FTP code paths are never exercised.
+  basic-ftp: ">=6.2.1"
   vite: "$vite"
   lighthouse: "13.4.1"
   "@puppeteer/browsers": ">=3.0.0"

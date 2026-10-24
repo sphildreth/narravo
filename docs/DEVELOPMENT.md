@@ -55,11 +55,12 @@ Notes for specific gates:
   `eslint.config.mjs` (`eslint-config-next` core-web-vitals + TypeScript rules).
   `pnpm lint:fix` applies autofixes. Every relaxation in the config is scoped to
   named files and says why; extend a scope deliberately, do not un-scope rules.
-  Two dependency pins are load-bearing: ESLint stays on 9.x because
-  eslint-plugin-react/jsx-a11y peer ranges stop at `^9` (ESLint 10 removed
-  `context.getFilename`), and TypeScript stays on 6.x because `typescript-eslint`
-  hard-errors on the TypeScript 7 native API. Drop the pins in
-  `pnpm-workspace.yaml`/`package.json` only when the upstream packages allow it.
+  A dependency pin is load-bearing: TypeScript stays on 6.x because
+  `typescript-eslint` hard-errors on the TypeScript 7 native API. (The ESLint 10.x
+  line works since eslint-config-next 16.4.3 resolved plugin versions compatible
+  with it; if a lint crash reappears, see the note at the top of
+  `eslint.config.mjs`.) Drop the pin in `pnpm-workspace.yaml`/`package.json` only
+  when typescript-eslint ships TS >=7.1 support.
 - `--install-hook` writes `.git/hooks/pre-commit`; `git commit --no-verify`
   bypasses it once, and `NARRAVO_PRECHECKS_ARGS` overrides the default arguments.
 

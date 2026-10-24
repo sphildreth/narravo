@@ -12,8 +12,13 @@ export class LocalStorageService {
   private uploadDir: string;
   private baseUrl: string;
 
-  constructor(uploadDir: string = "public/uploads", baseUrl: string = "/uploads") {
-    this.uploadDir = path.resolve(uploadDir);
+  constructor(uploadDir?: string, baseUrl: string = "/uploads") {
+    // Resolve at runtime from the process working directory. A relative literal
+    // here is statically analyzable by Turbopack, which then traces (and warns
+    // about) the whole project directory during build.
+    this.uploadDir = path.isAbsolute(uploadDir ?? "")
+      ? (uploadDir as string)
+      : path.join(process.cwd(), "public/uploads", uploadDir ?? "");
     this.baseUrl = baseUrl;
   }
 

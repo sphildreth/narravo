@@ -35,6 +35,16 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Featured-image uploads are sent through server actions (PostForm ->
+  // createPost/updatePost) and may be up to 5MB (see actions.ts). The Next.js
+  // default server-action body limit is 1MB, which causes those uploads to fail
+  // with a generic error before the action runs. Raise it to cover 5MB + form
+  // field overhead.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '8mb',
+    },
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },

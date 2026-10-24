@@ -6,6 +6,47 @@ This file records notable project changes. It follows the
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-24
+
+### Fixed
+
+- Featured-image uploads larger than 1MB failed with a generic "An unexpected
+  error occurred" because Next.js server actions enforce a 1MB request body
+  limit while the app allows 5MB images. `next.config.mjs` now sets
+  `experimental.serverActions.bodySizeLimit: '8mb'`, so uploads up to the
+  app-side limit reach `createPost`/`updatePost` instead of dying before the
+  action runs.
+- Featured images on post pages were center-cropped by `object-cover` plus a
+  hard `maxHeight: 500px`, which chopped the top off wide banners (title text
+  included). The image now renders full-width with `object-contain` and an
+  `80vh` cap, so the whole composition is visible; unusually tall images
+  letterbox instead of cropping.
+
+### Changed
+
+- Dependency refresh across the workspace: `next` 16.3.5 → 16.4.3,
+  `react`/`react-dom` 19.3.1, `eslint` 10.13.0 (with `eslint-config-next`
+  16.4.3, whose resolved `eslint-plugin-react`/`eslint-plugin-jsx-a11y` versions
+  work on the ESLint 10 line), all `@tiptap/*` 3.32.0, `@aws-sdk/*` 3.1156.0,
+  `drizzle-orm` 0.45.4, `vitest`/`vite` 5.0.5/8.3.5, `dotenv` 18, `zod` 4.6.7,
+  and the rest of the minor/patch updates reported by `pnpm outdated`.
+- The "ESLint stays on 9.x" pin is retired: it is no longer load-bearing now
+  that `eslint-config-next` ≥ 16.4.3 resolves ESLint-10-compatible plugin
+  versions. TypeScript remains pinned to 6.x because `typescript-eslint` still
+  hard-errors on the TypeScript 7 native API (TS >= 7.1 support tracked
+  upstream). Notes in `eslint.config.mjs`, `docs/DEVELOPMENT.md`, and
+  `pnpm-workspace.yaml` were updated accordingly.
+- `sharp` is added as a dependency for image processing (used for in-place
+  optimization of stored uploads).
+
+### Performance
+
+- `LocalStorageService` resolves its upload directory at runtime
+  (`process.cwd()`-based) instead of statically analyzing a relative literal,
+  which previously made Turbopack trace the whole project and emit "Dynamic
+  filesystem access causes tracing of the whole project". The production build
+  now completes with zero warnings.
+
 ## [1.0.4] - 2026-09-12
 
 ### Added

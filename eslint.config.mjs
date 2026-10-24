@@ -2,9 +2,10 @@
 // ESLint flat config for the narravo workspace (`pnpm lint`).
 //
 // Two ecosystem constraints worth knowing before editing this file:
-//   * ESLint stays on the 9.x line. eslint-config-next pulls eslint-plugin-react
-//     and eslint-plugin-jsx-a11y, whose peer ranges stop at ^9 (ESLint 10 removed
-//     `context.getFilename`, which crashes eslint-plugin-react@7 on load).
+//   * ESLint 10 works as of eslint-config-next 16.4.3, which resolves
+//     eslint-plugin-react/jsx-a11y versions that run cleanly on the 10.x line
+//     (verified with `pnpm lint --max-warnings=0`). If lint crashes on load with
+//     a `context.getFilename` error, drop back to the 9.x line.
 //   * TypeScript stays on the 6.x line. typescript-eslint hard-errors on the
 //     TypeScript 7 native API, so `eslint-config-next/typescript` cannot run
 //     against TS 7 until typescript-eslint ships TS >=7.1 support.
