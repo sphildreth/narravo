@@ -17,7 +17,7 @@ interface ExportRequest {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin2FA();
+    const session = await requireAdmin2FA();
     
     const { includeMedia = true, dateFrom, dateTo }: ExportRequest = await req.json();
     
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const operationId = nanoid();
     const logEntry = await db.insert(dataOperationLogs).values({
       operationType: "export",
-      userId: null, // TODO: Get from session when auth is implemented
+      userId: session?.user?.id ?? null,
       details: { includeMedia, dateFrom, dateTo, operationId },
       status: "started",
       ipAddress: req.headers.get("x-forwarded-for") || "unknown",

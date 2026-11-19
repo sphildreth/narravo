@@ -95,7 +95,10 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
     setSelectedFile(file);
   };
 
+  const [restrictedPosts, setRestrictedPosts] = useState<string[]>([]);
+
   const handleStartImport = async () => {
+    setRestrictedPosts([]);
     if (!selectedFile) {
       setUploadError("Please select a .xml file to import");
       return;
@@ -121,6 +124,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
       if (result.error) {
         setUploadError(result.error);
       } else if (result.job) {
+        setRestrictedPosts(result.restrictedPosts ?? []);
         // Prepend new job to list and clear form
         setJobs(prev => {
           const existing = prev.filter(j => j.id !== result.job!.id);
@@ -155,6 +159,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
       if (result.error) {
         setUploadError(result.error);
       } else if (result.job) {
+        setRestrictedPosts(result.restrictedPosts ?? []);
         setJobs(prev => prev.map(job => 
           job.id === jobId ? result.job! : job
         ));
@@ -229,6 +234,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
             </div>
 
             <div>
+              {restrictedPosts.length > 0 && <p role="status">Will import as drafts: {restrictedPosts.join(", ")}</p>}
               <label htmlFor="statuses" className="block text-sm font-medium mb-2">Post Statuses to Import</label>
               <select
                 id="statuses"
@@ -297,7 +303,7 @@ export default function ImportManager({ initialJobs }: ImportManagerProps) {
                   }
                   className="rounded border-border"
                 />
-                <span className="text-sm text-red-600">Purge all data before import (destructive!)</span>
+                <span className="text-sm text-red-600">Replace existing posts, discussions, taxonomy, and redirects after validation. Uploaded files are retained.</span>
               </label>
 
               <label className="flex items-center space-x-2">

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const logger = { info: vi.fn(), error: vi.fn() };
@@ -71,7 +72,7 @@ vi.mock("@/lib/logger", () => ({ default: logger }));
 vi.mock("pg", () => ({ Client: FakeClient }));
 vi.mock("drizzle-orm/node-postgres", () => ({ drizzle: () => dbMock }));
 vi.mock("@/drizzle/schema", () => ({ users: usersTable, posts: postsTable, comments: commentsTable }));
-vi.mock("crypto", () => ({ randomUUID: () => `uuid-${++uuidCounter}` }));
+vi.mock("crypto", () => ({ randomInt: () => 0, randomUUID: () => `uuid-${++uuidCounter}` }));
 vi.mock("slugify", () => (str: string) => str.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""));
 
 const BASE_ENV = { ...process.env };

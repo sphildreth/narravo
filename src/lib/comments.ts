@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { publicPostCondition } from "./post-visibility";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { sanitizeCommentHtml } from "./sanitize";
@@ -58,7 +59,7 @@ export async function createCommentCore(
   let pathPrefix = "";
   if (input.parentId) {
     const parent = await deps.getParentComment(input.parentId);
-    if (!parent) throw new CommentError("Parent comment not found");
+    if (!parent || parent.postId !== input.postId) throw new CommentError("Parent comment not found");
     depth = parent.depth + 1;
     if (depth >= MAX_COMMENT_DEPTH) throw new CommentError("Max depth exceeded");
     pathPrefix = parent.path + ".";
@@ -114,8 +115,10 @@ export type CommentDTO = {
  * @param postId The ID of the post.
  * @returns A promise that resolves to the number of comments.
  */
-export async function countApprovedComments(postId: string): Promise<number> {
-  const rows = await db.execute(sql`select count(*)::int as c from comments where post_id = ${postId} and status = 'approved' and deleted_at is null`);
+export async function countApprovedComments(postId: string, includeUnpublished = false): Promise<number> {
+  const rows = await db.execute(sql`select count(*)::int as c from comments c join posts p on p.id = c.post_id
+    where c.post_id = ${postId} and c.status = 'approved' and c.deleted_at is null
+    ${includeUnpublished ? sql`` : sql`and ${publicPostCondition()}`}`);
   const first = Array.isArray(rows) ? rows[0] : (rows as any).rows?.[0];
   return Number(first?.c ?? 0);
 }
@@ -127,22 +130,23 @@ export async function countApprovedComments(postId: string): Promise<number> {
  * @param opts Options for pagination, limits, and user-specific data.
  * @returns A promise that resolves to an object containing top-level comments, a map of children, and a cursor for the next page.
  */
-export async function getCommentTreeForPost(postId: string, opts: { cursor?: string | null; limitTop?: number; limitReplies?: number; userId?: string | undefined } = {}) {
+export async function getCommentTreeForPost(postId: string, opts: { cursor?: string | null; limitTop?: number; limitReplies?: number; userId?: string | undefined; includeUnpublished?: boolean } = {}) {
   // Set default options
   const limitTop = opts.limitTop ?? 10;
   const limitReplies = opts.limitReplies ?? 3;
   const cursor = opts.cursor ?? null;
   const userId = opts.userId;
+  const visibility = opts.includeUnpublished ? sql`` : sql`and ${publicPostCondition()}`;
   
   const topSql = sql`
     select c.id, c.post_id as "postId", c.user_id as "userId", c.path, c.depth, c.body_html as "bodyHtml",
            -- Fetch author details and a count of direct approved children for each top-level comment
            c.created_at as "createdAt",
            u.name as "authorName", u.image as "authorImage",
-           (select count(*)::int from comments c2 where c2.parent_id = c.id and c2.status = 'approved') as "childrenCount"
-    from comments c
+           (select count(*)::int from comments c2 where c2.parent_id = c.id and c2.status = 'approved' and c2.deleted_at is null) as "childrenCount"
+    from comments c join posts p on p.id = c.post_id
     left join users u on u.id = c.user_id
-    where c.post_id = ${postId}
+    where c.post_id = ${postId} ${visibility}
       and c.status = 'approved'
       and c.deleted_at is null
       and c.depth = 0 -- Only fetch top-level comments
@@ -175,9 +179,9 @@ export async function getCommentTreeForPost(postId: string, opts: { cursor?: str
       select c.id, c.post_id as "postId", c.user_id as "userId", c.path, c.depth, c.body_html as "bodyHtml",
              c.created_at as "createdAt",
              u.name as "authorName", u.image as "authorImage"
-      from comments c
+      from comments c join posts p on p.id = c.post_id
       left join users u on u.id = c.user_id
-      where c.post_id = ${postId}
+      where c.post_id = ${postId} ${visibility}
         and c.status = 'approved'
         and c.deleted_at is null
         and (
@@ -335,7 +339,7 @@ export async function getRecentComments(limit = 5) {
     select c.id, c.body_html as "bodyHtml", c.created_at as "createdAt",
            u.name as "authorName", u.image as "authorImage",
            p.slug as "postSlug"
-    from comments c
+    from comments c join posts p on p.id = c.post_id
     left join users u on u.id = c.user_id
     left join posts p on p.id = c.post_id
     order by c.created_at desc

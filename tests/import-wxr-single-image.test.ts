@@ -133,8 +133,8 @@ describe("WXR Import single image handling", () => {
       allowedHosts: ["www.shildreth.com"],
     });
 
-    // One image should be fetched and uploaded (the original URL, not the dimensioned one)
-    expect(putCalls.length).toBe(1);
+    // Preview computes the original image mapping without writing to storage
+    expect(putCalls).toHaveLength(0);
 
     // The mapping should be present for the original (non-dimensioned) URL
     expect(result.mediaUrls.has(ORIGINAL_IMAGE_URL)).toBe(true);
@@ -152,7 +152,7 @@ describe("WXR Import single image handling", () => {
       verbose: true,
       allowedHosts: ["https://www.shildreth.com/some/path/"],
     });
-    expect(putCalls.length).toBe(1);
+    expect(putCalls).toHaveLength(0);
     expect(result.mediaUrls.size).toBe(1);
   });
 
@@ -173,7 +173,7 @@ describe("WXR Import single image handling", () => {
       verbose: true,
       allowedHosts: ["shildreth.com"],
     });
-    expect(putCalls.length).toBe(1);
+    expect(putCalls).toHaveLength(0);
     expect(result.mediaUrls.size).toBe(1);
   });
   

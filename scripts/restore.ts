@@ -1,35 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import JSZip from "jszip";
-import { db } from "@/lib/db";
-import { posts, users, configuration } from "@/drizzle/schema";
 import fs from "node:fs/promises";
-import { eq, and, sql } from "drizzle-orm";
-import logger from "@/lib/logger";
-import type { BackupManifest } from "./backup";
+import { parseArgs } from "node:util";
+import { and, eq, getTableColumns, isNull, or, type SQL } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
+import { db } from "@/lib/db";
 import { sanitizeHtml } from "@/lib/sanitize";
-
-const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
-const MAX_UNCOMPRESSED_BYTES = 250 * 1024 * 1024;
-const MAX_ENTRY_BYTES = 50 * 1024 * 1024;
-const MAX_ARCHIVE_ENTRIES = 100;
-
-function assertSafeArchive(zip: JSZip, archiveBytes: number): void {
-  if (archiveBytes <= 0 || archiveBytes > MAX_ARCHIVE_BYTES) {
-    throw new Error("Backup archive exceeds the compressed size limit");
-  }
-  const entries = Object.values(zip.files);
-  if (entries.length > MAX_ARCHIVE_ENTRIES) throw new Error("Backup archive contains too many entries");
-  let total = 0;
-  for (const entry of entries) {
-    if (entry.dir) continue;
-    const size = Number((entry as unknown as { _data?: { uncompressedSize?: unknown } })._data?.uncompressedSize);
-    if (!Number.isSafeInteger(size) || size < 0 || size > MAX_ENTRY_BYTES) {
-      throw new Error("Backup archive entry exceeds the uncompressed size limit");
-    }
-    total += size;
-    if (total > MAX_UNCOMPRESSED_BYTES) throw new Error("Backup archive exceeds the expansion limit");
-  }
-}
+import logger from "@/lib/logger";
+import { archiveLimits, assertArchiveLimits, readArchiveEntry, digest, legacyNames, mediaType, names, storageFor, tables, validMediaKey, type BackupManifest, type MediaEntry, type TableName } from "./content-archive";
 
 export interface RestoreOptions {
   backupPath: string;
@@ -38,6 +16,7 @@ export interface RestoreOptions {
   startDate?: Date;
   endDate?: Date;
   verbose?: boolean;
+  skipMedia?: boolean;
   skipUsers?: boolean;
   skipConfiguration?: boolean;
 }
@@ -56,397 +35,229 @@ export interface RestorePreview {
   };
 }
 
-export async function restoreBackup(options: RestoreOptions): Promise<RestorePreview | void> {
-  const {
-    backupPath,
-    dryRun = false,
-    filterSlugs = [],
-    startDate,
-    endDate,
-    verbose = false,
-    skipUsers = false,
-    skipConfiguration = false,
-  } = options;
+type Row = Record<string, any>;
+type Data = Record<TableName, Row[]>;
 
-  if (verbose) {
-    logger.info(`${dryRun ? "Previewing" : "Starting"} restore from: ${backupPath}`);
+function selectRecords(data: Data, options: RestoreOptions) {
+  if (!options.filterSlugs?.length && !options.startDate && !options.endDate) return false;
+  data.posts = data.posts.filter(post => {
+    if (options.filterSlugs?.length && !options.filterSlugs.includes(post.slug)) return false;
+    if (!options.startDate && !options.endDate) return true;
+    if (!post.publishedAt) return false;
+    const time = new Date(post.publishedAt);
+    return (!options.startDate || time >= options.startDate) && (!options.endDate || time <= options.endDate);
+  });
+  const postIds = new Set(data.posts.map(p => p.id));
+  const paths = new Set(data.posts.map(p => "/" + p.slug));
+  data.comments = data.comments.filter(c => postIds.has(c.postId));
+  const commentIds = new Set(data.comments.map(c => c.id));
+  data.comment_attachments = data.comment_attachments.filter(a => commentIds.has(a.commentId));
+  data.post_tags = data.post_tags.filter(t => postIds.has(t.postId));
+  data.comment_tags = data.comment_tags.filter(t => commentIds.has(t.commentId));
+  data.reactions = data.reactions.filter(r => (r.targetType === "post" ? postIds : commentIds).has(r.targetId));
+  data.uploads = data.uploads.filter(u => postIds.has(u.postId));
+  data.redirects = data.redirects.filter(r => paths.has(r.toPath));
+  const categories = new Set(data.posts.map(p => p.categoryId));
+  data.categories = data.categories.filter(c => categories.has(c.id));
+  const tags = new Set([...data.post_tags, ...data.comment_tags].map(t => t.tagId));
+  data.tags = data.tags.filter(t => tags.has(t.id));
+  const userIds = new Set([data.comments, data.reactions, data.uploads, data.posts]
+    .flatMap(rows => rows.flatMap(r => [r.userId, r.deletedBy])).filter(Boolean));
+  data.configuration = data.configuration.filter(row => userIds.has(row.userId));
+  data.users = data.users.filter(u => userIds.has(u.id));
+  return true;
+}
+
+function orderComments(rows: Row[]) {
+  const byId = new Map(rows.map(r => [r.id, r]));
+  const done = new Set<string>();
+  const ordered: Row[] = [];
+  for (const row of rows) {
+    const parents = new Set<string>();
+    let node: Row | undefined = row;
+    while (node && !done.has(node.id)) {
+      if (parents.has(node.id)) throw new Error("Comment parent cycle in archive");
+      parents.add(node.id);
+      node = byId.get(node.parentId);
+    }
+    for (const id of [...parents].reverse()) {
+      ordered.push(byId.get(id)!);
+      done.add(id);
+    }
+  }
+  return ordered;
+}
+
+function matchRecord(name: TableName, cols: Record<string, PgColumn>, row: Row): SQL {
+  const same = (key: string) => row[key] == null ? isNull(cols[key]!) : eq(cols[key]!, row[key]);
+  switch (name) {
+    case "posts": return row.importedSystemId ? or(same("importedSystemId"), same("slug"))! : same("slug");
+    case "users": return row.email ? same("email") : same("id");
+    case "categories": case "tags": return same("slug");
+    case "uploads": return same("key");
+    case "configuration": return and(same("key"), same("userId"))!;
+    case "redirects": return same("fromPath");
+    case "reactions": return and(same("targetType"), same("targetId"), same("userId"), same("kind"))!;
+    case "post_tags": return and(same("postId"), same("tagId"))!;
+    case "comment_tags": return and(same("commentId"), same("tagId"))!;
+    default: return same("id");
+  }
+}
+
+const references: Record<string, TableName> = {
+  userId: "users", deletedBy: "users", categoryId: "categories", tagId: "tags",
+  postId: "posts", commentId: "comments", parentId: "comments",
+};
+
+export async function restoreBackup(options: RestoreOptions): Promise<RestorePreview> {
+  if ((options.startDate && !Number.isFinite(options.startDate.getTime())) ||
+      (options.endDate && !Number.isFinite(options.endDate.getTime())) ||
+      (options.startDate && options.endDate && options.startDate > options.endDate)) {
+    throw new Error("Invalid restore date range");
+  }
+  if (options.filterSlugs && (!options.filterSlugs.length || options.filterSlugs.some(slug => !slug.trim()))) {
+    throw new Error("A slug filter requires a nonempty list of slugs");
+  }
+  const stat = await fs.stat(options.backupPath);
+  if (stat.size > archiveLimits.compressed) throw new Error("Backup exceeds compressed size limit");
+  const buffer = await fs.readFile(options.backupPath);
+  const zip = await JSZip.loadAsync(buffer);
+  assertArchiveLimits(zip, buffer.length);
+  const manifest: BackupManifest = JSON.parse((await readArchiveEntry(zip, "manifest.json")).toString("utf8"));
+  if (!manifest || ![1, 2].includes(manifest.version) || !manifest.tables || !Array.isArray(manifest.media)) {
+    throw new Error("Invalid or unsupported backup manifest");
+  }
+  const required = new Set<string>(manifest.version === 1 ? legacyNames : names);
+  const data = {} as Data;
+  for (const name of names) {
+    const entry = manifest.tables[name];
+    data[name] = [];
+    if (!entry && !required.has(name)) continue;
+    if (!entry || entry.filename !== `db/${name}.json`) throw new Error(`Missing table: ${name}`);
+    const json = (await readArchiveEntry(zip, entry.filename)).toString("utf8");
+    if (!json || digest(json) !== entry.sha256) throw new Error(`Failed checksum for ${name}`);
+    const rows = JSON.parse(json);
+    if (!Array.isArray(rows) || rows.length !== entry.recordCount || rows.some(r => !r || typeof r !== "object" || Array.isArray(r))) {
+      throw new Error(`Invalid table: ${name}`);
+    }
+    data[name] = rows;
+  }
+  if (options.skipConfiguration) data.configuration = [];
+  const selective = selectRecords(data, options);
+  data.comments = orderComments(data.comments);
+  const selectedContent = selective ? JSON.stringify(data) : "";
+  const media: Array<{ entry: MediaEntry; bytes: Uint8Array; mime: string; storage: ReturnType<typeof storageFor> }> = [];
+  const mediaPaths = new Set<string>();
+  for (const entry of options.skipMedia ? [] : manifest.media) {
+    // Version 1 contained only URL hashes. Its files must be recovered separately.
+    if (manifest.version === 1) throw new Error("Legacy ZIP contains media placeholders. Recover the media from storage and retry with --skip-media.");
+    if (!validMediaKey(entry.key) || entry.path !== `media/${entry.store}/${entry.key}`) throw new Error("Invalid media path");
+    if (mediaPaths.has(entry.path)) throw new Error("Duplicate media entry");
+    mediaPaths.add(entry.path);
+    if (selective && !selectedContent.includes(entry.key)) continue;
+    const bytes = await readArchiveEntry(zip, entry.path);
+    if (!bytes || bytes.length !== entry.bytes || digest(bytes) !== entry.sha256) throw new Error(`Invalid media: ${entry.key}`);
+    media.push({ entry, bytes, mime: mediaType(entry.key, bytes), storage: storageFor(entry.store) });
   }
 
-  // Read and parse zip file
-  const zipBuffer = await fs.readFile(backupPath);
-  const zip = await JSZip.loadAsync(new Uint8Array(zipBuffer));
-  assertSafeArchive(zip, zipBuffer.byteLength);
-
-  // Read manifest
-  const manifestFile = zip.file("manifest.json");
-  if (!manifestFile) {
-    throw new Error("Invalid backup: manifest.json not found");
-  }
-  
-  const manifestContent = await manifestFile.async("text");
-  const manifest: BackupManifest = JSON.parse(manifestContent);
-
-  if (verbose) {
-    logger.info(`Backup version: ${manifest.version}`);
-    logger.info(`Created: ${manifest.createdUtc}`);
-    logger.info("Original counts:", manifest.counts);
-  }
-
-  const preview: RestorePreview = {
-    tables: {},
-    filteredRecords: { posts: 0, comments: 0 },
-  };
-
-  // Helper function to filter posts by criteria
-  const filterPosts = (postsData: any[]) => {
-    let filtered = postsData;
-
-    if (filterSlugs.length > 0) {
-      filtered = filtered.filter(post => filterSlugs.includes(post.slug));
-    }
-
-    if (startDate || endDate) {
-      filtered = filtered.filter(post => {
-        if (!post.publishedAt) return false;
-        const publishedAt = new Date(post.publishedAt);
-        
-        if (startDate && publishedAt < startDate) return false;
-        if (endDate && publishedAt > endDate) return false;
-        
-        return true;
-      });
-    }
-
-    return filtered;
-  };
-
-  // Restore posts
-  const postsFile = zip.file("db/posts.json");
-  if (postsFile) {
-    const postsContent = await postsFile.async("text");
-    const allPostsData = JSON.parse(postsContent);
-    const filteredPostsData = filterPosts(allPostsData);
-    
-    preview.filteredRecords.posts = filteredPostsData.length;
-    preview.tables.posts = { toInsert: 0, toUpdate: 0, toSkip: 0 };
-
-    if (verbose && filteredPostsData.length !== allPostsData.length) {
-      logger.info(`Filtered posts: ${filteredPostsData.length} of ${allPostsData.length}`);
-    }
-
-    if (!dryRun) {
-      for (const post of filteredPostsData) {
+  const preview: RestorePreview = { tables: {}, filteredRecords: { posts: data.posts.length, comments: data.comments.length } };
+  const dryRunComplete = new Error("Roll back preview");
+  const ids = new Map<string, string>();
+  try {
+    await db.transaction(async (tx: typeof db) => {
+      for (const name of names) {
+        const table = tables[name];
+        const columns: Record<string, PgColumn> = getTableColumns(table);
+        const counts = preview.tables[name] = { toInsert: 0, toUpdate: 0, toSkip: 0 };
+        for (const record of data[name]) {
+          const row: Row = {};
+          for (const [key, col] of Object.entries(columns)) {
+            const value = record[key];
+            if (value === undefined) continue;
+            const target = key === "targetId" ? (record.targetType === "post" ? "posts" : "comments") : references[key];
+            row[key] = value != null && col.dataType === "date" ? new Date(value)
+              : target ? ids.get(`${target}/${value}`) ?? value : value;
+          }
+          if (name === "users") {
+            delete row.twoFactorEnabled;
+            delete row.twoFactorEnforcedAt;
+            delete row.mfaVerifiedAt;
+          }
+          if (name === "posts" || name === "comments") {
+            for (const key of ["html", "bodyHtml", "excerpt"]) {
+              if (typeof row[key] === "string") row[key] = sanitizeHtml(row[key]);
+            }
+          }
+          if (name === "configuration" && row.key === "SITE.DISCLAIMER.STYLE") { counts.toSkip++; continue; }
+          if (name === "configuration" && row.key === "SITE.DISCLAIMER.TEXT" && typeof row.value === "string") row.value = sanitizeHtml(row.value);
+          const match = matchRecord(name, columns, row);
+          const matches = await tx.select().from(table).where(match).limit(2);
+          if (matches.length > 1) throw new Error(`Ambiguous identity in ${name}`);
+          const existing = matches[0];
+          if (existing?.id && row.id) ids.set(`${name}/${row.id}`, existing.id);
+          if (name === "users" && options.skipUsers) { counts.toSkip++; continue; }
+          if (name === "users" && !existing && record.twoFactorEnabled === true) {
+            throw new Error("Restore or enroll the account's second factor before importing its content");
+          }
+          if (existing && !row.id) { counts.toSkip++; continue; }
+          if (existing) {
+            delete row.id;
+            await tx.update(table).set(row).where(match);
+            counts.toUpdate++;
+          } else {
+            await tx.insert(table).values(row);
+            counts.toInsert++;
+          }
+        }
+      }
+      for (const { entry, bytes, storage, mime } of media) {
+        let existing: Uint8Array | undefined;
         try {
-          const sanitizedBody = sanitizeHtml(String(post.bodyHtml ?? post.html ?? ""));
-          // Check if post exists by GUID or slug
-          const existing = await db
-            .select()
-            .from(posts)
-            .where(
-              post.guid 
-                ? eq(posts.importedSystemId, post.guid)
-                : eq(posts.slug, post.slug)
-            )
-            .limit(1);
-
-          if (existing.length > 0) {
-            // Update existing post
-            const existingPost = existing[0];
-            if (existingPost) {
-              await db
-                .update(posts)
-                .set({
-                  title: post.title,
-                  html: sanitizedBody,
-                  bodyHtml: sanitizedBody,
-                  bodyMd: typeof post.bodyMd === "string" ? post.bodyMd : null,
-                  excerpt: typeof post.excerpt === "string" ? sanitizeHtml(post.excerpt) : null,
-                  publishedAt: post.publishedAt ? new Date(post.publishedAt) : null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(posts.id, existingPost.id));
-              
-              preview.tables.posts.toUpdate++;
-              if (verbose) logger.info(`Updated post: ${post.slug}`);
-            }
-          } else {
-            // Insert new post
-            await db.insert(posts).values({
-              ...post,
-              html: sanitizedBody,
-              bodyHtml: sanitizedBody,
-              bodyMd: typeof post.bodyMd === "string" ? post.bodyMd : null,
-              excerpt: typeof post.excerpt === "string" ? sanitizeHtml(post.excerpt) : null,
-              id: post.id, // Preserve original ID if possible
-              publishedAt: post.publishedAt ? new Date(post.publishedAt) : null,
-              createdAt: post.createdAt ? new Date(post.createdAt) : new Date(),
-              updatedAt: post.updatedAt ? new Date(post.updatedAt) : new Date(),
-            });
-            
-            preview.tables.posts.toInsert++;
-            if (verbose) logger.info(`Inserted post: ${post.slug}`);
-          }
+          existing = await storage.getObjectBytes(entry.key, archiveLimits.entry);
         } catch (error) {
-          if (verbose) logger.warn(`Failed to restore post ${post.slug}:`, error);
-          preview.tables.posts.toSkip++;
+          const e = error as { code?: string; name?: string; $metadata?: { httpStatusCode?: number } };
+          if (e.code !== "ENOENT" && e.name !== "NoSuchKey" && e.$metadata?.httpStatusCode !== 404) throw error;
         }
+        if (existing && digest(existing) !== entry.sha256) throw new Error(`Conflicting media file: ${entry.key}`);
+        if (!existing && !options.dryRun) await storage.putObject(entry.key, bytes, mime, true);
       }
-    } else {
-      // Dry run - just count what would be done
-      for (const post of filteredPostsData) {
-        const existing = await db
-          .select()
-          .from(posts)
-          .where(
-            post.guid 
-              ? eq(posts.importedSystemId, post.guid)
-              : eq(posts.slug, post.slug)
-          )
-          .limit(1);
-
-        if (existing.length > 0) {
-          preview.tables.posts.toUpdate++;
-        } else {
-          preview.tables.posts.toInsert++;
-        }
-      }
-    }
+      if (options.dryRun) throw dryRunComplete;
+    });
+  } catch (error) {
+    if (error !== dryRunComplete) throw error;
   }
-
-  // Restore users (unless skipped)
-  if (!skipUsers) {
-    const usersFile = zip.file("db/users.json");
-    if (usersFile) {
-      const usersContent = await usersFile.async("text");
-      const usersData = JSON.parse(usersContent);
-      
-      preview.tables.users = { toInsert: 0, toUpdate: 0, toSkip: 0 };
-
-      if (!dryRun) {
-        for (const user of usersData) {
-          try {
-            const existing = await db
-              .select()
-              .from(users)
-              .where(eq(users.email, user.email))
-              .limit(1);
-
-            if (existing.length > 0) {
-              const existingUser = existing[0];
-              if (existingUser) {
-                await db
-                  .update(users)
-                  .set({
-                    name: user.name,
-                    image: user.image,
-                  })
-                  .where(eq(users.id, existingUser.id));
-                
-                preview.tables.users.toUpdate++;
-                if (verbose) logger.info("Updated a user record");
-              }
-            } else {
-              await db.insert(users).values(user);
-              preview.tables.users.toInsert++;
-              if (verbose) logger.info("Inserted a user record");
-            }
-          } catch (error) {
-            if (verbose) logger.warn("Failed to restore a user record", error);
-            preview.tables.users.toSkip++;
-          }
-        }
-      } else {
-        for (const user of usersData) {
-          const existing = await db
-            .select()
-            .from(users)
-            .where(eq(users.email, user.email))
-            .limit(1);
-
-          if (existing.length > 0) {
-            preview.tables.users.toUpdate++;
-          } else {
-            preview.tables.users.toInsert++;
-          }
-        }
-      }
-    }
-  }
-
-  // Restore configuration (unless skipped)
-  if (!skipConfiguration) {
-    const configFile = zip.file("db/configuration.json");
-    if (configFile) {
-      const configContent = await configFile.async("text");
-      const configData = JSON.parse(configContent);
-      
-      preview.tables.configuration = { toInsert: 0, toUpdate: 0, toSkip: 0 };
-
-      if (!dryRun) {
-        for (const config of configData) {
-          try {
-            // Arbitrary restored CSS can create same-origin phishing overlays.
-            // The legacy setting remains editable for compatibility but is no
-            // longer rendered and is not accepted from an archive.
-            if (config.key === "SITE.DISCLAIMER.STYLE") {
-              preview.tables.configuration.toSkip++;
-              continue;
-            }
-            const restoredValue = config.key === "SITE.DISCLAIMER.TEXT" && typeof config.value === "string"
-              ? sanitizeHtml(config.value)
-              : config.value;
-            const existing = await db
-              .select()
-              .from(configuration)
-              .where(
-                and(
-                  eq(configuration.key, config.key),
-                  config.userId ? eq(configuration.userId, config.userId) : sql`user_id is null`
-                )
-              )
-              .limit(1);
-
-            if (existing.length > 0) {
-              const existingConfig = existing[0];
-              if (existingConfig) {
-                await db
-                  .update(configuration)
-                  .set({
-                    value: restoredValue,
-                    type: config.type,
-                    allowedValues: config.allowedValues,
-                    required: config.required,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(configuration.id, existingConfig.id));
-                
-                preview.tables.configuration.toUpdate++;
-                if (verbose) logger.info(`Updated config: ${config.key}`);
-              }
-            } else {
-              await db.insert(configuration).values({
-                ...config,
-                value: restoredValue,
-                createdAt: config.createdAt ? new Date(config.createdAt) : new Date(),
-                updatedAt: config.updatedAt ? new Date(config.updatedAt) : new Date(),
-              });
-              
-              preview.tables.configuration.toInsert++;
-              if (verbose) logger.info(`Inserted config: ${config.key}`);
-            }
-          } catch (error) {
-            if (verbose) logger.warn(`Failed to restore config ${config.key}:`, error);
-            preview.tables.configuration.toSkip++;
-          }
-        }
-      } else {
-        for (const config of configData) {
-          const existing = await db
-            .select()
-            .from(configuration)
-            .where(
-              and(
-                eq(configuration.key, config.key),
-                config.userId ? eq(configuration.userId, config.userId) : sql`user_id is null`
-              )
-            )
-            .limit(1);
-
-          if (existing.length > 0) {
-            preview.tables.configuration.toUpdate++;
-          } else {
-            preview.tables.configuration.toInsert++;
-          }
-        }
-      }
-    }
-  }
-
-  // TODO: Restore other tables (comments, reactions, etc.) based on filtered posts
-  // This would require filtering comments by post IDs and maintaining referential integrity
-
-  if (dryRun) {
-    if (verbose) {
-      logger.info("\n=== DRY RUN PREVIEW ===");
-      logger.info("Changes that would be made:");
-      Object.entries(preview.tables).forEach(([table, counts]) => {
-        logger.info(`${table}: insert ${counts.toInsert}, update ${counts.toUpdate}, skip ${counts.toSkip}`);
-      });
-      
-      if (preview.filteredRecords.posts > 0) {
-        logger.info(`\nFiltered to ${preview.filteredRecords.posts} posts`);
-      }
-    }
-    return preview;
-  } else {
-    if (verbose) {
-      logger.info("\n=== RESTORE COMPLETE ===");
-      Object.entries(preview.tables).forEach(([table, counts]) => {
-        logger.info(`${table}: inserted ${counts.toInsert}, updated ${counts.toUpdate}, skipped ${counts.toSkip}`);
-      });
-    }
-  }
+  if (options.verbose) logger.info("Restore counts", preview.tables);
+  return preview;
 }
 
 // CLI usage
-if (import.meta.url === `file://${process.argv[1]}`) {
+async function runCli() {
   const args = process.argv.slice(2);
-  const backupPath = args[0];
-  
-  if (!backupPath) {
-    logger.error("Usage: tsx scripts/restore.ts <backup.zip> [options]");
-    logger.error("Options:");
-    logger.error("  --dry-run          Preview changes without applying them");
-    logger.error("  --verbose, -v      Enable verbose output");
-    logger.error("  --slugs slug1,slug2  Restore only specific posts by slug");
-    logger.error("  --start-date YYYY-MM-DD  Restore posts from this date onwards");
-    logger.error("  --end-date YYYY-MM-DD    Restore posts up to this date");
-    logger.error("  --skip-users       Skip restoring users");
-    logger.error("  --skip-config      Skip restoring configuration");
+  if (args[0] === "--") args.shift();
+  try {
+    const { values, positionals } = parseArgs({
+      args, allowPositionals: true, options: {
+        "dry-run": { type: "boolean" }, verbose: { type: "boolean", short: "v" },
+        slugs: { type: "string" }, "start-date": { type: "string" }, "end-date": { type: "string" },
+        "skip-media": { type: "boolean" }, "skip-users": { type: "boolean" }, "skip-config": { type: "boolean" },
+      },
+    });
+    if (positionals.length !== 1) throw new Error("Usage: pnpm restore <backup.zip> [--dry-run] [--slugs list] [--start-date date] [--end-date date] [--skip-media] [--skip-users] [--skip-config] [--verbose]");
+    const preview = await restoreBackup({
+      backupPath: positionals[0]!,
+      dryRun: !!values["dry-run"], verbose: !!values.verbose,
+      skipMedia: !!values["skip-media"], skipUsers: !!values["skip-users"], skipConfiguration: !!values["skip-config"],
+      ...(values.slugs !== undefined ? { filterSlugs: values.slugs.split(",").map(s => s.trim()) } : {}),
+      ...(values["start-date"] !== undefined ? { startDate: new Date(values["start-date"]) } : {}),
+      ...(values["end-date"] !== undefined ? { endDate: new Date(values["end-date"]) } : {}),
+    });
+    if (values["dry-run"] && !values.verbose) logger.info("Restore preview", preview.tables);
+    logger.info(values["dry-run"] ? "Restore preview complete" : "Restore completed successfully");
+    process.exit(0);
+  } catch (error) {
+    logger.error("Restore failed:", error);
     process.exit(1);
   }
-
-  const options: RestoreOptions = {
-    backupPath,
-    dryRun: args.includes("--dry-run"),
-    verbose: args.includes("--verbose") || args.includes("-v"),
-    skipUsers: args.includes("--skip-users"),
-    skipConfiguration: args.includes("--skip-config"),
-  };
-
-  // Parse slugs filter
-  const slugsIndex = args.findIndex(arg => arg === "--slugs");
-  if (slugsIndex !== -1) {
-    const slugsArg = args[slugsIndex + 1];
-    if (slugsArg) {
-      options.filterSlugs = slugsArg.split(",");
-    }
-  }
-
-  // Parse date filters
-  const startDateIndex = args.findIndex(arg => arg === "--start-date");
-  if (startDateIndex !== -1) {
-    const startDateArg = args[startDateIndex + 1];
-    if (startDateArg) {
-      options.startDate = new Date(startDateArg);
-    }
-  }
-
-  const endDateIndex = args.findIndex(arg => arg === "--end-date");
-  if (endDateIndex !== -1) {
-    const endDateArg = args[endDateIndex + 1];
-    if (endDateArg) {
-      options.endDate = new Date(endDateArg);
-    }
-  }
-
-  restoreBackup(options)
-    .then(() => {
-      logger.info("✅ Restore completed successfully");
-      process.exit(0);
-    })
-    .catch(error => {
-      logger.error("❌ Restore failed:", error);
-      process.exit(1);
-    });
 }
+
+if (import.meta.url === `file://${process.argv[1]}`) void runCli();

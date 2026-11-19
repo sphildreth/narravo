@@ -92,10 +92,11 @@ export class S3Service {
   }
 
   // New: simple helper to upload a buffer directly
-  async putObject(key: string, body: Uint8Array, contentType: string): Promise<void> {
+  async putObject(key: string, body: Uint8Array, contentType: string, onlyIfMissing = false): Promise<void> {
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
+      ...(onlyIfMissing && { IfNoneMatch: "*" }),
       Body: body,
       ContentType: contentType,
     });
@@ -141,6 +142,21 @@ export class S3Service {
   async deleteObject(key: string): Promise<void> {
     const cmd = new DeleteObjectCommand({ Bucket: this.bucket, Key: key });
     await this.client.send(cmd);
+  }
+
+  async listKeys(prefix: string): Promise<string[]> {
+    const keys: string[] = [];
+    let token: string | undefined;
+    do {
+      const page: ListObjectsV2CommandOutput = await this.client.send(new ListObjectsV2Command({
+        Bucket: this.bucket, Prefix: prefix + "/", ContinuationToken: token,
+      }));
+      for (const object of page.Contents ?? []) {
+        if (object.Key && !object.Key.endsWith("/")) keys.push(object.Key);
+      }
+      token = page.NextContinuationToken;
+    } while (token);
+    return keys;
   }
 
   // New: delete all objects under a given prefix (handles pagination, batches up to 1000 per call)

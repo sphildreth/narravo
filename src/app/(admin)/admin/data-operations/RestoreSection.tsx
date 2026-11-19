@@ -10,6 +10,7 @@ export function RestoreSection() {
   const [file, setFile] = useState<File | null>(null);
   const [checksum, setChecksum] = useState("");
   const [dryRun, setDryRun] = useState(true);
+  const [skipMedia, setSkipMedia] = useState(false);
 
   const handleRestore = async () => {
     if (!file) {
@@ -24,6 +25,7 @@ export function RestoreSection() {
       const formData = new FormData();
       formData.append("backupFile", file);
       formData.append("dryRun", dryRun.toString());
+      formData.append("skipMedia", String(skipMedia));
       formData.append("skipUsers", "false");
       formData.append("skipConfiguration", "false");
       if (checksum) {
@@ -87,6 +89,11 @@ export function RestoreSection() {
             className="block w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
           />
         </div>
+
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={skipMedia} onChange={e => setSkipMedia(e.target.checked)} />
+          Restore media separately
+        </label>
 
         <label className="flex items-center gap-2">
           <input

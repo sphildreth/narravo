@@ -15,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CI: true
-      NODE_ENV: test
       NEXT_TELEMETRY_DISABLED: '1'
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/narravo_test
       NEXTAUTH_SECRET: ci-nextauth-secret-at-least-32-characters
@@ -39,10 +38,10 @@ jobs:
           - 5432:5432
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7.0.1
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7.1.0
       with:
         node-version: '22'
     
@@ -62,49 +61,34 @@ jobs:
         pnpm drizzle:migrate
         pnpm seed:config
     
-    - name: Run TypeScript check
-      run: pnpm typecheck
-    
-    - name: Run tests
-      run: pnpm test
-    
-    - name: Build application
-      env:
-        ANALYZE: true
+    - name: Seed performance post
+      run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/perf/fixture.sql
+
+    - name: Build production application
       run: pnpm build
-    
-    - name: Bundle size check
+
+    - name: Start application
       run: |
-        # Check if any JS bundle exceeds our budget (90KB for post pages)
-        find .next/static/chunks -name "*.js" -size +90k -ls || true
-        echo "Bundle size check completed"
-    
-    - name: Start application for testing
-      run: |
-        pnpm start &
-        sleep 10
-        curl -f http://localhost:3000/healthz || (echo "Health check failed" && exit 1)
-      timeout-minutes: 2
-    
-    - name: Run Lighthouse CI
-      run: |
-        pnpm exec lhci autorun --config=lighthouserc.json --collect.url="http://localhost:3000" || echo "Lighthouse CI skipped - service may not be ready"
-      continue-on-error: true
-    
-    - name: Performance benchmark
-      run: |
-        # Run a quick performance check
-        echo "Performance benchmark would run here in full CI environment"
-        # npm run perf:benchmark
-      continue-on-error: true
+        pnpm start > "$RUNNER_TEMP/narravo.log" 2>&1 &
+        curl --retry 30 --retry-delay 1 --retry-connrefused -fsS http://localhost:3000/healthz
+        curl -fsS http://localhost:3000/sample-post > /dev/null
+
+    - name: Check post JavaScript budget
+      run: node scripts/perf/post-bundle.mjs
+
+    - name: Run Lighthouse and enforce performance budgets
+      run: pnpm perf:lighthouse
+
+    - name: Run load benchmark
+      run: pnpm perf:loadtest --duration 15 --overallRate 10
 
     - name: Upload performance artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7.0.2
       if: always()
       with:
         name: performance-reports
         path: |
           lighthouse-results/
-          docs/perf/benchmarks/
+          .lighthouseci/
         retention-days: 30
         if-no-files-found: ignore

@@ -1,8 +1,9 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
+import DOMPurify from "dompurify";
+import { decodeHtmlEntities } from "@/lib/html-entities";
 import React, { useEffect, useRef } from 'react';
-import mermaid from 'mermaid';
 import logger from '@/lib/logger';
 
 // Type declaration for window.mermaid
@@ -40,15 +41,7 @@ export default function MermaidDiagram({ chart, className = "" }: MermaidDiagram
     elementRef.current.innerHTML = '';
 
     // Decode HTML entities in chart content for proper Mermaid rendering
-    const decodedChart = chart
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&#x27;/g, "'")
-      .replace(/&#x2F;/g, "/")
-      .replace(/&nbsp;/g, " ");
+    const decodedChart = decodeHtmlEntities(chart);
 
     // Render the diagram
     const renderDiagram = async () => {
@@ -82,7 +75,7 @@ export default function MermaidDiagram({ chart, className = "" }: MermaidDiagram
           window.mermaid = mermaidModule.default;
         } else {
           // Re-initialize with appropriate config
-          await mermaid.initialize(config);
+          await window.mermaid.initialize(config);
         }
 
         // Generate a stable unique ID for this render using the component's ID
@@ -93,7 +86,7 @@ export default function MermaidDiagram({ chart, className = "" }: MermaidDiagram
         
         const { svg } = await window.mermaid.render(renderId, decodedChart);
         if (elementRef.current) {
-          elementRef.current.innerHTML = svg;
+          elementRef.current.replaceChildren(DOMPurify.sanitize(svg, { RETURN_DOM_FRAGMENT: true, USE_PROFILES: { svg: true, svgFilters: true, html: true }, FORBID_TAGS: ["script", "iframe", "object", "embed", "form"] }));
         }
       } catch (error) {
         logger.error('Mermaid rendering error:', error);

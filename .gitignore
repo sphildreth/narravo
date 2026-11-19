@@ -37,6 +37,7 @@ Thumbs.db
 
 # Test/coverage outputs
 coverage/
+/test-results/
 
 # Python bytecode (scripts/*.py quality gates)
 __pycache__/

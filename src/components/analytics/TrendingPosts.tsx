@@ -2,25 +2,13 @@
 import { getTrendingPosts } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
-import { unstable_cache as cache } from "next/cache";
 import Link from "next/link";
 
 export default async function TrendingPosts() {
   const config = new ConfigServiceImpl({ db });
   const trendingDays = await config.getNumber("VIEW.TRENDING-DAYS") ?? 7;
   const feedCount = await config.getNumber("FEED.LATEST-COUNT") ?? 5;
-  const revalidateSeconds = await config.getNumber("VIEW.REVALIDATE-SECONDS") ?? 60;
-
-  const getTrending = cache(
-    async () => getTrendingPosts({ days: trendingDays, limit: Math.min(feedCount, 5) }),
-    ["trending", `days:${trendingDays}`, `limit:${feedCount}`],
-    { 
-      revalidate: revalidateSeconds,
-      tags: ["analytics:trending"]
-    }
-  );
-
-  const trendingPosts = await getTrending();
+  const trendingPosts = await getTrendingPosts({ days: trendingDays, limit: Math.min(feedCount, 5) });
 
   if (trendingPosts.length === 0) {
     return null; // Don't show section if no trending posts

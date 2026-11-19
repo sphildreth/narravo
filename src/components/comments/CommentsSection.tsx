@@ -6,14 +6,14 @@ import { getSession } from "@/lib/auth";
 import CommentThread from "./CommentThread";
 import CommentForm from "./CommentForm";
 
-export default async function CommentsSection({ postId }: { postId: string }) {
+export default async function CommentsSection({ postId, includeUnpublished = false }: { postId: string; includeUnpublished?: boolean }) {
   const session = await getSession();
   const userId = session?.user?.id || undefined;
   const canReact = Boolean(session?.user?.id);
 
   const [count, initial] = await Promise.all([
-    countApprovedComments(postId),
-    getCommentTreeForPost(postId, { limitTop: 10, limitReplies: 3, userId }),
+    countApprovedComments(postId, includeUnpublished),
+    getCommentTreeForPost(postId, { limitTop: 10, limitReplies: 3, userId, includeUnpublished }),
   ]);
   
   return (

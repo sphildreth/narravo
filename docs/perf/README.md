@@ -167,7 +167,7 @@ Add to your CI pipeline:
 
 ### Bundle Size Budgets
 
-- **Post Pages**: ≤90KB gzipped JS
+- **Post Pages**: ≤90 KiB gzipped initial post-specific JS. CI measures the additional scripts over the root layout of a 404 and also reports the full page total
 - **Admin Initial**: ≤180KB gzipped JS
 - **Admin Code-Split**: Lazy-loaded features
 
@@ -187,9 +187,9 @@ Add to your CI pipeline:
 
 ### CI/CD Gates
 
-1. **Lighthouse score deltas** (fail if >3 point drop)
-2. **Bundle size budgets** (fail if >10% increase)
-3. **Load test SLOs** (fail if P95 latency >target +20%)
+1. Lighthouse runs three times on the homepage and sample post. The score and timing thresholds are in `lighthouserc.json`.
+2. The sample post must load at most 90 KiB of post-specific gzipped JavaScript. CI reports the total including the shared runtime.
+3. The public-route load test requires a 95th-percentile response time of at most 400 ms and an error rate of at most 1%.
 
 ## Troubleshooting
 

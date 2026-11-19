@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+import { load } from "cheerio";
+import { RE2JS } from "re2js";
 import { parseStringPromise } from "xml2js";
 import { db } from "@/lib/db";
-import { posts, redirects, categories, tags, postTags, comments, users, importJobs, importJobErrors } from "@/drizzle/schema";
+import { posts, redirects, categories, tags, postTags, comments, reactions, users, importJobs, importJobErrors } from "@/drizzle/schema";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { validateAndProtectIframes, restoreProtectedIframes, defaultProviders } from "./iframe-allowlist";
 import { getS3Config, S3Service } from "@/lib/s3";
@@ -44,6 +46,7 @@ export interface WxrItem {
   "wp:post_date_gmt"?: string;
   "wp:post_name"?: string;
   "wp:status"?: string;
+  "wp:post_password"?: string;
   "wp:post_type"?: string;
   "wp:post_parent"?: string;
   "wp:attachment_url"?: string;
@@ -139,6 +142,7 @@ export interface ImportResult {
   };
   errors: Array<{ item: string; error: string }>;
   dryRun: boolean;
+  restrictedPosts: string[];
   mediaUrls: Map<string, string>; // old URL -> new URL mapping
 }
 
@@ -217,7 +221,9 @@ export function parseWxrItem(item: WxrItem): ParsedPost | ParsedAttachment | nul
       html: item["content:encoded"] || "",
       excerpt: item["excerpt:encoded"],
       author: item["dc:creator"] || "unknown",
-      publishedAt: item["wp:post_date_gmt"] ? new Date(item["wp:post_date_gmt"]) : undefined,
+      publishedAt: item["wp:status"] === "publish" && !item["wp:post_password"] && item["wp:post_date_gmt"]
+        ? new Date(item["wp:post_date_gmt"].replace(" ", "T").replace(/(?<=\d{2}:\d{2}:\d{2})$/, "Z"))
+        : undefined,
       originalUrl: item.link,
       featuredImageId,
       categories,
@@ -297,7 +303,7 @@ async function handleLocalMedia(
   opts: { dryRun?: boolean; verbose?: boolean }
 ): Promise<{ isLocal: boolean; url: string | null }> {
   const { dryRun = false, verbose = false } = opts;
-  const rootRegex = new RegExp(rootUrlPattern, "i");
+  const rootRegex = RE2JS.compile(rootUrlPattern, RE2JS.CASE_INSENSITIVE);
 
   // Extract domain from the URL to test against the pattern
   let domainToTest: string;
@@ -313,7 +319,7 @@ async function handleLocalMedia(
     domainToTest = url;
   }
 
-  if (!rootRegex.test(domainToTest)) {
+  if (!rootRegex.matcher(domainToTest).find()) {
     return { isLocal: false, url: null };
   }
 
@@ -438,6 +444,7 @@ export async function downloadMedia(
   localService: LocalStorageService | null,
   allowedHosts: string[],
   opts?: { 
+    requireMedia?: boolean;
     dryRun?: boolean; 
     verbose?: boolean;
     uploadsPath?: string;
@@ -450,6 +457,7 @@ export async function downloadMedia(
   if (uploadsPath && rootUrlPattern) {
     const localResult = await handleLocalMedia(url, uploadsPath, rootUrlPattern, localService, { dryRun, verbose });
     if (localResult.isLocal) {
+      if (!localResult.url && opts?.requireMedia) throw new Error("Could not stage media from the configured uploads directory");
       return localResult.url;
     }
   }
@@ -458,8 +466,9 @@ export async function downloadMedia(
     return null; // No storage configured, skip download
   }
 
-  // In dry-run without remote storage configured, avoid making real network calls
-  if (dryRun && !s3Service) {
+  const hostname = URL.canParse(url) ? new URL(url).hostname.toLowerCase().replace(/\.$/, "") : "";
+  if (!allowedHosts.some(host => hostname === host || hostname.endsWith(`.${host}`))) return null;
+  if (dryRun && !s3Service && !opts?.requireMedia) {
     if (verbose) logger.info(`⏩ Dry-run without S3 configured, skipping media download: ${url}`);
     return null;
   }
@@ -493,6 +502,8 @@ export async function downloadMedia(
       logger.info(`💾 Uploading ${buffer.length} bytes as ${key} (${detected.mimeType})`);
     }
     
+    if (dryRun) return (s3Service ?? localService)!.getPublicUrl(key);
+
     if (s3Service) {
       await s3Service.putObject(key, buffer, detected.mimeType);
       const publicUrl = s3Service.getPublicUrl(key);
@@ -511,6 +522,7 @@ export async function downloadMedia(
     
     return null;
   } catch (error) {
+    if (opts?.requireMedia) throw error;
     if (verbose) {
       logger.error(`❌ Failed to download media ${url}:`, error);
     } else {
@@ -943,26 +955,15 @@ export function replaceRemoteVideosWithPlaceholder(html: string, mediaUrlMap: Ma
  * @returns The normalized HTML.
  */
 function normalizeWpLists(html: string): string {
-  if (!html) return html;
-  let out = html;
-
-  // Unwrap <p> that directly wraps <ul> or <ol>
-  // Handle optional attributes on <p> and optional HTML comments between <p> and the list
-  // Example WP markup: <p class="has-text-color">
-  // <!-- wp:list --><ul>... </ul><!-- /wp:list -->
-  // </p>
-  out = out.replace(/<p\b[^>]*>\s*(?:<!--[\s\S]*?-->\s*)*(<(?:ul|ol)\b[^>]*>)/gi, "$1");
-  out = out.replace(/(<\/(?:ul|ol)>\s*(?:<!--[\s\S]*?-->\s*)*)<\/p>/gi, "$1");
-
-  // Unwrap <p> inside list items: <li><p>text</p></li> -> <li>text</li>
-  // Allow attributes on the inner <p>
-  out = out.replace(/<li>\s*<p\b[^>]*>/gi, "<li>");
-  out = out.replace(/<\/p>\s*<\/li>/gi, "</li>");
-
-  // Sometimes editors place lists inside blockquotes incorrectly wrapped
-  // Keep minimal transformations: do not modify nested structures beyond above rules
-
-  return out;
+  if (!/<(?:ul|ol)\b/i.test(html)) return html;
+  // The HTML parser closes paragraphs around block-level lists and preserves excerpt markers.
+  const $ = load(html, {}, false);
+  $("li").each((_, li) => {
+    const item = $(li);
+    const children = item.children();
+    if (children.length === 1 && children.is("p")) children.replaceWith(children.contents());
+  });
+  return $.html();
 }
 
 /**
@@ -1229,6 +1230,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     },
     errors: [],
     dryRun,
+    restrictedPosts: [],
     mediaUrls: new Map(),
   };
   const mediaBudget = {
@@ -1295,56 +1297,6 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
         .where(eq(importJobs.id, jobId));
     }
 
-    // Purge data if requested (complete reset: database + all uploaded files)
-    if (purgeBeforeImport && !dryRun) {
-      if (verbose) logger.info("🗑️ Purging existing data...");
-      
-      // Delete in correct order to respect foreign keys
-      await db.delete(postTags);
-      await db.delete(comments);
-      await db.delete(posts);
-      await db.delete(categories);
-      await db.delete(tags);
-      await db.delete(redirects);
-
-      // Also purge ALL post-related files from storage (not just imported media)
-      try {
-        // Initialize a storage service if not already prepared (e.g., when skipMedia was true)
-        if (!s3Service && !localService) {
-          const s3cfg = getS3Config();
-          if (s3cfg) s3Service = new S3Service(s3cfg);
-          else localService = localStorageService;
-        }
-
-        // List of all prefixes that might contain post-related files
-        const prefixesToPurge = [
-          "imported-media/",  // WXR imported media
-          "images/",          // User-uploaded images
-          "videos/",          // User-uploaded videos
-          "uploads/",         // Default upload prefix
-          "featured/",        // Featured images
-        ];
-
-        for (const prefix of prefixesToPurge) {
-          try {
-            if (s3Service) {
-              await s3Service.deletePrefix(prefix);
-              if (verbose) logger.info(`🧹 S3/R2 storage purged: ${prefix}`);
-            } else if (localService) {
-              await localService.deletePrefix(prefix);
-              if (verbose) logger.info(`🧹 Local storage purged: ${prefix}`);
-            }
-          } catch (e) {
-            if (verbose) logger.warn(`Warning: failed to purge prefix "${prefix}":`, e);
-          }
-        }
-      } catch (e) {
-        if (verbose) logger.warn("Warning: failed to initialize storage for purge:", e);
-      }
-
-      if (verbose) logger.info("✅ Purge completed");
-    }
-
     let stageStart = Date.now();
     // Parse XML
     if (verbose) logger.info("📖 Parsing WXR file...");
@@ -1357,9 +1309,9 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     result.summary.totalItems = itemArray.length;
 
-    // Debug logging for tests
     if (verbose) {
-      logger.info("Parsed document structure:", JSON.stringify(doc, null, 2));
+      const version = doc.rss?.channel?.["wp:wxr_version"];
+      if (typeof version === "string" && /^\d{1,3}\.\d{1,3}$/.test(version)) logger.info(`WXR version ${version}`);
       logger.info("Items found:", itemArray.length);
     }
 
@@ -1369,7 +1321,7 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     const attachmentIdToUrl = new Map<string, string>(); // attachment ID -> URL
 
     // Get existing slugs to avoid conflicts
-    if (!dryRun) {
+    if (!dryRun && !purgeBeforeImport) {
       const existingPosts = await db.execute(sql`SELECT slug FROM posts`);
       (existingPosts.rows || []).forEach((row: { slug: string }) => {
         if (row?.slug) existingSlugs.add(row.slug);
@@ -1392,6 +1344,8 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
             continue;
           }
           
+          if (status !== "publish" || item["wp:post_password"]) result.restrictedPosts.push(parsed.title);
+
           // Ensure unique slug
           parsed.slug = generateSlugWithFallback(parsed.slug, existingSlugs);
           existingSlugs.add(parsed.slug);
@@ -1414,6 +1368,10 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     // Split items
     const attachmentItems = parsedItems.filter((i): i is ParsedAttachment => i.type === "attachment");
     const postItems = parsedItems.filter((i): i is ParsedPost => i.type === "post");
+
+    if (purgeBeforeImport && postItems.length === 0) {
+      throw new Error("The replacement contains no eligible posts");
+    }
 
     // Mark attachments processed (for summary)
     result.summary.attachmentsProcessed = attachmentItems.length;
@@ -1465,23 +1423,23 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       }
       if (verbose && medias.length) logger.info(`📥 Downloading ${medias.length} media files (concurrency=${concurrency})...`);
 
+      const failures: string[] = [];
       await runWithConcurrency(medias, concurrency, async (url) => {
         try {
-          if (!result.mediaUrls.has(url)) {
-            const downloadOpts: { dryRun?: boolean; verbose?: boolean; uploadsPath?: string; rootUrlPattern?: string; budget?: typeof mediaBudget } = { dryRun, verbose, budget: mediaBudget };
-            if (uploadsPath && rootUrlPattern) {
-              downloadOpts.uploadsPath = uploadsPath;
-              downloadOpts.rootUrlPattern = rootUrlPattern;
-            }
-            const newUrl = await downloadMedia(url, s3Service, localService, normalizedAllowedHosts, downloadOpts);
-            if (newUrl) result.mediaUrls.set(url, newUrl);
-          }
-        } catch (e) {
-          if (verbose) logger.warn("Media download failed:", url, e);
+          const newUrl = await downloadMedia(url, s3Service, localService, normalizedAllowedHosts, {
+            dryRun, verbose, requireMedia: purgeBeforeImport, budget: mediaBudget,
+            ...(uploadsPath && rootUrlPattern ? { uploadsPath, rootUrlPattern } : {}),
+          });
+          if (newUrl) result.mediaUrls.set(url, newUrl);
+        } catch (error) {
+          failures.push(url);
+          if (verbose) logger.warn("Media staging failed:", url, error);
         }
-        return undefined as unknown as void;
       });
-      
+      if (purgeBeforeImport && failures.length) {
+        throw new Error(`Could not stage ${failures.length} requested media file(s); existing content was retained`);
+      }
+
       if (verbose) {
         const successCount = result.mediaUrls.size;
         const failCount = medias.length - successCount;
@@ -1504,297 +1462,317 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       stageStart = Date.now();
     }
 
-    // In-memory caches to reduce DB chatter
-    const authorCache = new Map<string, string>(); // author login/name -> userId
-    const categoryCache = new Map<string, string>(); // slug -> id
-    const tagCache = new Map<string, string>(); // slug -> id
+    const importPosts = async (connection: typeof db) => {
+      // In-memory caches to reduce DB chatter
+      const authorCache = new Map<string, string>(); // author login/name -> userId
+      const categoryCache = new Map<string, string>(); // slug -> id
+      const tagCache = new Map<string, string>(); // slug -> id
 
-    for (const post of postItems) {
-      try {
-  // Prepare HTML: expand shortcodes, normalize lists, transform syntax highlighting, sanitize, then rewrite media URLs
-        const expanded = processedPostContent.get(post.importedSystemId) || "";
-        const withIframes = transformIframeVideos(expanded);
-        const normalized = normalizeWpLists(withIframes);
-        const withSyntaxHighlighting = transformSyntaxHighlighting(normalized);
+      for (const post of postItems) {
+        try {
+    // Prepare HTML: expand shortcodes, normalize lists, transform syntax highlighting, sanitize, then rewrite media URLs
+          const expanded = processedPostContent.get(post.importedSystemId) || "";
+          const withIframes = transformIframeVideos(expanded);
+          const normalized = normalizeWpLists(withIframes);
+          const withSyntaxHighlighting = transformSyntaxHighlighting(normalized);
 
-  // Determine a featured image fallback from raw content BEFORE placeholders/sanitization
-  const rawFeatured = extractFirstImageFromHtml(expanded);
+    // Determine a featured image fallback from raw content BEFORE placeholders/sanitization
+    const rawFeatured = extractFirstImageFromHtml(expanded);
 
-        // Compute excerpt BEFORE sanitize to preserve <!--more--> markers if any
-        const computedExcerpt = generateExcerpt(withSyntaxHighlighting, {
-          maxChars: EXCERPT_MAX,
-          ellipsis: EXCERPT_ELLIPSIS,
-          dropBlockCode: !INCLUDE_BLOCK_CODE,
-        });
+          // Compute excerpt BEFORE sanitize to preserve <!--more--> markers if any
+          const computedExcerpt = generateExcerpt(withSyntaxHighlighting, {
+            maxChars: EXCERPT_MAX,
+            ellipsis: EXCERPT_ELLIPSIS,
+            dropBlockCode: !INCLUDE_BLOCK_CODE,
+          });
 
-  const sanitized = sanitizeWithIframes(withSyntaxHighlighting);
-  const rewritten = rewriteMediaUrls(sanitized, result.mediaUrls, verbose);
-  const withImagePlaceholders = replaceRemoteImagesWithPlaceholder(rewritten, result.mediaUrls);
-  const finalHtml = replaceRemoteVideosWithPlaceholder(withImagePlaceholders, result.mediaUrls);
+    const sanitized = sanitizeWithIframes(withSyntaxHighlighting);
+    const rewritten = rewriteMediaUrls(sanitized, result.mediaUrls, verbose);
+    const withImagePlaceholders = replaceRemoteImagesWithPlaceholder(rewritten, result.mediaUrls);
+    const finalHtml = replaceRemoteVideosWithPlaceholder(withImagePlaceholders, result.mediaUrls);
 
-        // Handle featured image
-        let featuredImageUrl: string | undefined;
-        let featuredImageAlt: string | undefined = undefined;
-        if (post.featuredImageId && attachmentIdToUrl.has(post.featuredImageId)) {
-          const originalUrl = attachmentIdToUrl.get(post.featuredImageId)!;
-          // Only accept downloaded/mapped URL; never keep a remote original
-          const mapped = result.mediaUrls.get(originalUrl);
-          featuredImageUrl = mapped || undefined;
-        }
-
-        // Fallback: if no featuredImageUrl resolved via attachment meta, pick first image from RAW (pre-sanitize) content
-        if (!featuredImageUrl && rawFeatured) {
-          const candidate = rawFeatured.url;
-          const allowed = !isHttpUrl(candidate) || Array.from(result.mediaUrls.values()).includes(candidate) || skipMedia;
-          if (candidate && allowed) {
-            featuredImageUrl = candidate;
-            featuredImageAlt = rawFeatured.alt && rawFeatured.alt.length > 0 ? rawFeatured.alt : post.title;
+          // Handle featured image
+          let featuredImageUrl: string | undefined;
+          let featuredImageAlt: string | undefined = undefined;
+          if (post.featuredImageId && attachmentIdToUrl.has(post.featuredImageId)) {
+            const originalUrl = attachmentIdToUrl.get(post.featuredImageId)!;
+            // Only accept downloaded/mapped URL; never keep a remote original
+            const mapped = result.mediaUrls.get(originalUrl);
+            featuredImageUrl = mapped || undefined;
           }
-        }
 
-        // Guard against placeholder-derived alt leaking into featured alt
-        if (featuredImageAlt === 'Image cannot be downloaded') {
-          featuredImageAlt = rawFeatured?.alt && rawFeatured.alt.length > 0 ? rawFeatured.alt : post.title;
-        }
-
-        if (!dryRun) {
-          await db.transaction(async (tx: any) => {
-            // Get or create author (cache by login/name)
-            let authorId: string | undefined = authorCache.get(post.author);
-            if (!authorId) {
-              const authorRows = await tx.insert(users).values({
-                login: post.author,
-                name: post.author,
-                email: `${post.author}@imported.local`,
-              }).onConflictDoUpdate({ target: users.login, set: { name: post.author } }).returning();
-              authorId = authorRows?.[0]?.id;
-              if (authorId) authorCache.set(post.author, authorId);
+          // Fallback: if no featuredImageUrl resolved via attachment meta, pick first image from RAW (pre-sanitize) content
+          if (!featuredImageUrl && rawFeatured) {
+            const candidate = rawFeatured.url;
+            const allowed = !isHttpUrl(candidate) || Array.from(result.mediaUrls.values()).includes(candidate) || skipMedia;
+            if (candidate && allowed) {
+              featuredImageUrl = candidate;
+              featuredImageAlt = rawFeatured.alt && rawFeatured.alt.length > 0 ? rawFeatured.alt : post.title;
             }
+          }
 
-            // Upsert categories (use cache per slug)
-            let primaryCategoryId: string | null = null;
-            if (post.categories.length > 0) {
-              // Resolve from cache first
-              const missingCats = post.categories.filter(c => !categoryCache.has(c.slug));
-              for (const c of missingCats) {
-                const catRows = await tx.insert(categories).values({ name: c.name, slug: c.slug })
-                  .onConflictDoUpdate({ target: categories.slug, set: { name: c.name } })
-                  .returning();
-                if (catRows?.[0]?.id) categoryCache.set(c.slug, catRows[0].id);
+          // Guard against placeholder-derived alt leaking into featured alt
+          if (featuredImageAlt === 'Image cannot be downloaded') {
+            featuredImageAlt = rawFeatured?.alt && rawFeatured.alt.length > 0 ? rawFeatured.alt : post.title;
+          }
+
+          if (!dryRun) {
+            await connection.transaction(async (tx: any) => {
+              // Get or create author (cache by login/name)
+              let authorId: string | undefined = authorCache.get(post.author);
+              if (!authorId) {
+                const authorRows = await tx.insert(users).values({
+                  login: post.author,
+                  name: post.author,
+                  email: `${post.author}@imported.local`,
+                }).onConflictDoUpdate({ target: users.login, set: { name: post.author } }).returning();
+                authorId = authorRows?.[0]?.id;
+                if (authorId) authorCache.set(post.author, authorId);
               }
-              // Determine primary as first declared
-              const firstSlug = post.categories[0]?.slug;
-              primaryCategoryId = firstSlug ? (categoryCache.get(firstSlug) ?? null) : null;
-            }
 
-            // Upsert tags (use cache per slug)
-            const tagIds: string[] = [];
-            if (post.tags.length > 0) {
-              const missingTags = post.tags.filter(t => !tagCache.has(t.slug));
-              for (const t of missingTags) {
-                const tagRows = await tx.insert(tags).values({ name: t.name, slug: t.slug })
-                  .onConflictDoUpdate({ target: tags.slug, set: { name: t.name } })
-                  .returning();
-                if (tagRows?.[0]?.id) tagCache.set(t.slug, tagRows[0].id);
+              // Upsert categories (use cache per slug)
+              let primaryCategoryId: string | null = null;
+              if (post.categories.length > 0) {
+                // Resolve from cache first
+                const missingCats = post.categories.filter(c => !categoryCache.has(c.slug));
+                for (const c of missingCats) {
+                  const catRows = await tx.insert(categories).values({ name: c.name, slug: c.slug })
+                    .onConflictDoUpdate({ target: categories.slug, set: { name: c.name } })
+                    .returning();
+                  if (catRows?.[0]?.id) categoryCache.set(c.slug, catRows[0].id);
+                }
+                // Determine primary as first declared
+                const firstSlug = post.categories[0]?.slug;
+                primaryCategoryId = firstSlug ? (categoryCache.get(firstSlug) ?? null) : null;
               }
-              for (const t of post.tags) {
-                const id = tagCache.get(t.slug);
-                if (id) tagIds.push(id);
+
+              // Upsert tags (use cache per slug)
+              const tagIds: string[] = [];
+              if (post.tags.length > 0) {
+                const missingTags = post.tags.filter(t => !tagCache.has(t.slug));
+                for (const t of missingTags) {
+                  const tagRows = await tx.insert(tags).values({ name: t.name, slug: t.slug })
+                    .onConflictDoUpdate({ target: tags.slug, set: { name: t.name } })
+                    .returning();
+                  if (tagRows?.[0]?.id) tagCache.set(t.slug, tagRows[0].id);
+                }
+                for (const t of post.tags) {
+                  const id = tagCache.get(t.slug);
+                  if (id) tagIds.push(id);
+                }
               }
-            }
 
-            // Determine whether to recompute excerpt on update by checking existing row
-            const existing = await tx.select({ id: posts.id, html: posts.html, excerpt: posts.excerpt })
-              .from(posts)
-              .where(eq(posts.importedSystemId, post.importedSystemId))
-              .limit(1);
-            const existingRow = existing[0];
+              // Determine whether to recompute excerpt on update by checking existing row
+              const existing = await tx.select({ id: posts.id, html: posts.html, excerpt: posts.excerpt })
+                .from(posts)
+                .where(eq(posts.importedSystemId, post.importedSystemId))
+                .limit(1);
+              const existingRow = existing[0];
 
-            const htmlChanged = !!existingRow && (existingRow.html ?? "") !== finalHtml;
-            const hadExcerpt = !!(existingRow?.excerpt && existingRow.excerpt.trim().length > 0);
-            const shouldRecompute = rebuildExcerpts || !hadExcerpt || htmlChanged;
+              const htmlChanged = !!existingRow && (existingRow.html ?? "") !== finalHtml;
+              const hadExcerpt = !!(existingRow?.excerpt && existingRow.excerpt.trim().length > 0);
+              const shouldRecompute = rebuildExcerpts || !hadExcerpt || htmlChanged;
 
-            const excerptToUse = shouldRecompute ? (computedExcerpt || null) : (existingRow?.excerpt ?? computedExcerpt ?? null);
+              const excerptToUse = shouldRecompute ? (computedExcerpt || null) : (existingRow?.excerpt ?? computedExcerpt ?? null);
 
-            // Insert or update post using importedSystemId for idempotency
-            const insertedPost = await tx.insert(posts).values({
-              slug: post.slug,
-              title: post.title,
-              html: finalHtml,
-              bodyHtml: finalHtml,
-              bodyMd: null,
-              excerpt: excerptToUse,
-              importedSystemId: post.importedSystemId,
-              publishedAt: post.publishedAt || null,
-              categoryId: primaryCategoryId,
-              featuredImageUrl,
-              featuredImageAlt,
-            }).onConflictDoUpdate({
-              target: posts.importedSystemId,
-              set: {
+              // Insert or update post using importedSystemId for idempotency
+              const insertedPost = await tx.insert(posts).values({
+                slug: post.slug,
                 title: post.title,
                 html: finalHtml,
                 bodyHtml: finalHtml,
+                bodyMd: null,
                 excerpt: excerptToUse,
+                importedSystemId: post.importedSystemId,
                 publishedAt: post.publishedAt || null,
                 categoryId: primaryCategoryId,
                 featuredImageUrl,
                 featuredImageAlt,
-                updatedAt: sql`now()`,
-              },
-            }).returning();
+              }).onConflictDoUpdate({
+                target: posts.importedSystemId,
+                set: {
+                  title: post.title,
+                  html: finalHtml,
+                  bodyHtml: finalHtml,
+                  excerpt: excerptToUse,
+                  publishedAt: post.publishedAt || null,
+                  categoryId: primaryCategoryId,
+                  featuredImageUrl,
+                  featuredImageAlt,
+                  updatedAt: sql`now()`,
+                },
+              }).returning();
 
-            const postId = insertedPost?.[0]?.id;
-            if (!postId) throw new Error("Failed to upsert post");
-            // Refresh post-tags: replace associations
-            await tx.delete(postTags).where(eq(postTags.postId, postId));
-            for (const tagId of tagIds) {
-              await tx.insert(postTags).values({ postId, tagId }).onConflictDoNothing();
-            }
-
-            // Create redirect if we have an original URL
-            if (post.originalUrl) {
-              try {
-                const url = new URL(post.originalUrl);
-                const fromPath = url.pathname;
-                const toPath = `/${post.slug}`;
-                if (fromPath !== toPath) {
-                  await tx.insert(redirects).values({ fromPath, toPath, status: 301 })
-                    .onConflictDoUpdate({ target: redirects.fromPath, set: { toPath, status: 301 } });
-                  result.summary.redirectsCreated++;
-                }
-              } catch {
-                // ignore invalid redirect URL
+              const postId = insertedPost?.[0]?.id;
+              if (!postId) throw new Error("Failed to upsert post");
+              // Refresh post-tags: replace associations
+              await tx.delete(postTags).where(eq(postTags.postId, postId));
+              for (const tagId of tagIds) {
+                await tx.insert(postTags).values({ postId, tagId }).onConflictDoNothing();
               }
-            }
 
-            // Process comments with idempotency and parent caching
-            if (post.comments.length > 0) {
-              // Build set of existing paths to avoid duplicates on re-import
-              const existing = await tx.select({ id: comments.id, path: comments.path, depth: comments.depth })
-                .from(comments)
-                .where(eq(comments.postId, postId));
-              const existingPaths = new Set<string>(existing.map((r: any) => r.path as string));
-              const existingByPath = new Map<string, { id: string; depth: number; path: string }>
-                (existing.map((r: any) => [r.path as string, { id: r.id as string, depth: r.depth as number, path: r.path as string }]));
+              // Create redirect if we have an original URL
+              if (post.originalUrl) {
+                try {
+                  const url = new URL(post.originalUrl);
+                  const fromPath = url.pathname;
+                  const toPath = `/${post.slug}`;
+                  if (fromPath !== toPath) {
+                    await tx.insert(redirects).values({ fromPath, toPath, status: 301 })
+                      .onConflictDoUpdate({ target: redirects.fromPath, set: { toPath, status: 301 } });
+                    result.summary.redirectsCreated++;
+                  }
+                } catch {
+                  // ignore invalid redirect URL
+                }
+              }
 
-              // Map original comment id -> inserted { id, path, depth }
-              const insertedMap = new Map<string, { id: string; path: string; depth: number }>();
+              // Process comments with idempotency and parent caching
+              if (post.comments.length > 0) {
+                // Build set of existing paths to avoid duplicates on re-import
+                const existing = await tx.select({ id: comments.id, path: comments.path, depth: comments.depth })
+                  .from(comments)
+                  .where(eq(comments.postId, postId));
+                const existingPaths = new Set<string>(existing.map((r: any) => r.path as string));
+                const existingByPath = new Map<string, { id: string; depth: number; path: string }>
+                  (existing.map((r: any) => [r.path as string, { id: r.id as string, depth: r.depth as number, path: r.path as string }]));
 
-              // We'll iteratively insert comments whose parents are resolved
-              const remaining = post.comments.filter(c => c.approved).slice();
-              const maxIterations = remaining.length + 5;
-              let iterations = 0;
-              while (remaining.length > 0 && iterations < maxIterations) {
-                iterations++;
-                let progressed = false;
+                // Map original comment id -> inserted { id, path, depth }
+                const insertedMap = new Map<string, { id: string; path: string; depth: number }>();
 
-                for (let idx = 0; idx < remaining.length; ) {
-                  const c = remaining[idx]!;
+                // We'll iteratively insert comments whose parents are resolved
+                const remaining = post.comments.filter(c => c.approved).slice();
+                const maxIterations = remaining.length + 5;
+                let iterations = 0;
+                while (remaining.length > 0 && iterations < maxIterations) {
+                  iterations++;
+                  let progressed = false;
 
-                  // Resolve parent if any
-                  let parentInfo: { id: string; path: string; depth: number } | null = null;
-                  if (c.parentId) {
-                    // If parent inserted in this run
-                    const ins = insertedMap.get(c.parentId);
-                    if (ins) parentInfo = ins;
-                    else {
-                      // If parent existed already, its path ends with the parent's original ID
-                      // We can find by scanning existing paths for those that end with `.${parentId}` or equal to parentId
-                      const parentPath = Array.from(existingPaths).find((p: string) => p === c.parentId || p.endsWith(`.${c.parentId}`));
-                      if (parentPath) {
-                        const e = existingByPath.get(parentPath);
-                        if (e) parentInfo = e;
+                  for (let idx = 0; idx < remaining.length; ) {
+                    const c = remaining[idx]!;
+
+                    // Resolve parent if any
+                    let parentInfo: { id: string; path: string; depth: number } | null = null;
+                    if (c.parentId) {
+                      // If parent inserted in this run
+                      const ins = insertedMap.get(c.parentId);
+                      if (ins) parentInfo = ins;
+                      else {
+                        // If parent existed already, its path ends with the parent's original ID
+                        // We can find by scanning existing paths for those that end with `.${parentId}` or equal to parentId
+                        const parentPath = Array.from(existingPaths).find((p: string) => p === c.parentId || p.endsWith(`.${c.parentId}`));
+                        if (parentPath) {
+                          const e = existingByPath.get(parentPath);
+                          if (e) parentInfo = e;
+                        }
                       }
+
+                      // If parent unresolved yet, skip this round
+                      if (!parentInfo) { idx++; continue; }
                     }
 
-                    // If parent unresolved yet, skip this round
-                    if (!parentInfo) { idx++; continue; }
-                  }
+                    // Compute this comment path/depth
+                    const basePath = parentInfo?.path ?? "";
+                    const path = basePath ? `${basePath}.${c.id}` : c.id;
+                    const depth = (parentInfo?.depth ?? 0) + (parentInfo ? 1 : 0);
 
-                  // Compute this comment path/depth
-                  const basePath = parentInfo?.path ?? "";
-                  const path = basePath ? `${basePath}.${c.id}` : c.id;
-                  const depth = (parentInfo?.depth ?? 0) + (parentInfo ? 1 : 0);
+                    // Idempotency: skip if path already exists
+                    if (existingPaths.has(path)) {
+                      // Map to existing id for children
+                      const e = existingByPath.get(path);
+                      if (e) insertedMap.set(c.id, e);
+                      remaining.splice(idx, 1);
+                      progressed = true;
+                      continue;
+                    }
 
-                  // Idempotency: skip if path already exists
-                  if (existingPaths.has(path)) {
-                    // Map to existing id for children
-                    const e = existingByPath.get(path);
-                    if (e) insertedMap.set(c.id, e);
+                    // Upsert/create comment author if available
+                    let commentUserId: string | null = null;
+                    if (c.authorEmail) {
+                      const userRows = await tx.insert(users).values({ email: c.authorEmail, name: c.author })
+                        .onConflictDoUpdate({ target: users.email, set: { name: c.author } })
+                        .returning();
+                      commentUserId = userRows?.[0]?.id ?? null;
+                    }
+
+                    // Insert comment
+                    const inserted = await tx.insert(comments).values({
+                      postId,
+                      userId: commentUserId,
+                      parentId: parentInfo?.id ?? null,
+                      path,
+                      depth,
+                      bodyHtml: sanitizeWithIframes(c.content),
+                      bodyMd: null,
+                      status: "approved",
+                      createdAt: c.date || null,
+                    }).returning();
+
+                    if (inserted?.[0]) {
+                      const info = { id: inserted[0].id, path, depth };
+                      insertedMap.set(c.id, info);
+                      existingPaths.add(path);
+                      existingByPath.set(path, info);
+                    }
+
                     remaining.splice(idx, 1);
                     progressed = true;
-                    continue;
                   }
 
-                  // Upsert/create comment author if available
-                  let commentUserId: string | null = null;
-                  if (c.authorEmail) {
-                    const userRows = await tx.insert(users).values({ email: c.authorEmail, name: c.author })
-                      .onConflictDoUpdate({ target: users.email, set: { name: c.author } })
-                      .returning();
-                    commentUserId = userRows?.[0]?.id ?? null;
-                  }
-
-                  // Insert comment
-                  const inserted = await tx.insert(comments).values({
-                    postId,
-                    userId: commentUserId,
-                    parentId: parentInfo?.id ?? null,
-                    path,
-                    depth,
-                    bodyHtml: sanitizeWithIframes(c.content),
-                    bodyMd: null,
-                    status: "approved",
-                    createdAt: c.date || null,
-                  }).returning();
-
-                  if (inserted?.[0]) {
-                    const info = { id: inserted[0].id, path, depth };
-                    insertedMap.set(c.id, info);
-                    existingPaths.add(path);
-                    existingByPath.set(path, info);
-                  }
-
-                  remaining.splice(idx, 1);
-                  progressed = true;
+                  if (!progressed) break; // Avoid infinite loop on malformed trees
                 }
-
-                if (!progressed) break; // Avoid infinite loop on malformed trees
               }
-            }
+            });
+          }
+
+          result.summary.postsImported++;
+
+          // Persist incremental progress so UI polling updates the bar
+          if (jobId && !dryRun && !purgeBeforeImport) {
+            await db.update(importJobs)
+              .set({
+                postsImported: result.summary.postsImported,
+                redirectsCreated: result.summary.redirectsCreated,
+                updatedAt: sql`now()`,
+              })
+              .where(eq(importJobs.id, jobId));
+          }
+        } catch (error) {
+          if (purgeBeforeImport) throw error;
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          result.errors.push({
+            item: post.importedSystemId,
+            error: `Post import failed: ${errorMsg}`
           });
-        }
 
-        result.summary.postsImported++;
-
-        // Persist incremental progress so UI polling updates the bar
-        if (jobId && !dryRun) {
-          await db.update(importJobs)
-            .set({
-              postsImported: result.summary.postsImported,
-              redirectsCreated: result.summary.redirectsCreated,
-              updatedAt: sql`now()`,
-            })
-            .where(eq(importJobs.id, jobId));
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        result.errors.push({
-          item: post.importedSystemId,
-          error: `Post import failed: ${errorMsg}`
-        });
-
-        if (jobId && !dryRun) {
-          await db.insert(importJobErrors).values({
-            jobId,
-            itemIdentifier: post.importedSystemId,
-            errorType: "post_import",
-            errorMessage: errorMsg,
-            itemData: { title: post.title, slug: post.slug }
-          });
+          if (jobId && !dryRun && !purgeBeforeImport) {
+            await db.insert(importJobErrors).values({
+              jobId,
+              itemIdentifier: post.importedSystemId,
+              errorType: "post_import",
+              errorMessage: errorMsg,
+              itemData: { title: post.title, slug: post.slug }
+            });
+          }
         }
       }
+    };
+
+    if (purgeBeforeImport && !dryRun) {
+      // Media is staged under immutable content hashes. Old files may also be
+      // used by site settings or external links, so retain them for explicit cleanup.
+      await db.transaction(async (tx: typeof db) => {
+        await tx.execute(sql`LOCK TABLE posts, comments, tags, categories, redirects IN SHARE ROW EXCLUSIVE MODE`);
+        await tx.delete(reactions).where(sql`target_type in ('post', 'comment')`);
+        await tx.delete(comments);
+        await tx.delete(posts);
+        await tx.delete(categories);
+        await tx.delete(tags);
+        await tx.delete(redirects);
+        await importPosts(tx);
+      });
+    } else {
+      await importPosts(db);
     }
 
     // Update job completion
@@ -1814,6 +1792,10 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
     }
 
   } catch (error) {
+    if (purgeBeforeImport) {
+      result.summary.postsImported = 0;
+      result.summary.redirectsCreated = 0;
+    }
     // Handle fatal errors
     const errorMsg = error instanceof Error ? error.message : String(error);
     result.errors.push({
@@ -1865,13 +1847,13 @@ async function run() {
 
   if (!pathArg) {
     logger.error("Usage: npx tsx scripts/import-wxr.ts path=./export.xml [--dry-run] [--skip-media] [--verbose] [--rebuild-excerpts] [--purge] [allowedHosts=example.com,cdn.example.com] [concurrency=8] [uploads=/path/to/uploads] [root=^https?://example.com$]");
-    logger.error("  --purge: Delete all existing posts, comments, categories, tags, redirects, and uploaded files before import");
+    logger.error("  --purge: Replace existing posts, comments, taxonomy and redirects after validation. Upload files are retained.");
     process.exit(1);
   }
 
   if (rootArg) {
     try {
-      new RegExp(rootArg);
+      RE2JS.compile(rootArg);
     } catch (e) {
       logger.error(`❌ Invalid --root regular expression provided: ${rootArg}`);
       if (e instanceof Error) {
@@ -1891,7 +1873,7 @@ async function run() {
   if (allowedHosts.length > 0) logger.info(`🔒 Allowed media hosts: ${allowedHosts.join(", ")}`);
   if (concurrency) logger.info(`🧵 Concurrency: ${concurrency}`);
   if (rebuildExcerpts) logger.info("📝 Rebuilding excerpts for all posts");
-  if (purgeBeforeImport) logger.info("🗑️ Purging all existing data and files before import");
+  if (purgeBeforeImport) logger.info("🗑️ Replacing existing content after validation");
 
   const startTime = Date.now();
   const opts: ImportOptions = { dryRun, skipMedia, verbose, allowedHosts, rebuildExcerpts, purgeBeforeImport };
@@ -1941,6 +1923,7 @@ async function run() {
   await writeFile(checkpointPath, JSON.stringify(checkpointData, null, 2));
   logger.info(`\n💾 Checkpoint saved to: ${checkpointPath}`);
 
+  if (result.restrictedPosts.length) logger.info("Imported as drafts", result.restrictedPosts);
   if (result.errors.length > 0) {
     process.exit(1);
   }
@@ -2013,11 +1996,7 @@ function choosePreferredImageUrl(anchorHref?: string, imgSrc?: string): string |
 export function sanitizeWithIframes(rawHtml: string): string {
   const { html: protectedHtml, placeholders } = validateAndProtectIframes(rawHtml, defaultProviders);
   // First, drop all iframes during sanitize; we'll restore only validated ones next
-  const sanitized = sanitizeHtml(
-    // Temporarily replace tokens already, since our sanitize function allows iframes by default.
-    // We removed raw iframes earlier by tokenizing; now ensure sanitizer cannot reintroduce unsafe content.
-    protectedHtml.replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-  );
+  const sanitized = sanitizeHtml(protectedHtml, false);
   const restored = restoreProtectedIframes(sanitized, placeholders);
   return restored;
 }

@@ -3,7 +3,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPostBySlug, getPostBySlugWithReactions, getPreviousPost, getNextPost } from "@/lib/posts";
-import { getSession } from "@/lib/auth";
+import { canPreviewUnpublished, getSession } from "@/lib/auth";
 import { getSiteMetadata } from "@/lib/rss";
 import { generatePostMetadata, generatePostJsonLd } from "@/lib/seo";
 import CommentsSection from "@/components/comments/CommentsSection";
@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   
   // For metadata generation, we need to check admin status to avoid leaking unpublished content
   const session = await getSession();
-  const isAdmin = Boolean(session?.user?.isAdmin);
+  const isAdmin = await canPreviewUnpublished(session);
   
   const post = await getPostBySlug(resolvedParams.slug, isAdmin);
   if (!post) {
@@ -72,7 +72,7 @@ export default async function PostPage({ params }: Props) {
   );
   
   const userId = session?.user?.id || undefined;
-  const isAdmin = Boolean(session?.user?.isAdmin);
+  const isAdmin = await canPreviewUnpublished(session);
   const canReact = Boolean(session?.user?.id);
 
   // Measure post loading (main data fetch)
@@ -81,47 +81,8 @@ export default async function PostPage({ params }: Props) {
     async () => getPostBySlugWithReactions(resolvedParams.slug, userId, isAdmin)
   );
   
-  if (!post) {
-    // Check if this is an unpublished post that exists but isn't visible to non-admin users
-    if (!isAdmin) {
-      const adminPost = await getPostBySlug(resolvedParams.slug, true);
-      if (adminPost && !adminPost.publishedAt) {
-        // Post exists but is unpublished and user is not admin
-        return (
-          <main className="max-w-screen mx-auto px-6 my-7">
-            <div className="max-w-2xl mx-auto text-center py-16">
-              <div className="mb-6">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
-                  <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.694-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                </div>
-                <h1 className="text-2xl font-bold text-fg mb-2">Content Unavailable</h1>
-                <p className="text-muted-foreground">
-                  This post has been removed by the site administrator or is no longer available.
-                </p>
-              </div>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  If you believe this is an error, please contact the site administrator.
-                </p>
-                <div className="pt-4">
-                  <Link 
-                    href="/" 
-                    className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                  >
-                    Return to Home
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </main>
-        );
-      }
-    }
-    notFound();
-  }
-  
+  if (!post) notFound();
+
   // Measure navigation data loading
   const { result: [previousPost, nextPost] } = await measureAsync(
     'navigation-load',
@@ -310,7 +271,7 @@ export default async function PostPage({ params }: Props) {
               <p className="text-gray-500 text-sm">This post is locked and no longer accepts comments.</p>
             </div>
           ) : (
-            <CommentsSection postId={post.id} />
+            <CommentsSection postId={post.id} includeUnpublished={isAdmin} />
           )}
         </div>
       </main>

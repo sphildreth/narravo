@@ -19,8 +19,9 @@ if (typeof window !== 'undefined') {
  * This configuration is designed to work with markdown-generated HTML
  * and allows common formatting elements while blocking dangerous content.
  */
-export function sanitizeHtml(html: string): string {
-  let sanitized = purifyInstance.sanitize(html, {
+export function sanitizeHtml(html: string, allowIframes = true): string {
+  const fragment = purifyInstance.sanitize(html, {
+    RETURN_DOM_FRAGMENT: true,
     ALLOWED_TAGS: [
       "p", "a", "strong", "em", "code", "pre", "ul", "ol", "li", 
       "blockquote", "img", "br", "span", "h1", "h2", "h3", "h4", "h5", "h6",
@@ -62,63 +63,30 @@ export function sanitizeHtml(html: string): string {
     SANITIZE_DOM: true, // Sanitize DOM nodes
     KEEP_CONTENT: true, // Keep text content even if tags are removed
     // Ensure external links are safe
-    FORBID_TAGS: ["script", "object", "embed", "form"],
+    FORBID_TAGS: ["script", "object", "embed", "form", ...(allowIframes ? [] : ["iframe"])],
   });
 
-  // Post-process: allow only YouTube iframes, strip others entirely
-  sanitized = sanitized.replace(/<iframe([^>]*)>(.*?)<\/iframe>/gi, (m, attrs) => {
-    const srcMatch = String(attrs).match(/\ssrc=["']([^"']+)["']/i);
-    const src = srcMatch?.[1] || "";
+  for (const iframe of fragment.querySelectorAll("iframe")) {
     try {
-      const u = new URL(src, "https://example.com");
-      const host = u.hostname.toLowerCase();
-      const allowed = /(^|\.)youtube\.com$/.test(host) || /(^|\.)youtu\.be$/.test(host) || /(^|\.)youtube-nocookie\.com$/.test(host);
-      return allowed ? `<iframe${attrs}></iframe>` : "";
-    } catch {
-      return "";
+      const u = new URL(iframe.getAttribute("src") ?? "");
+      if (u.protocol !== "https:" || !/(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/.test(u.hostname)) iframe.remove();
+    } catch { iframe.remove(); }
+  }
+  for (const input of fragment.querySelectorAll("input")) {
+    if (input.type !== "checkbox") { input.remove(); continue; }
+    for (const attr of [...input.attributes]) {
+      if (!["type", "checked", "disabled"].includes(attr.name)) input.removeAttribute(attr.name);
     }
-  });
-
-  // Post-process: only allow checkbox inputs for task lists, remove others
-  sanitized = sanitized.replace(/<input([^>]*)>/gi, (match, attrs) => {
-    // Check if this is a checkbox input
-    if (/\btype\s*=\s*["']?checkbox["']?/i.test(attrs)) {
-      // This is a checkbox, keep it but ensure only safe attributes
-      const safeAttrs = attrs
-        .replace(/\b(?:on\w+|style|formaction|form|name|value)\s*=\s*["'][^"']*["']/gi, '')
-        .replace(/\btype\s*=\s*["']?[^"'\s]*["']?/gi, 'type="checkbox"');
-      return `<input${safeAttrs}>`;
-    }
-    // Remove any other input types
-    return '';
-  });
-
-  // Only pre/code may retain a tightly constrained syntax-highlighting class.
-  // Allowing arbitrary classes on authored markup can activate application
-  // utility classes (for example fixed positioning and large z-index values)
-  // even when inline styles are prohibited.
-  sanitized = sanitized.replace(
-    /<([a-z][\w-]*)([^>]*?)\sclass=["']([^"']*?)["']/gi,
-    (match, tagName, attrs, className) => {
-      if (!/^(?:pre|code)$/i.test(tagName)) {
-        return `<${tagName}${attrs}`;
-      }
-      // Only allow safe syntax highlighting classes
-      const safeClasses = className
-        .split(/\s+/)
-    .filter((cls: string) => /^(prism|language|lang|hljs|undefined|numbers|line|mermaid)[\w-]*$/i.test(cls))
-        .join(' ');
-      
-      if (safeClasses) {
-        return `<${tagName}${attrs} class="${safeClasses}"`;
-      } else {
-        // Remove class attribute if no safe classes found
-        return `<${tagName}${attrs}`;
-      }
-    }
-  );
-
-  return sanitized;
+  }
+  for (const element of fragment.querySelectorAll("[class]")) {
+    const classes = Array.from(element.classList).filter(c =>
+      /^(pre|code)$/i.test(element.tagName) && /^(prism|language|lang|hljs|undefined|numbers|line|mermaid)[\w-]*$/i.test(c));
+    if (classes.length) element.setAttribute("class", classes.join(" "));
+    else element.removeAttribute("class");
+  }
+  const wrapper = fragment.ownerDocument.createElement("div");
+  wrapper.append(fragment);
+  return wrapper.innerHTML;
 }
 
 /**

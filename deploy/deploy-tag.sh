@@ -153,9 +153,9 @@ check_runtime() {
 
   local node_version
   node_version="$(node -p 'process.versions.node')"
-  if ! version_ge "$node_version" "22.13.0"; then
+  if ! version_ge "$node_version" "22.22.2"; then
     cat >&2 <<ERROR
-ERROR: Narravo requires Node.js 22.13 or newer.
+ERROR: Narravo requires Node.js 22.22.2 or newer.
 Current Node.js: $node_version
 
 Install Node.js 22 on this host, then rerun the deploy:
@@ -167,7 +167,7 @@ ERROR
   fi
 
   local package_manager
-  package_manager="$(run_as_app "cd '$APP_ROOT' && node -p \"require('./package.json').packageManager || 'pnpm@11.5.2'\"")"
+  package_manager="$(run_as_app "cd '$APP_ROOT' && node -p \"require('./package.json').packageManager || 'pnpm@12.21.0'\"")"
   echo "==> Activating $package_manager with Corepack"
   sudo corepack enable pnpm
   sudo corepack prepare "$package_manager" --activate

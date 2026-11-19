@@ -13,7 +13,7 @@ FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
-RUN npm install --global pnpm@11.5.2 \
+RUN npm install --global pnpm@12.21.0 \
     && addgroup -S --gid 10001 narravo \
     && adduser -S --uid 10001 --ingroup narravo --home /home/narravo narravo
 COPY --from=base /app/.next ./.next
@@ -23,6 +23,7 @@ COPY --from=base /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=base /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/next.config.mjs ./next.config.mjs
+COPY --from=base /app/tsconfig.json ./tsconfig.json
 COPY --from=base /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=base /app/drizzle ./drizzle
 COPY --from=base /app/scripts ./scripts

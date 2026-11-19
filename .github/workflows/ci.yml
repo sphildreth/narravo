@@ -42,10 +42,10 @@ jobs:
       
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '22'
 
@@ -63,11 +63,27 @@ jobs:
       - name: Run database migrations
         run: pnpm drizzle:migrate
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Cache Next.js build data
+        uses: actions/cache@v6.1.0
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
-      - name: Build
-        run: pnpm build
+      - name: Initialize build cache on a cold runner
+        run: mkdir -p .next/cache
 
-      - name: Test
-        run: pnpm test
+      - name: Install browser for editor tests
+        run: pnpm exec playwright install --with-deps chromium --only-shell
+
+      - name: Run quality checks
+        run: python3 scripts/do-prechecks.py --database --include-e2e
+
+      - name: Save data operations screenshot
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: data-operations-preview
+          path: test-results/**/data-operations.png
+          if-no-files-found: error
+          retention-days: 30

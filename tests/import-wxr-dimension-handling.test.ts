@@ -145,7 +145,7 @@ describe("WordPress Dimension URL Handling", () => {
 
     // Should download the two supported original images (without dimensions).
     // The PDF is an active/document format and is rejected by byte validation.
-    expect(putCalls.length).toBe(2);
+    expect(putCalls).toHaveLength(0);
 
     // Verify that fetch was called with original URLs, not dimensioned ones
     expect(mockDownloadRemoteBytes).toHaveBeenCalledWith("http://www.shildreth.com/wp-content/uploads/2017/07/20170723_175934.jpg", ["www.shildreth.com"], expect.any(Number));

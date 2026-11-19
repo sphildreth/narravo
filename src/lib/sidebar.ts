@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { publicPostCondition } from "./post-visibility";
 
 /**
  * lib/sidebar.ts
@@ -32,8 +33,8 @@ export async function getArchiveMonths(limit: number = 24): Promise<ArchiveMonth
 export async function getRecentPosts(limit: number = 10): Promise<RecentPost[]> {
   const res: any = await db.execute(sql`
     select id, slug, title, published_at as "publishedAt"
-    from posts
-    where published_at is not null
+    from posts p
+    where ${publicPostCondition()}
     order by published_at desc nulls last, id desc
     limit ${limit}
   `);

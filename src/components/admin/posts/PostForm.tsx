@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, useTransition, useCallback } from "react";
+import { useState, useEffect, useTransition, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -34,6 +34,19 @@ interface Post {
 
 interface PostFormProps {
   post?: Post;
+}
+
+function imagePreviewUrl(value: string | null | undefined) {
+  if (!value) return undefined;
+  try {
+    if (value.startsWith("/uploads/")) {
+      const url = new URL(value, "https://preview.invalid");
+      return url.pathname.startsWith("/uploads/") ? url.pathname : undefined;
+    }
+    const url = new URL(value);
+    if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+  } catch { /* The URL input may be incomplete while typing. */ }
+  return undefined;
 }
 
 export default function PostForm({ post }: PostFormProps) {
@@ -166,20 +179,28 @@ export default function PostForm({ post }: PostFormProps) {
 
   // Local (deferred) featured image file state
   const [featuredImageFile, setFeaturedImageFile] = useState<File | null>(null);
-  const [featuredImagePreview, setFeaturedImagePreview] = useState<string | null>(null);
-
-  // Own the preview object URL for the selected file: create it when a file is
-  // picked, revoke it (and clear the preview) when the file changes or the form
-  // unmounts. The existing post's image is rendered from formData.featuredImageUrl,
-  // so this state only ever tracks the pending upload.
+  const previewCanvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    if (!featuredImageFile) return;
-    const url = URL.createObjectURL(featuredImageFile);
-    setFeaturedImagePreview(url);
-    return () => {
-      URL.revokeObjectURL(url);
-      setFeaturedImagePreview(null);
-    };
+    const canvas = previewCanvas.current;
+    if (!featuredImageFile || !canvas) return;
+    let active = true;
+    createImageBitmap(featuredImageFile).then(bitmap => {
+      try {
+        if (!active) return;
+        const scale = Math.min(1, 384 / bitmap.width, 128 / bitmap.height);
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      } finally {
+        bitmap.close();
+      }
+    }).catch(() => {
+      if (active) {
+        setErrors(prev => ({ ...prev, featuredImage: "Choose a supported raster image." }));
+        setFeaturedImageFile(null);
+      }
+    });
+    return () => { active = false; };
   }, [featuredImageFile]);
 
   // Validate slug format
@@ -653,19 +674,24 @@ export default function PostForm({ post }: PostFormProps) {
           <label className="block text-sm font-medium mb-2">Featured Image</label>
           <div className="space-y-3">
             {/* Preview: either existing URL (editing existing post) or local file preview */}
-            {(featuredImagePreview || formData.featuredImageUrl) && (
+            {(featuredImageFile || formData.featuredImageUrl) && (
               <div className="relative inline-block">
-                <img
-                  src={featuredImagePreview || formData.featuredImageUrl}
-                  alt={formData.featuredImageAlt || "Featured image preview"}
-                  className="max-w-sm h-32 object-cover rounded-md border border-border"
-                />
+                {featuredImageFile ? (
+                  <canvas ref={previewCanvas} role="img" aria-label={formData.featuredImageAlt || "Featured image preview"} className="max-w-sm rounded-md border border-border" />
+                ) : (
+                  <img
+                    src={imagePreviewUrl(formData.featuredImageUrl)}
+                    alt={formData.featuredImageAlt || "Featured image preview"}
+                    className="max-w-sm h-32 object-cover rounded-md border border-border"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     setFeaturedImageFile(null);
                     setFormData(prev => ({ ...prev, featuredImageUrl: "", featuredImageAlt: "" }));
                   }}
+                  aria-label="Remove featured image"
                   className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-700 transition-colors"
                   disabled={isPending}
                 >
@@ -675,14 +701,15 @@ export default function PostForm({ post }: PostFormProps) {
             )}
 
             {/* File input appears if no remote URL present or user is selecting a new one */}
-            {!formData.featuredImageUrl && !featuredImagePreview && (
+            {!formData.featuredImageUrl && !featuredImageFile && (
               <div className="flex items-center gap-3 flex-wrap">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
+                      setErrors(prev => ({ ...prev, featuredImage: "" }));
                       setFeaturedImageFile(file);
                       // Reset URL field to ensure server doesn't treat previous URL
                       setFormData(prev => ({ ...prev, featuredImageUrl: "" }));
@@ -696,7 +723,7 @@ export default function PostForm({ post }: PostFormProps) {
             )}
 
             {/* URL input only shown when no file chosen and no preview */}
-            {!featuredImagePreview && !featuredImageFile && (
+            {!featuredImageFile && (
               <div>
                 <input
                   type="url"
@@ -709,8 +736,10 @@ export default function PostForm({ post }: PostFormProps) {
               </div>
             )}
 
+            {errors.featuredImage && <p role="alert" className="text-sm text-red-600">{errors.featuredImage}</p>}
+
             {/* Alt text field displayed if either a file or URL is selected */}
-            {(featuredImagePreview || formData.featuredImageUrl) && (
+            {(featuredImageFile || formData.featuredImageUrl) && (
               <div>
                 <input
                   type="text"
@@ -731,7 +760,7 @@ export default function PostForm({ post }: PostFormProps) {
           <label className="block text-sm font-medium mb-2">
             Content *
           </label>
-          <div className="rounded-lg overflow-hidden">
+          <div className="rounded-lg overflow-clip">
             <TiptapEditor
               initialMarkdown={formData.bodyMd}
               onChange={handleEditorChange}

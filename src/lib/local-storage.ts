@@ -29,7 +29,7 @@ export class LocalStorageService {
     logger.info(`[LocalStorage] Upload directory ready: ${this.uploadDir}`);
   }
 
-  async putObject(key: string, body: Uint8Array, contentType: string): Promise<void> {
+  async putObject(key: string, body: Uint8Array, contentType: string, onlyIfMissing = false): Promise<void> {
     await this.init();
 
     const filePath = this.resolveContainedPath(key);
@@ -56,7 +56,12 @@ export class LocalStorageService {
       // or upload can never expose a partially written object.
       temporaryPath = path.join(dir, `.upload-${nanoid()}.tmp`);
       await fs.writeFile(temporaryPath, body);
-      await fs.rename(temporaryPath, filePath);
+      if (onlyIfMissing) {
+        await fs.link(temporaryPath, filePath);
+        await fs.unlink(temporaryPath);
+      } else {
+        await fs.rename(temporaryPath, filePath);
+      }
       temporaryPath = null;
       logger.info(`[LocalStorage] File written successfully: ${filePath}`);
       
@@ -124,6 +129,35 @@ export class LocalStorageService {
       return;
     }
     await fs.rm(target, { recursive: true, force: true });
+  }
+
+  async listKeys(prefix: string): Promise<string[]> {
+    const directory = this.resolveContainedPath(prefix);
+    let entries;
+    try {
+      if ((await fs.lstat(directory)).isSymbolicLink()) throw new Error("Symlinked upload directory");
+      entries = await fs.readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+    const keys: string[] = [];
+    for (const entry of entries) {
+      const key = `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) keys.push(...await this.listKeys(key));
+      if (entry.isFile() && !entry.name.startsWith(".")) keys.push(key);
+    }
+    return keys;
+  }
+
+  async getObjectBytes(key: string, limit: number): Promise<Uint8Array> {
+    const file = this.resolveContainedPath(key);
+    if (await fs.realpath(file) !== file) throw new Error("Symlinked upload file");
+    const stat = await fs.stat(file);
+    if (!stat.isFile() || stat.size > limit) throw new Error("Invalid upload size");
+    const bytes = await fs.readFile(file);
+    if (bytes.length > limit) throw new Error("Upload exceeds size limit");
+    return bytes;
   }
 
   async exists(key: string): Promise<boolean> {

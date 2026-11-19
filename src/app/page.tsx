@@ -8,7 +8,6 @@ import { listPosts } from "@/lib/posts";
 import { getPostViewCounts } from "@/lib/analytics";
 import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
-import { unstable_cache as cache } from "next/cache";
 import { PageTracker } from "@/components/analytics/PageTracker";
 
 // This page reads DB-backed config and latest posts; ensure it's not pre-rendered at build time
@@ -16,7 +15,6 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const config = new ConfigServiceImpl({ db });
-  const revalidateSeconds = await config.getNumber("PUBLIC.HOME.REVALIDATE-SECONDS") ?? 60;
   const feedCount = await config.getNumber("FEED.LATEST-COUNT") ?? 20;
   const disclaimerEnabled = await config.getBoolean("SITE.DISCLAIMER.ENABLED");
   
@@ -25,12 +23,7 @@ export default async function Page() {
   const trackPageViews = await config.getBoolean("PAGE.TRACK-VIEWS") ?? true;
   const trackHomepage = await config.getBoolean("PAGE.TRACK-HOMEPAGE") ?? true;
 
-  const getPosts = cache(
-    async () => listPosts({ limit: feedCount, includeViews: true }),
-    ["home", `limit:${feedCount}`],
-    { revalidate: revalidateSeconds, tags: ["home"] }
-  );
-  const { items: posts, nextCursor } = await getPosts();
+  const { items: posts, nextCursor } = await listPosts({ limit: feedCount, includeViews: true });
 
   // Get view counts for all posts
   const postIds = posts.map(p => p.id);
