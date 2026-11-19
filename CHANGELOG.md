@@ -6,6 +6,12 @@ This file records notable project changes. It follows the
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-11-19
+
+### Fixed
+
+- The admin dashboard displays Recent Comments again. A duplicate join in the PostgreSQL query caused the page to show React error 441.
+
 ## [1.0.6] - 2026-11-19
 
 ### Fixed
