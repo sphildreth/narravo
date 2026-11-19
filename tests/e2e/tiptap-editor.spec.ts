@@ -2,8 +2,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('TipTap Editor E2E Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/tiptap-demo");
+    const editor = page.locator(".ProseMirror");
+    await expect(editor).toContainText("Welcome to the Enhanced TipTap Editor");
+    await editor.fill("");
+  });
+
   test('should display toolbar with all expected buttons', async ({ page }) => {
-    await page.goto("/tests/e2e/editor.html");
 
     // Check for presence of key toolbar buttons
     await expect(page.getByTitle('Bold (Ctrl+B)')).toBeVisible();
@@ -15,7 +21,6 @@ test.describe('TipTap Editor E2E Tests', () => {
   });
 
   test('should allow text formatting', async ({ page }) => {
-    await page.goto("/tests/e2e/editor.html");
     
     // Type some text
     const editor = page.locator('.ProseMirror');
@@ -33,7 +38,6 @@ test.describe('TipTap Editor E2E Tests', () => {
   });
 
   test('should show language dropdown when in code block', async ({ page }) => {
-    await page.goto("/tests/e2e/editor.html");
     
     // Click code block button
     await page.getByTitle('Code Block', { exact: true }).click();
@@ -43,7 +47,6 @@ test.describe('TipTap Editor E2E Tests', () => {
   });
 
   test('should handle image upload with alt text prompt', async ({ page }) => {
-    await page.goto("/tests/e2e/editor.html");
     
     // Set up dialog handler for alt text prompt
     page.on('dialog', dialog => dialog.accept('Test alt text'));
@@ -64,7 +67,6 @@ test.describe('TipTap Editor E2E Tests', () => {
   });
 
   test('should sanitize pasted content', async ({ page }) => {
-    await page.goto("/tests/e2e/editor.html");
     
     const editor = page.locator('.ProseMirror');
     await editor.click();

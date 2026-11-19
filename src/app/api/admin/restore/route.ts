@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     
     const options: RestoreRequest = {
       dryRun: formData.get("dryRun") === "true",
-      filterSlugs: filterSlugsValue ? (filterSlugsValue as string).split(",") : undefined,
+      filterSlugs: filterSlugsValue ? (filterSlugsValue as string).split(",").map(slug => slug.trim()) : undefined,
       startDate: startDateValue ? startDateValue as string : undefined,
       endDate: endDateValue ? endDateValue as string : undefined,
       skipMedia: formData.get("skipMedia") === "true",
@@ -85,13 +85,15 @@ export async function POST(req: NextRequest) {
       userAgent: req.headers.get("user-agent") || "unknown",
     }).returning();
 
+    let ownsTempFile = false;
     try {
       // Save uploaded file to temp location
       const buffer = Buffer.from(await file.arrayBuffer());
       const tempFilename = `restore-${operationId}.zip`;
       const tempPath = `/tmp/${tempFilename}`;
       
-      await fs.writeFile(tempPath, new Uint8Array(buffer));
+      await fs.writeFile(tempPath, new Uint8Array(buffer), { mode: 0o600, flag: "wx" });
+      ownsTempFile = true;
 
       // Verify checksum if provided
       if (options.checksum) {
@@ -178,9 +180,9 @@ export async function POST(req: NextRequest) {
       throw error;
     } finally {
       try {
-        await fs.unlink(`/tmp/restore-${operationId}.zip`);
+        if (ownsTempFile) await fs.unlink(`/tmp/restore-${operationId}.zip`);
       } catch {
-        // Best-effort cleanup of a non-sensitive temporary archive.
+        // The owning process may already have removed the archive.
       }
     }
 

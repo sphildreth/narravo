@@ -2,7 +2,7 @@
 import { expect, test } from "@playwright/test";
 
 test("restores media separately and requires explicit selection for a bulk purge", async ({ page }, info) => {
-  await page.goto("/tests/e2e/editor.html?data-operations");
+  await page.goto("http://127.0.0.1:4197/tests/e2e/data-operations.html");
   await page.getByLabel("Mode", { exact: true }).selectOption("hard");
   const preview = page.getByRole("button", { name: "Preview Purge" });
   await expect(preview).toBeDisabled();

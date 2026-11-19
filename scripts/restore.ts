@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import JSZip from "jszip";
 import fs from "node:fs/promises";
+import { parseArgs } from "node:util";
 import { and, eq, getTableColumns, isNull, or, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import { sanitizeHtml } from "@/lib/sanitize";
 import logger from "@/lib/logger";
-import { archiveLimits, assertArchiveLimits, digest, legacyNames, mediaType, names, storageFor, tables, validMediaKey, type BackupManifest, type MediaEntry, type TableName } from "./content-archive";
+import { archiveLimits, assertArchiveLimits, readArchiveEntry, digest, legacyNames, mediaType, names, storageFor, tables, validMediaKey, type BackupManifest, type MediaEntry, type TableName } from "./content-archive";
 
 export interface RestoreOptions {
   backupPath: string;
@@ -60,7 +61,9 @@ function selectRecords(data: Data, options: RestoreOptions) {
   data.categories = data.categories.filter(c => categories.has(c.id));
   const tags = new Set([...data.post_tags, ...data.comment_tags].map(t => t.tagId));
   data.tags = data.tags.filter(t => tags.has(t.id));
-  const userIds = new Set(Object.values(data).flatMap(rows => rows.flatMap(r => [r.userId, r.deletedBy])));
+  const userIds = new Set([data.comments, data.reactions, data.uploads, data.posts]
+    .flatMap(rows => rows.flatMap(r => [r.userId, r.deletedBy])).filter(Boolean));
+  data.configuration = data.configuration.filter(row => userIds.has(row.userId));
   data.users = data.users.filter(u => userIds.has(u.id));
   return true;
 }
@@ -107,12 +110,20 @@ const references: Record<string, TableName> = {
 };
 
 export async function restoreBackup(options: RestoreOptions): Promise<RestorePreview> {
+  if ((options.startDate && !Number.isFinite(options.startDate.getTime())) ||
+      (options.endDate && !Number.isFinite(options.endDate.getTime())) ||
+      (options.startDate && options.endDate && options.startDate > options.endDate)) {
+    throw new Error("Invalid restore date range");
+  }
+  if (options.filterSlugs && (!options.filterSlugs.length || options.filterSlugs.some(slug => !slug.trim()))) {
+    throw new Error("A slug filter requires a nonempty list of slugs");
+  }
   const stat = await fs.stat(options.backupPath);
   if (stat.size > archiveLimits.compressed) throw new Error("Backup exceeds compressed size limit");
   const buffer = await fs.readFile(options.backupPath);
   const zip = await JSZip.loadAsync(buffer);
   assertArchiveLimits(zip, buffer.length);
-  const manifest: BackupManifest = JSON.parse(await zip.file("manifest.json")?.async("string") ?? "null");
+  const manifest: BackupManifest = JSON.parse((await readArchiveEntry(zip, "manifest.json")).toString("utf8"));
   if (!manifest || ![1, 2].includes(manifest.version) || !manifest.tables || !Array.isArray(manifest.media)) {
     throw new Error("Invalid or unsupported backup manifest");
   }
@@ -123,7 +134,7 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
     data[name] = [];
     if (!entry && !required.has(name)) continue;
     if (!entry || entry.filename !== `db/${name}.json`) throw new Error(`Missing table: ${name}`);
-    const json = await zip.file(entry.filename)?.async("string");
+    const json = (await readArchiveEntry(zip, entry.filename)).toString("utf8");
     if (!json || digest(json) !== entry.sha256) throw new Error(`Failed checksum for ${name}`);
     const rows = JSON.parse(json);
     if (!Array.isArray(rows) || rows.length !== entry.recordCount || rows.some(r => !r || typeof r !== "object" || Array.isArray(r))) {
@@ -136,12 +147,15 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
   data.comments = orderComments(data.comments);
   const selectedContent = selective ? JSON.stringify(data) : "";
   const media: Array<{ entry: MediaEntry; bytes: Uint8Array; mime: string; storage: ReturnType<typeof storageFor> }> = [];
+  const mediaPaths = new Set<string>();
   for (const entry of options.skipMedia ? [] : manifest.media) {
     // Version 1 contained only URL hashes. Its files must be recovered separately.
     if (manifest.version === 1) throw new Error("Legacy ZIP contains media placeholders. Recover the media from storage and retry with --skip-media.");
     if (!validMediaKey(entry.key) || entry.path !== `media/${entry.store}/${entry.key}`) throw new Error("Invalid media path");
+    if (mediaPaths.has(entry.path)) throw new Error("Duplicate media entry");
+    mediaPaths.add(entry.path);
     if (selective && !selectedContent.includes(entry.key)) continue;
-    const bytes = await zip.file(entry.path)?.async("uint8array");
+    const bytes = await readArchiveEntry(zip, entry.path);
     if (!bytes || bytes.length !== entry.bytes || digest(bytes) !== entry.sha256) throw new Error(`Invalid media: ${entry.key}`);
     media.push({ entry, bytes, mime: mediaType(entry.key, bytes), storage: storageFor(entry.store) });
   }
@@ -217,65 +231,33 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
 }
 
 // CLI usage
-if (import.meta.url === `file://${process.argv[1]}`) {
+async function runCli() {
   const args = process.argv.slice(2);
-  const backupPath = args.filter(arg => arg !== "--")[0];
-  
-  if (!backupPath) {
-    logger.error("Usage: tsx scripts/restore.ts <backup.zip> [options]");
-    logger.error("Options:");
-    logger.error("  --dry-run          Preview changes without applying them");
-    logger.error("  --verbose, -v      Enable verbose output");
-    logger.error("  --slugs slug1,slug2  Restore only specific posts by slug");
-    logger.error("  --start-date YYYY-MM-DD  Restore posts from this date onwards");
-    logger.error("  --end-date YYYY-MM-DD    Restore posts up to this date");
-    logger.error("  --skip-users       Skip restoring users");
-    logger.error("  --skip-config      Skip restoring configuration");
+  if (args[0] === "--") args.shift();
+  try {
+    const { values, positionals } = parseArgs({
+      args, allowPositionals: true, options: {
+        "dry-run": { type: "boolean" }, verbose: { type: "boolean", short: "v" },
+        slugs: { type: "string" }, "start-date": { type: "string" }, "end-date": { type: "string" },
+        "skip-media": { type: "boolean" }, "skip-users": { type: "boolean" }, "skip-config": { type: "boolean" },
+      },
+    });
+    if (positionals.length !== 1) throw new Error("Usage: pnpm restore <backup.zip> [--dry-run] [--slugs list] [--start-date date] [--end-date date] [--skip-media] [--skip-users] [--skip-config] [--verbose]");
+    const preview = await restoreBackup({
+      backupPath: positionals[0]!,
+      dryRun: !!values["dry-run"], verbose: !!values.verbose,
+      skipMedia: !!values["skip-media"], skipUsers: !!values["skip-users"], skipConfiguration: !!values["skip-config"],
+      ...(values.slugs !== undefined ? { filterSlugs: values.slugs.split(",").map(s => s.trim()) } : {}),
+      ...(values["start-date"] !== undefined ? { startDate: new Date(values["start-date"]) } : {}),
+      ...(values["end-date"] !== undefined ? { endDate: new Date(values["end-date"]) } : {}),
+    });
+    if (values["dry-run"] && !values.verbose) logger.info("Restore preview", preview.tables);
+    logger.info(values["dry-run"] ? "Restore preview complete" : "Restore completed successfully");
+    process.exit(0);
+  } catch (error) {
+    logger.error("Restore failed:", error);
     process.exit(1);
   }
-
-  const options: RestoreOptions = {
-    backupPath,
-    dryRun: args.includes("--dry-run"),
-    verbose: args.includes("--verbose") || args.includes("-v"),
-    skipMedia: args.includes("--skip-media"),
-    skipUsers: args.includes("--skip-users"),
-    skipConfiguration: args.includes("--skip-config"),
-  };
-
-  // Parse slugs filter
-  const slugsIndex = args.findIndex(arg => arg === "--slugs");
-  if (slugsIndex !== -1) {
-    const slugsArg = args[slugsIndex + 1];
-    if (slugsArg) {
-      options.filterSlugs = slugsArg.split(",");
-    }
-  }
-
-  // Parse date filters
-  const startDateIndex = args.findIndex(arg => arg === "--start-date");
-  if (startDateIndex !== -1) {
-    const startDateArg = args[startDateIndex + 1];
-    if (startDateArg) {
-      options.startDate = new Date(startDateArg);
-    }
-  }
-
-  const endDateIndex = args.findIndex(arg => arg === "--end-date");
-  if (endDateIndex !== -1) {
-    const endDateArg = args[endDateIndex + 1];
-    if (endDateArg) {
-      options.endDate = new Date(endDateArg);
-    }
-  }
-
-  restoreBackup(options)
-    .then(() => {
-      logger.info("✅ Restore completed successfully");
-      process.exit(0);
-    })
-    .catch(error => {
-      logger.error("❌ Restore failed:", error);
-      process.exit(1);
-    });
 }
+
+if (import.meta.url === `file://${process.argv[1]}`) void runCli();

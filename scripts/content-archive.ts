@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import type JSZip from "jszip";
+import { Readable } from "node:stream";
 import { createHash } from "node:crypto";
 import { categories, tags, users, posts, comments, commentAttachments, reactions, redirects, configuration, postTags, commentTags, uploads } from "@/drizzle/schema";
 import { localStorageService } from "@/lib/local-storage";
@@ -38,6 +39,28 @@ export function storageFor(store: MediaEntry["store"]) {
   if (!cloud) throw new Error("Configure the archive's S3/R2 storage before restoring cloud media");
   return cloud;
 }
+// JSZip exposes the central directory length on entries loaded from a ZIP.
+function declaredEntrySize(entry: JSZip.JSZipObject): number {
+  const size = (entry as unknown as { _data: { uncompressedSize: number } })._data.uncompressedSize;
+  if (!Number.isSafeInteger(size) || size < 0 || size > archiveLimits.entry) throw new Error("Invalid archive entry size");
+  return size;
+}
+
+export async function readArchiveEntry(zip: JSZip, path: string): Promise<Buffer> {
+  const entry = zip.file(path);
+  if (!entry) throw new Error(`Missing archive entry: ${path}`);
+  const limit = declaredEntrySize(entry);
+  const stream = new Readable().wrap(entry.nodeStream());
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of stream) {
+    total += chunk.length;
+    if (total > limit) throw new Error(`Archive entry exceeds declared size: ${path}`);
+    chunks.push(chunk);
+  }
+  if (total !== limit) throw new Error(`Incomplete archive entry: ${path}`);
+  return Buffer.concat(chunks, total);
+}
 export function assertArchiveLimits(zip: JSZip, archiveBytes?: number) {
   if (archiveBytes !== undefined && (archiveBytes <= 0 || archiveBytes > archiveLimits.compressed)) throw new Error("Backup exceeds compressed size limit");
   const entries = Object.values(zip.files);
@@ -45,9 +68,7 @@ export function assertArchiveLimits(zip: JSZip, archiveBytes?: number) {
   let total = 0;
   for (const entry of entries) {
     if (entry.dir) continue;
-    const size = Number((entry as unknown as { _data: { uncompressedSize: number } })._data.uncompressedSize);
-    if (!Number.isSafeInteger(size) || size < 0 || size > archiveLimits.entry) throw new Error("Invalid archive entry size");
-    total += size;
+    total += declaredEntrySize(entry);
     if (total > archiveLimits.expanded) throw new Error("Backup exceeds expansion limit");
   }
 }
