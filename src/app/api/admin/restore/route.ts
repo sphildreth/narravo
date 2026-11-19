@@ -18,6 +18,7 @@ interface RestoreRequest {
   filterSlugs?: string[] | undefined;
   startDate?: string | undefined;
   endDate?: string | undefined;
+  skipMedia?: boolean;
   skipUsers?: boolean;
   skipConfiguration?: boolean;
   checksum?: string | undefined; // Expected checksum for verification
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
       filterSlugs: filterSlugsValue ? (filterSlugsValue as string).split(",") : undefined,
       startDate: startDateValue ? startDateValue as string : undefined,
       endDate: endDateValue ? endDateValue as string : undefined,
+      skipMedia: formData.get("skipMedia") === "true",
       skipUsers: formData.get("skipUsers") === "true",
       skipConfiguration: formData.get("skipConfiguration") === "true",
       checksum: checksumValue ? checksumValue as string : undefined,
@@ -117,6 +119,7 @@ export async function POST(req: NextRequest) {
       const restoreOptions: any = {
         backupPath: tempPath,
         dryRun: options.dryRun ?? false,
+        skipMedia: options.skipMedia,
         skipUsers: options.skipUsers ?? false,
         skipConfiguration: options.skipConfiguration ?? false,
         verbose: false,

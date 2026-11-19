@@ -73,6 +73,9 @@ jobs:
         curl --retry 30 --retry-delay 1 --retry-connrefused -fsS http://localhost:3000/healthz
         curl -fsS http://localhost:3000/sample-post > /dev/null
 
+    - name: Check post JavaScript budget
+      run: node scripts/perf/post-bundle.mjs
+
     - name: Run Lighthouse and enforce performance budgets
       run: pnpm perf:lighthouse
 

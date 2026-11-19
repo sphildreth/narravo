@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { load } from "cheerio";
 import { RE2JS } from "re2js";
 import { parseStringPromise } from "xml2js";
 import { db } from "@/lib/db";
@@ -443,6 +444,7 @@ export async function downloadMedia(
   localService: LocalStorageService | null,
   allowedHosts: string[],
   opts?: { 
+    requireMedia?: boolean;
     dryRun?: boolean; 
     verbose?: boolean;
     uploadsPath?: string;
@@ -455,6 +457,7 @@ export async function downloadMedia(
   if (uploadsPath && rootUrlPattern) {
     const localResult = await handleLocalMedia(url, uploadsPath, rootUrlPattern, localService, { dryRun, verbose });
     if (localResult.isLocal) {
+      if (!localResult.url && opts?.requireMedia) throw new Error("Could not stage media from the configured uploads directory");
       return localResult.url;
     }
   }
@@ -463,8 +466,9 @@ export async function downloadMedia(
     return null; // No storage configured, skip download
   }
 
-  // In dry-run without remote storage configured, avoid making real network calls
-  if (dryRun && !s3Service) {
+  const hostname = URL.canParse(url) ? new URL(url).hostname.toLowerCase().replace(/\.$/, "") : "";
+  if (!allowedHosts.some(host => hostname === host || hostname.endsWith(`.${host}`))) return null;
+  if (dryRun && !s3Service && !opts?.requireMedia) {
     if (verbose) logger.info(`⏩ Dry-run without S3 configured, skipping media download: ${url}`);
     return null;
   }
@@ -498,7 +502,7 @@ export async function downloadMedia(
       logger.info(`💾 Uploading ${buffer.length} bytes as ${key} (${detected.mimeType})`);
     }
     
-    if (dryRun && s3Service) return s3Service.getPublicUrl(key);
+    if (dryRun) return (s3Service ?? localService)!.getPublicUrl(key);
 
     if (s3Service) {
       await s3Service.putObject(key, buffer, detected.mimeType);
@@ -518,6 +522,7 @@ export async function downloadMedia(
     
     return null;
   } catch (error) {
+    if (opts?.requireMedia) throw error;
     if (verbose) {
       logger.error(`❌ Failed to download media ${url}:`, error);
     } else {
@@ -950,27 +955,15 @@ export function replaceRemoteVideosWithPlaceholder(html: string, mediaUrlMap: Ma
  * @returns The normalized HTML.
  */
 function normalizeWpLists(html: string): string {
-  if (!html) return html;
-  let out = html;
-
-  // Unwrap <p> that directly wraps <ul> or <ol>
-  // Handle optional attributes on <p> and optional HTML comments between <p> and the list
-  // Example WP markup: <p class="has-text-color">
-  // <!-- wp:list --><ul>... </ul><!-- /wp:list -->
-  // </p>
-  out = out.replace(/<!--[\s\S]*?-->/g, "");
-  out = out.replace(/<p\b[^>]*>\s*(<(?:ul|ol)\b[^>]*>)/gi, "$1");
-  out = out.replace(/(<\/(?:ul|ol)>\s*)<\/p>/gi, "$1");
-
-  // Unwrap <p> inside list items: <li><p>text</p></li> -> <li>text</li>
-  // Allow attributes on the inner <p>
-  out = out.replace(/<li>\s*<p\b[^>]*>/gi, "<li>");
-  out = out.replace(/<\/p>\s*<\/li>/gi, "</li>");
-
-  // Sometimes editors place lists inside blockquotes incorrectly wrapped
-  // Keep minimal transformations: do not modify nested structures beyond above rules
-
-  return out;
+  if (!/<(?:ul|ol)\b/i.test(html)) return html;
+  // The HTML parser closes paragraphs around block-level lists and preserves excerpt markers.
+  const $ = load(html, {}, false);
+  $("li").each((_, li) => {
+    const item = $(li);
+    const children = item.children();
+    if (children.length === 1 && children.is("p")) children.replaceWith(children.contents());
+  });
+  return $.html();
 }
 
 /**
@@ -1316,9 +1309,9 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
 
     result.summary.totalItems = itemArray.length;
 
-    // Debug logging for tests
     if (verbose) {
-      logger.info("Parsed document structure:", JSON.stringify(doc, null, 2));
+      const version = doc.rss?.channel?.["wp:wxr_version"];
+      if (typeof version === "string" && /^\d{1,3}\.\d{1,3}$/.test(version)) logger.info(`WXR version ${version}`);
       logger.info("Items found:", itemArray.length);
     }
 
@@ -1430,23 +1423,23 @@ export async function importWxr(filePath: string, options: ImportOptions = {}): 
       }
       if (verbose && medias.length) logger.info(`📥 Downloading ${medias.length} media files (concurrency=${concurrency})...`);
 
+      const failures: string[] = [];
       await runWithConcurrency(medias, concurrency, async (url) => {
         try {
-          if (!result.mediaUrls.has(url)) {
-            const downloadOpts: { dryRun?: boolean; verbose?: boolean; uploadsPath?: string; rootUrlPattern?: string; budget?: typeof mediaBudget } = { dryRun, verbose, budget: mediaBudget };
-            if (uploadsPath && rootUrlPattern) {
-              downloadOpts.uploadsPath = uploadsPath;
-              downloadOpts.rootUrlPattern = rootUrlPattern;
-            }
-            const newUrl = await downloadMedia(url, s3Service, localService, normalizedAllowedHosts, downloadOpts);
-            if (newUrl) result.mediaUrls.set(url, newUrl);
-          }
-        } catch (e) {
-          if (verbose) logger.warn("Media download failed:", url, e);
+          const newUrl = await downloadMedia(url, s3Service, localService, normalizedAllowedHosts, {
+            dryRun, verbose, requireMedia: purgeBeforeImport, budget: mediaBudget,
+            ...(uploadsPath && rootUrlPattern ? { uploadsPath, rootUrlPattern } : {}),
+          });
+          if (newUrl) result.mediaUrls.set(url, newUrl);
+        } catch (error) {
+          failures.push(url);
+          if (verbose) logger.warn("Media staging failed:", url, error);
         }
-        return undefined as unknown as void;
       });
-      
+      if (purgeBeforeImport && failures.length) {
+        throw new Error(`Could not stage ${failures.length} requested media file(s); existing content was retained`);
+      }
+
       if (verbose) {
         const successCount = result.mediaUrls.size;
         const failCount = medias.length - successCount;

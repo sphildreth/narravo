@@ -63,5 +63,16 @@ jobs:
       - name: Run database migrations
         run: pnpm drizzle:migrate
 
+      - name: Cache Next.js build data
+        uses: actions/cache@v6.1.0
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Initialize build cache on a cold runner
+        run: mkdir -p .next/cache
+
       - name: Run quality checks
         run: python3 scripts/do-prechecks.py --database

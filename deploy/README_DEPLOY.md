@@ -89,7 +89,7 @@ Alternatively, use the provided `deploy/nginx.conf` with Nginx + Certbot on the 
 Both provided proxy examples reject request bodies above roughly 101 MiB before Next.js parses multipart uploads. If you customize the proxy, preserve an equivalent limit.
 
 6) Backup and restore:
-- Backup the database and uploads to a zip:
+- Export content and uploads to a ZIP. Retain a PostgreSQL dump and the MFA encryption key for full account recovery.
 ```bash
 docker compose --env-file deploy/.env -f docker-compose.prod.yml exec -T web pnpm backup --output /tmp/blog-backup.zip
 docker compose --env-file deploy/.env -f docker-compose.prod.yml cp web:/tmp/blog-backup.zip "backup-$(date +%F).zip"
@@ -97,8 +97,12 @@ unzip -t "backup-$(date +%F).zip"
 ```
 - Copy the ZIP into the container and preview the restore. Remove `--dry-run` to apply it.
 ```bash
-docker compose --env-file deploy/.env -f docker-compose.prod.yml cp backup-YYYY-MM-DD.zip web:/tmp/restore.zip
-docker compose --env-file deploy/.env -f docker-compose.prod.yml exec -T web pnpm restore /tmp/restore.zip --dry-run
+docker compose --env-file deploy/.env -f docker-compose.prod.yml exec -T web sh -ec '
+  file=$(mktemp)
+  trap '"'"'rm -f "$file"'"'"' EXIT
+  cat > "$file"
+  pnpm restore "$file" --dry-run
+' < backup-YYYY-MM-DD.zip
 ```
 
 7) Updating to a new version:

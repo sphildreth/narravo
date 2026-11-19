@@ -89,6 +89,19 @@ it.skipIf(!url)("round-trips content, taxonomy, discussions and media through a 
   }
 });
 
+it.skipIf(!url)("requires enrolled accounts to exist before their content can be migrated", async () => {
+  const [source, target] = pools as [TestPool, TestPool];
+  scope.db = drizzle(source);
+  await source.query("INSERT INTO users(email,two_factor_enabled) VALUES ('enrolled@example.test', true)");
+  const zip = await createBackup({ outputPath: path.join(dir, "enrolled.zip"), includeMedia: false });
+  scope.db = drizzle(target);
+  await expect(restoreBackup({ backupPath: zip })).rejects.toThrow("second factor");
+  expect((await target.query("SELECT id FROM users WHERE email='enrolled@example.test'")).rowCount).toBe(0);
+  await target.query("INSERT INTO users(email,two_factor_enabled) VALUES ('enrolled@example.test', true)");
+  await restoreBackup({ backupPath: zip });
+  expect((await target.query("SELECT two_factor_enabled FROM users WHERE email='enrolled@example.test'")).rows[0].two_factor_enabled).toBe(true);
+});
+
 it.skipIf(!url)("holds scheduled and deleted posts out of public reads", async () => {
   const source = pools[0]!;
   scope.db = drizzle(source);

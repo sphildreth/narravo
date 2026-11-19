@@ -1,8 +1,8 @@
-
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { importWxr, ImportOptions } from "../scripts/import-wxr";
 import * as fs from "node:fs";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { rm, mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -60,15 +60,22 @@ vi.mock("@/drizzle/schema", () => ({
 }));
 
 const TEST_ROOT_URL = "http://my-old-site.com";
-const UPLOADS_DIR = path.join(__dirname, "tmp-uploads");
-const PUBLIC_DIR = path.join(process.cwd(), "public");
-const NARRAVO_UPLOADS_BASE = path.join(PUBLIC_DIR, "uploads");
-const NARRAVO_IMPORTED_MEDIA = path.join(NARRAVO_UPLOADS_BASE, "imported-media");
-const WXR_FILE_PATH = path.join(__dirname, "fixtures", "wxr", "wxr_offline_media.xml");
+const testFiles = vi.hoisted(() => ({ root: "" }));
+vi.mock("@/lib/local-storage", async (load) => {
+  const actual = await load<typeof import("@/lib/local-storage")>();
+  return { ...actual, get localStorageService() { return new actual.LocalStorageService(path.join(testFiles.root, "destination")); } };
+});
+let UPLOADS_DIR: string;
+let NARRAVO_IMPORTED_MEDIA: string;
+let WXR_FILE_PATH: string;
 const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
 
 describe("WXR Importer - Offline Media", () => {
   beforeAll(async () => {
+    testFiles.root = fs.mkdtempSync(path.join(tmpdir(), "narravo-offline-import-"));
+    UPLOADS_DIR = path.join(testFiles.root, "source");
+    NARRAVO_IMPORTED_MEDIA = path.join(testFiles.root, "destination/imported-media");
+    WXR_FILE_PATH = path.join(testFiles.root, "fixture.xml");
     // Create temp directories
     await mkdir(path.join(UPLOADS_DIR, "2023", "01"), { recursive: true });
     await mkdir(NARRAVO_IMPORTED_MEDIA, { recursive: true });
@@ -116,10 +123,14 @@ describe("WXR Importer - Offline Media", () => {
   });
 
   afterAll(async () => {
-    // Clean up temp files and directories
-    await rm(UPLOADS_DIR, { recursive: true, force: true });
-    await rm(NARRAVO_IMPORTED_MEDIA, { recursive: true, force: true });
-    await rm(WXR_FILE_PATH, { force: true });
+    await rm(testFiles.root, { recursive: true, force: true });
+  });
+
+  it("keeps the database intact when a replacement cannot stage a requested file", async () => {
+    const { db } = await import("@/lib/db");
+    const result = await importWxr(WXR_FILE_PATH, { uploads: UPLOADS_DIR, root: `^${TEST_ROOT_URL}`, purgeBeforeImport: true });
+    expect(result.errors).toEqual([expect.objectContaining({ error: expect.stringContaining("Could not stage") })]);
+    expect(db.transaction).not.toHaveBeenCalled();
   });
 
   it("should copy local media, rewrite URL, and import the post", async () => {
@@ -129,7 +140,6 @@ describe("WXR Importer - Offline Media", () => {
       verbose: true,
       uploads: UPLOADS_DIR,
       root: `^${TEST_ROOT_URL}`,
-      purgeBeforeImport: true, // Clean slate for the test
     };
 
     const result = await importWxr(WXR_FILE_PATH, options);

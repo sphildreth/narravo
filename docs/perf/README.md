@@ -167,7 +167,7 @@ Add to your CI pipeline:
 
 ### Bundle Size Budgets
 
-- **Post Pages**: ≤90KB gzipped JS
+- **Post Pages**: ≤90 KiB gzipped initial post-specific JS. CI measures the additional scripts over the root layout of a 404 and also reports the full page total
 - **Admin Initial**: ≤180KB gzipped JS
 - **Admin Code-Split**: Lazy-loaded features
 

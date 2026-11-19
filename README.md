@@ -166,6 +166,7 @@ Restore:
 
 - `pnpm restore <backup.zip>` reads a backup archive and can run dry-run previews.
 - Restore validates file hashes and database constraints. Slug/date filters select posts and related discussions, taxonomy, reactions, redirects and media. Preview runs the same database writes in a rolled-back transaction. Version 1 archives cannot recover data they omitted. Use `--skip-media` if restoring their media separately.
+- Content archives omit login credentials. For full identity recovery, restore the PostgreSQL backup and the original MFA encryption key. To migrate content for an enrolled user, restore or enroll the destination account first.
 - Use `--skip-users` and `--skip-config` when restoring content into an existing site.
 
 ```bash

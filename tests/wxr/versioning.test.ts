@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { importWxr } from "../../scripts/import-wxr";
 import { loadFixture } from "../helpers/fixtures";
@@ -31,20 +32,8 @@ describe("WXR: Versioning & Compatibility", () => {
     const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await importWxr(fixturePath, { dryRun: true, verbose: true });
     
-    // Check if verbose logs include parsed structure (logger adds timestamp and [INFO] prefix)
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringMatching(/\[INFO\] Parsed document structure:/), expect.any(String));
-    
-    // Find the call that contains the parsed structure and check for wp:wxr_version
-    const parsedStructureCalls = consoleLogSpy.mock.calls.filter(call => 
-      typeof call[0] === 'string' && call[0].includes('Parsed document structure:')
-    );
-    expect(parsedStructureCalls.length).toBe(1);
-    
-    // The second argument should contain the structure with wp:wxr_version
-    const structureString = parsedStructureCalls[0]?.[1] as string;
-    expect(structureString).toContain("wp:wxr_version");
-    expect(structureString).toContain("1.2");
-    
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("WXR version 1.2"));
+    expect(JSON.stringify(consoleLogSpy.mock.calls)).not.toContain("Parsed document structure");
     consoleLogSpy.mockRestore();
   });
 

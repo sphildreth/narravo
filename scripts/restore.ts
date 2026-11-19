@@ -182,6 +182,9 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestorePre
           const existing = matches[0];
           if (existing?.id && row.id) ids.set(`${name}/${row.id}`, existing.id);
           if (name === "users" && options.skipUsers) { counts.toSkip++; continue; }
+          if (name === "users" && !existing && record.twoFactorEnabled === true) {
+            throw new Error("Restore or enroll the account's second factor before importing its content");
+          }
           if (existing && !row.id) { counts.toSkip++; continue; }
           if (existing) {
             delete row.id;
