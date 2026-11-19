@@ -20,7 +20,7 @@ import { createBackup } from "../scripts/backup";
 import { restoreBackup } from "../scripts/restore";
 import { importWxr } from "../scripts/import-wxr";
 import { getPostBySlug, listPosts } from "@/lib/posts";
-import { countApprovedComments, getCommentTreeForPost } from "@/lib/comments";
+import { countApprovedComments, getCommentTreeForPost, getRecentComments } from "@/lib/comments";
 import { searchPosts } from "@/lib/search";
 
 const url = process.env.DATABASE_URL;
@@ -50,6 +50,32 @@ afterAll(async () => {
   for (const name of databases) await admin.query(`DROP DATABASE "${name}"`);
   await admin.end();
   await rm(dir, { recursive: true, force: true });
+});
+
+it.skipIf(!url)("loads recent dashboard comments even when a post or author is missing", async () => {
+  const client = await pools[0]!.connect();
+  try {
+    await client.query("BEGIN");
+    scope.db = drizzle(client);
+    await client.query(`
+      WITH post AS (
+        INSERT INTO posts(slug,title,html) VALUES ('dashboard-draft','Draft','Body') RETURNING id
+      ), author AS (
+        INSERT INTO users(email,name) VALUES ('writer@example.test','Writer') RETURNING id
+      )
+      INSERT INTO comments(post_id,user_id,path,body_html,created_at)
+      SELECT post.id,author.id,'0001','On a draft',now() FROM post,author
+      UNION ALL SELECT NULL,NULL,'0002','Without a post',now() + interval '1 second'
+    `);
+    expect(await getRecentComments(2)).toMatchObject([
+      { bodyHtml: "Without a post", postSlug: null, author: { name: null } },
+      { bodyHtml: "On a draft", postSlug: "dashboard-draft", author: { name: "Writer" } },
+    ]);
+    expect(await getRecentComments(1)).toHaveLength(1);
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+  }
 });
 
 it.skipIf(!url)("round-trips content, taxonomy, discussions and media through a clean database", async () => {

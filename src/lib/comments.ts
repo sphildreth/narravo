@@ -339,7 +339,7 @@ export async function getRecentComments(limit = 5) {
     select c.id, c.body_html as "bodyHtml", c.created_at as "createdAt",
            u.name as "authorName", u.image as "authorImage",
            p.slug as "postSlug"
-    from comments c join posts p on p.id = c.post_id
+    from comments c
     left join users u on u.id = c.user_id
     left join posts p on p.id = c.post_id
     order by c.created_at desc
