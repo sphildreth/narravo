@@ -208,64 +208,32 @@ export type TiptapEditorProps = {
 };
 
 // Helper functions for Markdown round-trip
-export const fromMarkdown = async (markdown: string, editor?: Editor) => {
-  if (!editor) return;
-  
-  // Pre-load languages that appear in code blocks
-  if (typeof window !== 'undefined') {
-    const codeBlockRegex = /```(\w+)/g;
-    let match;
-    const languagesToLoad = new Set<string>();
-    while ((match = codeBlockRegex.exec(markdown)) !== null) {
-      const lang = match[1]?.toLowerCase();
-      if (lang && SUPPORTED_LANGUAGES.includes(lang as any)) {
-        languagesToLoad.add(lang);
-      }
-    }
-    
-    // Load all languages found and wait for completion
-    if (languagesToLoad.size > 0) {
-      await Promise.all([...languagesToLoad].map(lang => loadLanguage(lang)));
-    }
-  }
-  
-  // Expand shortcodes (like video) in the markdown before processing
-  const expandedMarkdown = expandShortcodes(markdown);
-  const previewReadyMarkdown = expandedMarkdown.replace(/<video(?![^>]*data-shortcode-preview)/g, '<video data-shortcode-preview="true"');
-  
-  // Check if we have HTML (expanded shortcodes) vs plain markdown
-  const hasHTML = expandedMarkdown !== markdown && expandedMarkdown.includes('<');
-  
+export const fromMarkdown = async (markdown: string, editor?: Editor, insertAtSelection = false) => {
+  if (!editor || editor.isDestroyed) return;
+  const apply = (html: string) => {
+    const clean = DOMPurify.sanitize(html);
+    if (insertAtSelection) editor.commands.insertContent(clean);
+    else editor.commands.setContent(clean);
+  };
+
+  const expanded = expandShortcodes(markdown);
+  const preview = expanded.replace(/<video(?![^>]*data-shortcode-preview)/g, '<video data-shortcode-preview="true"');
   try {
-    if (hasHTML) {
-      editor.commands.setContent(previewReadyMarkdown);
-    } else {
-      const mdStorage = (editor.storage as any)?.markdown;
-      const parser = mdStorage?.parser;
-      if (parser) {
-        const doc = parser.parse(previewReadyMarkdown);
-        editor.commands.setContent(doc as any);
-      } else {
-        const escaped = previewReadyMarkdown
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&gt;');
-        editor.commands.setContent(`<pre>${escaped}</pre>`);
-      }
-    }
-  } catch (err) {
-    logger.error('fromMarkdown failed, fallback to pre block', err);
-    const escaped = previewReadyMarkdown
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    editor.commands.setContent(`<pre>${escaped}</pre>`);
+    const parser = (editor.storage as any).markdown?.parser;
+    if (expanded !== markdown && expanded.includes("<")) apply(preview);
+    else if (parser) apply(parser.parse(preview));
+    else throw new Error("Markdown parser unavailable");
+  } catch (error) {
+    logger.error("Could not parse editor Markdown", error);
+    const escaped = preview.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    apply(`<pre>${escaped}</pre>`);
   }
-  
-  // Force a reparse with a small delay to ensure content is set first
-  setTimeout(() => {
-    reparseLowlight(editor);
-    // Note: convertMermaidCodeBlocks is removed - the auto-conversion plugin in MermaidNode.ts handles this
-  }, 100);
+
+  // Loading a grammar can finish after the author has started typing.
+  // Re-highlight the current document without replacing its content or selection.
+  const languages = new Set(Array.from(markdown.matchAll(/```(\w+)/g), match => match[1]!.toLowerCase()));
+  await Promise.all([...languages].filter(lang => SUPPORTED_LANGUAGES.some(name => name === lang)).map(loadLanguage));
+  if (!editor.isDestroyed) reparseLowlight(editor);
 };
 
 const reparseLowlight = (editor: Editor) => {
@@ -586,13 +554,7 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
         
         if (isMarkdown && typeof window !== 'undefined') {
           event.preventDefault();
-          // Parse markdown directly into editor
-          fromMarkdown(text, editor!)
-            .then(() => {
-              // Note: convertMermaidCodeBlocks removed - auto-conversion plugin handles this
-              reparseLowlight(editor!);
-            })
-            .catch(() => {/* Ignore markdown parse errors */});
+          void fromMarkdown(text, editor!, true);
           return true;
         } else if (html && typeof window !== 'undefined') {
           event.preventDefault();
@@ -659,38 +621,6 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
       } catch {/* ignore */}
     }
   }, [editor, onChange]);
-
-  // Load languages for initial markdown content
-  React.useEffect(() => {
-    if (editor && stableInitialMarkdown.current && typeof window !== 'undefined') {
-      const loadInitialLanguages = async () => {
-        const codeBlockRegex = /```(\w+)/g;
-        let match;
-        const languagesToLoad = new Set<string>();
-        
-        while ((match = codeBlockRegex.exec(stableInitialMarkdown.current)) !== null) {
-          const lang = match[1]?.toLowerCase();
-          if (lang && SUPPORTED_LANGUAGES.includes(lang as any)) {
-            languagesToLoad.add(lang);
-          }
-        }
-        
-        // Load all languages in parallel
-        if (languagesToLoad.size > 0) {
-          await Promise.all([...languagesToLoad].map(lang => loadLanguage(lang)));
-          
-          // Refresh the editor content after languages are loaded to trigger highlighting
-          const currentDoc = editor.getJSON();
-          editor.commands.setContent(currentDoc as any);
-          reparseLowlight(editor);
-        }
-      };
-      
-      loadInitialLanguages().catch(() => {/* Language loading failed */});
-    }
-  }, [editor]); // Remove initialMarkdown from dependencies
-
-
 
   // Handle sticky toolbar behavior
   React.useEffect(() => {
@@ -1357,21 +1287,12 @@ ImageBubbleMenu.displayName = 'ImageBubbleMenu';
     onChange?.(newMarkdown);
   };
 
-  // Sync editor content to markdown when switching views
-  React.useEffect(() => {
+  const switchEditorMode = (markdownMode: boolean) => {
     if (!editor) return;
-    
-    if (showMarkdownView) {
-      // Switching to markdown view - get current editor content
-      const currentMarkdown = toMarkdown(editor);
-      setMarkdownContent(currentMarkdown);
-    } else {
-      // Switching to visual view - set editor content from markdown
-      if (markdownContent) {
-        fromMarkdown(markdownContent, editor);
-      }
-    }
-  }, [showMarkdownView, editor]);
+    if (markdownMode) setMarkdownContent(toMarkdown(editor));
+    else void fromMarkdown(markdownContent, editor);
+    setShowMarkdownView(markdownMode);
+  };
 
   return (
     <div className={className}>
@@ -1386,7 +1307,7 @@ ImageBubbleMenu.displayName = 'ImageBubbleMenu';
         fileInputRef={fileInputRef}
         videoInputRef={videoInputRef}
         showMarkdownView={showMarkdownView}
-        setShowMarkdownView={setShowMarkdownView}
+        setShowMarkdownView={switchEditorMode}
       />
       <div className="border border-border rounded-b-lg bg-card relative">
         {showMarkdownView ? (

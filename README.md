@@ -158,6 +158,7 @@ Backup/export:
 - Backups embed supported files from local uploads and configured S3/R2 storage. Restore with the same public storage URLs. For larger sites, use a PostgreSQL dump plus a separate copy of the uploads and bucket.
 
 ```bash
+mkdir -p backups
 pnpm backup --output backups/blog-$(date +%F).zip --verbose
 pnpm backup --skip-media --verbose
 ```

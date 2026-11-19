@@ -6,7 +6,9 @@ test.describe('TipTap Editor E2E Tests', () => {
     await page.goto("/tiptap-demo");
     const editor = page.locator(".ProseMirror");
     await expect(editor).toContainText("Welcome to the Enhanced TipTap Editor");
-    await editor.fill("");
+    await editor.press("ControlOrMeta+a");
+    await editor.press("Backspace");
+    await expect(editor).toHaveText("");
   });
 
   test('should display toolbar with all expected buttons', async ({ page }) => {
@@ -66,6 +68,18 @@ test.describe('TipTap Editor E2E Tests', () => {
     await expect(page.locator(".ProseMirror img")).toHaveAttribute("alt", "Test alt text");
   });
 
+  test("pastes Markdown at the cursor and retains existing text", async ({ page }) => {
+    const editor = page.locator(".ProseMirror");
+    await editor.pressSequentially("Original text. ");
+    await editor.evaluate(element => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/plain", "**New text**");
+      element.dispatchEvent(new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }));
+    });
+    await expect(editor).toContainText("Original text.");
+    await expect(editor.locator("strong")).toHaveText("New text");
+  });
+
   test('should sanitize pasted content', async ({ page }) => {
     
     const editor = page.locator('.ProseMirror');
@@ -88,6 +102,6 @@ test.describe('TipTap Editor E2E Tests', () => {
 
     // Verify script tags are removed but safe content remains
     await expect(editor.locator('script')).toHaveCount(0);
-    await expect(editor.locator('p')).toContainText('Safe content');
+    await expect(editor.getByText('Safe content', { exact: true })).toBeVisible();
   });
 });
