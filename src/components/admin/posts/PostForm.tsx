@@ -760,7 +760,7 @@ export default function PostForm({ post }: PostFormProps) {
           <label className="block text-sm font-medium mb-2">
             Content *
           </label>
-          <div className="rounded-lg overflow-hidden">
+          <div className="rounded-lg overflow-clip">
             <TiptapEditor
               initialMarkdown={formData.bodyMd}
               onChange={handleEditorChange}

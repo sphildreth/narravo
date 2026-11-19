@@ -269,11 +269,9 @@ export const toMarkdown = (editor?: Editor): string => {
 export default function TiptapEditor({ initialMarkdown = "", onChange, placeholder = "Write your post...", className = "" }: TiptapEditorProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
-  const toolbarRef = useRef<HTMLDivElement | null>(null);
-  const placeholderRef = useRef<HTMLDivElement | null>(null);
   const [showMarkdownView, setShowMarkdownView] = useState(false);
   const [markdownContent, setMarkdownContent] = useState(initialMarkdown);
-  const [isToolbarSticky, setIsToolbarSticky] = useState(false);
+  const [navigationHeight, setNavigationHeight] = useState(0);
   const [imageSelected, setImageSelected] = useState(false);
   
   // Generate a unique session ID for tracking uploads before post creation
@@ -622,93 +620,67 @@ export default function TiptapEditor({ initialMarkdown = "", onChange, placehold
     }
   }, [editor, onChange]);
 
-  // Handle sticky toolbar behavior
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
+  useEffect(() => {
+    const nav = document.querySelector<HTMLElement>("nav.sticky");
+    if (!nav) return;
+    const measure = () => setNavigationHeight(nav.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, []);
 
-    const placeholderEl = placeholderRef.current;
-    const toolbarEl = toolbarRef.current;
+  // Handle markdown content changes in markdown view
+  const handleMarkdownChange = (newMarkdown: string) => {
+    setMarkdownContent(newMarkdown);
+    onChange?.(newMarkdown);
+  };
 
-    if (!placeholderEl || !toolbarEl) {
-      return;
-    }
+  const switchEditorMode = (markdownMode: boolean) => {
+    if (!editor) return;
+    if (markdownMode) setMarkdownContent(toMarkdown(editor));
+    else void fromMarkdown(markdownContent, editor);
+    setShowMarkdownView(markdownMode);
+  };
 
-    const getScrollParent = (node: HTMLElement | null): HTMLElement | Window => {
-      if (!node) return window;
-
-      let parent = node.parentElement;
-      while (parent) {
-        const { overflow, overflowY, overflowX } = window.getComputedStyle(parent);
-        if (/(auto|scroll)/.test(`${overflow}${overflowY}${overflowX}`)) {
-          return parent;
-        }
-        parent = parent.parentElement;
-      }
-
-      return window;
-    };
-
-    const scrollTarget: HTMLElement | Window = getScrollParent(placeholderEl);
-
-    // Calculate navbar height (sticky navbar with py-2.5 and content)
-    const getNavbarHeight = (): number => {
-      const navbar = document.querySelector('nav[class*="sticky"]');
-      if (navbar) {
-        return (navbar as HTMLElement).offsetHeight;
-      }
-      // Fallback: py-2.5 (20px) + estimated content height (~36px for h-9 elements)
-      return 56;
-    };
-
-    const handleScroll = () => {
-      if (!toolbarRef.current || !placeholderRef.current) return;
-
-      const navbarHeight = getNavbarHeight();
-      const topBoundary = scrollTarget === window
-        ? navbarHeight  // Position below the navbar when using window scroll
-        : Math.max(navbarHeight, (scrollTarget as HTMLElement).getBoundingClientRect().top);
-
-      const shouldStick = placeholderRef.current.getBoundingClientRect().top <= topBoundary;
-
-      if (shouldStick) {
-        placeholderRef.current.style.height = `${toolbarRef.current.offsetHeight}px`;
-        // Update toolbar position to account for navbar height when sticky
-        if (scrollTarget === window) {
-          toolbarRef.current.style.top = `${navbarHeight}px`;
-        }
-      } else {
-        placeholderRef.current.style.height = '0px';
-        toolbarRef.current.style.top = '';
-      }
-
-      setIsToolbarSticky(prev => {
-        if (prev !== shouldStick) {
-          return shouldStick;
-        }
-        return prev;
-      });
-    };
-
-    handleScroll();
-
-    scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
-
-    return () => {
-      scrollTarget.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
-      placeholderEl.style.height = '0px';
-      if (toolbarRef.current) {
-        toolbarRef.current.style.top = '';
-      }
-    };
-  }, [editor]);
+  return (
+    <div className={className}>
+      <EditorToolbar
+        editor={editor}
+        navigationHeight={navigationHeight}
+        uploadFile={uploadFile}
+        insertVideoShortcode={insertVideoShortcode}
+        fileInputRef={fileInputRef}
+        videoInputRef={videoInputRef}
+        showMarkdownView={showMarkdownView}
+        setShowMarkdownView={switchEditorMode}
+      />
+      <div className="border border-border rounded-b-lg bg-card relative">
+        {showMarkdownView ? (
+          <textarea
+            value={markdownContent}
+            onChange={(e) => handleMarkdownChange(e.target.value)}
+            placeholder={`${placeholder} (Markdown mode)`}
+            className="w-full min-h-[220px] p-4 bg-transparent border-none outline-none resize-none font-mono text-sm leading-relaxed"
+            spellCheck={false}
+          />
+        ) : (
+          <>
+            <EditorContent editor={editor} />
+            {editor && imageSelected && (
+              <ImageBubbleMenu editor={editor} />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // Toolbar component definition
 interface ToolbarProps {
   editor: Editor | null;
-  isSticky: boolean;
-  toolbarRef: React.RefObject<HTMLDivElement | null>;
+  navigationHeight: number;
   uploadFile: (file: File) => Promise<string | null>;
   insertVideoShortcode: (editor: Editor, url: string) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
@@ -719,8 +691,7 @@ interface ToolbarProps {
 
 const EditorToolbar = React.memo(({ 
   editor, 
-  isSticky, 
-  toolbarRef,
+  navigationHeight,
   uploadFile,
   insertVideoShortcode,
   fileInputRef,
@@ -829,14 +800,9 @@ const EditorToolbar = React.memo(({
     };
 
     return (
-      <div 
-        ref={toolbarRef}
-        className={`flex flex-wrap gap-2 p-2 border-b border-border bg-muted/10 transition-all duration-200 ${
-          isSticky 
-            ? 'fixed z-40 bg-card/95 backdrop-blur-sm shadow-lg' 
-            : 'rounded-t-lg'
-        }`}
-        style={isSticky ? { left: toolbarRef.current?.getBoundingClientRect().left, width: toolbarRef.current?.offsetWidth } : {}}
+      <div
+        className="sticky z-40 flex flex-wrap gap-2 rounded-t-lg border-b border-border bg-card p-2"
+        style={{ top: navigationHeight }}
       >
         {/* Text Formatting */}
         <div className="flex gap-1">
@@ -1280,53 +1246,3 @@ const ImageBubbleMenu = ({ editor }: ImageBubbleMenuProps) => {
 };
 
 ImageBubbleMenu.displayName = 'ImageBubbleMenu';
-
-  // Handle markdown content changes in markdown view
-  const handleMarkdownChange = (newMarkdown: string) => {
-    setMarkdownContent(newMarkdown);
-    onChange?.(newMarkdown);
-  };
-
-  const switchEditorMode = (markdownMode: boolean) => {
-    if (!editor) return;
-    if (markdownMode) setMarkdownContent(toMarkdown(editor));
-    else void fromMarkdown(markdownContent, editor);
-    setShowMarkdownView(markdownMode);
-  };
-
-  return (
-    <div className={className}>
-      {/* Placeholder div to prevent layout jumps when toolbar becomes sticky */}
-      <div ref={placeholderRef} className="transition-all duration-200" />
-      <EditorToolbar 
-        editor={editor} 
-        isSticky={isToolbarSticky} 
-        toolbarRef={toolbarRef}
-        uploadFile={uploadFile}
-        insertVideoShortcode={insertVideoShortcode}
-        fileInputRef={fileInputRef}
-        videoInputRef={videoInputRef}
-        showMarkdownView={showMarkdownView}
-        setShowMarkdownView={switchEditorMode}
-      />
-      <div className="border border-border rounded-b-lg bg-card relative">
-        {showMarkdownView ? (
-          <textarea
-            value={markdownContent}
-            onChange={(e) => handleMarkdownChange(e.target.value)}
-            placeholder={`${placeholder} (Markdown mode)`}
-            className="w-full min-h-[220px] p-4 bg-transparent border-none outline-none resize-none font-mono text-sm leading-relaxed"
-            spellCheck={false}
-          />
-        ) : (
-          <>
-            <EditorContent editor={editor} />
-            {editor && imageSelected && (
-              <ImageBubbleMenu editor={editor} />
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
