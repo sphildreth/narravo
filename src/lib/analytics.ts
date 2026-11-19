@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { publicPostCondition } from "./post-visibility";
 import { db } from "./db";
 import { posts, postDailyViews, postViewEvents, pageViewEvents, pageDailyViews } from "@/drizzle/schema";
 import { sql, eq, gte, desc, and, sum, inArray } from "drizzle-orm";
@@ -486,7 +487,7 @@ export async function getTrendingPosts({ days = 7, limit = 10 }: { days?: number
         and(
           gte(postDailyViews.day, startDateStr),
           // Only include published posts
-          sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`
+          publicPostCondition(sql`posts`)
         )
       )
       .groupBy(posts.id, posts.slug, posts.title, posts.viewsTotal)
@@ -506,7 +507,7 @@ export async function getTrendingPosts({ days = 7, limit = 10 }: { days?: number
     const rows = await db
       .select({ id: posts.id, slug: posts.slug, title: posts.title, totalViews: posts.viewsTotal })
       .from(posts)
-      .where(sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`)
+      .where(publicPostCondition(sql`posts`))
       .orderBy(desc(posts.viewsTotal))
       .limit(limit);
 
@@ -842,7 +843,7 @@ export async function getSiteAnalyticsSummary({ days = 7, topN = 5 }: { days?: n
   const totalRows = await db
     .select({ total: sum(posts.viewsTotal) })
     .from(posts)
-    .where(sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`);
+    .where(publicPostCondition(sql`posts`));
   const totalPostViewsAllTime = Number(totalRows[0]?.total || 0);
 
   // Recent post views in last N days (sum of daily views)
@@ -893,7 +894,7 @@ export async function getSiteAnalyticsSummary({ days = 7, topN = 5 }: { days?: n
       .where(
         and(
           sql`${postDailyViews.day} >= ${startDateStr}`,
-          sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`
+          publicPostCondition(sql`posts`)
         )
       )
       .groupBy(posts.id, posts.slug, posts.title, posts.viewsTotal)
@@ -913,7 +914,7 @@ export async function getSiteAnalyticsSummary({ days = 7, topN = 5 }: { days?: n
     const rows = await db
       .select({ id: posts.id, slug: posts.slug, title: posts.title, totalViews: posts.viewsTotal })
       .from(posts)
-      .where(sql`${posts.publishedAt} IS NOT NULL AND ${posts.publishedAt} <= NOW()`)
+      .where(publicPostCondition(sql`posts`))
       .orderBy(desc(posts.viewsTotal))
       .limit(topN);
   topPosts = rows.map((r: any) => ({ id: r.id, slug: r.slug, title: r.title, totalViews: r.totalViews, viewsLastNDays: 0 }));

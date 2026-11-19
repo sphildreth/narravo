@@ -36,6 +36,16 @@ interface PostFormProps {
   post?: Post;
 }
 
+function imagePreviewUrl(value: string | null | undefined) {
+  if (!value) return undefined;
+  if (value.startsWith("/uploads/")) return value;
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+  } catch { /* The URL input may be incomplete while typing. */ }
+  return undefined;
+}
+
 export default function PostForm({ post }: PostFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -656,7 +666,7 @@ export default function PostForm({ post }: PostFormProps) {
             {(featuredImagePreview || formData.featuredImageUrl) && (
               <div className="relative inline-block">
                 <img
-                  src={featuredImagePreview || formData.featuredImageUrl}
+                  src={featuredImagePreview || imagePreviewUrl(formData.featuredImageUrl)}
                   alt={formData.featuredImageAlt || "Featured image preview"}
                   className="max-w-sm h-32 object-cover rounded-md border border-border"
                 />

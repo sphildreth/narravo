@@ -26,8 +26,8 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 // Mock the import-wxr script
-const importWxrMock = vi.fn();
-vi.mock("../../../scripts/import-wxr", () => ({
+const importWxrMock = vi.hoisted(() => vi.fn());
+vi.mock("../../scripts/import-wxr", () => ({
   importWxr: importWxrMock,
 }));
 

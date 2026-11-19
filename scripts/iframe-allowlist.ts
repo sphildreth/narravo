@@ -45,9 +45,12 @@ const providerFromHost = (pattern: string): IframeProvider | null => {
     const host = pattern.replace(/^https?:\/\//, "");
     const star = host.startsWith("*.");
     const bare = star ? host.slice(2) : host;
-    const escaped = bare.replace(/\./g, "\\.");
-    const re = star ? new RegExp(`^(?:[a-z0-9-]+\\.)?${escaped}$`) : new RegExp(`^${escaped}$`);
-    if (/youtube/.test(bare)) {
+    const patterns: Record<string, RegExp> = {
+      "youtube.com": /^(?:[a-z0-9-]+\.)*youtube\.com$/i,
+      "youtube-nocookie.com": /^(?:[a-z0-9-]+\.)*youtube-nocookie\.com$/i,
+    };
+    const re = patterns[bare];
+    if (re) {
       return {
         name: "YouTube",
         hostPatterns: [re],
@@ -65,13 +68,7 @@ const providerFromHost = (pattern: string): IframeProvider | null => {
         }
       } satisfies IframeProvider;
     }
-    // Unknown host patterns: allow only strict https src with minimal attrs (conservative default)
-    return {
-      name: `Host:${bare}`,
-      hostPatterns: [re],
-      allowedAttrs: [...DEFAULT_IFRAME_ATTRS],
-      httpsOnly: true,
-    } satisfies IframeProvider;
+    return null;
   } catch {
     return null;
   }
@@ -157,7 +154,7 @@ export function validateAndProtectIframes(
   providers: IframeProvider[] = defaultProviders
 ): { html: string; placeholders: ProtectedIframe[] } {
   const placeholders: ProtectedIframe[] = [];
-  if (!html || !html.includes("<iframe")) return { html, placeholders };
+  if (!html || !/<iframe/i.test(html)) return { html, placeholders };
 
   const iframeRe = /<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi;
   const out = html.replace(iframeRe, (tag) => {

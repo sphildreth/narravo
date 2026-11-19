@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { publicPostCondition } from "./post-visibility";
 /**
  * lib/search.ts — Public post search (MVP)
  */
@@ -50,7 +51,7 @@ export async function searchPosts(input: { q: string; page?: number; pageSize?: 
         + case when p.excerpt ilike ${qLike} then 1 else 0 end
       ) as score
     from posts p
-    where p.published_at is not null
+    where ${publicPostCondition()}
       and (
         p.title ilike ${qLike}
         or p.body_html ilike ${qLike}

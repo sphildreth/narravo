@@ -91,11 +91,14 @@ Both provided proxy examples reject request bodies above roughly 101 MiB before 
 6) Backup and restore:
 - Backup the database and uploads to a zip:
 ```bash
-docker compose --env-file deploy/.env -f docker-compose.prod.yml exec web pnpm -s backup > backup-$(date +%F).zip
+docker compose --env-file deploy/.env -f docker-compose.prod.yml exec -T web pnpm backup --output /tmp/blog-backup.zip
+docker compose --env-file deploy/.env -f docker-compose.prod.yml cp web:/tmp/blog-backup.zip "backup-$(date +%F).zip"
+unzip -t "backup-$(date +%F).zip"
 ```
-- Restore from a backup zip (pipe the file into the container):
+- Copy the ZIP into the container and preview the restore. Remove `--dry-run` to apply it.
 ```bash
-cat backup-YYYY-MM-DD.zip | docker compose --env-file deploy/.env -f docker-compose.prod.yml exec -T web pnpm -s restore
+docker compose --env-file deploy/.env -f docker-compose.prod.yml cp backup-YYYY-MM-DD.zip web:/tmp/restore.zip
+docker compose --env-file deploy/.env -f docker-compose.prod.yml exec -T web pnpm restore /tmp/restore.zip --dry-run
 ```
 
 7) Updating to a new version:
@@ -147,7 +150,7 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt -y install nodejs
 node --version
 sudo corepack enable
-sudo corepack prepare pnpm@11.5.2 --activate
+sudo corepack prepare pnpm@12.21.0 --activate
 pnpm --version
 ```
 
@@ -235,15 +238,15 @@ sudo -u narravo -H bash -lc "cd /opt/narravo && pnpm -s seed:config && pnpm -s s
 
 10) Backups and updates:
 ```bash
-# Backup (creates a zip on stdout)
-sudo -u narravo -H bash -lc "cd /opt/narravo && pnpm -s backup" > backup-$(date +%F).zip
+# Write and verify an archive in the application user’s home directory
+sudo -u narravo -H bash -lc "cd /opt/narravo && pnpm backup --output ~/backup-$(date +%F).zip && unzip -t ~/backup-$(date +%F).zip"
 
 # Update to latest code and rebuild
 sudo -u narravo -H bash -lc "cd /opt/narravo && git pull && pnpm -s i --frozen-lockfile && pnpm -s drizzle:migrate && pnpm -s build"
 sudo systemctl restart narravo
 
 # Restore (from a local zip file)
-sudo -u narravo -H bash -lc "cd /opt/narravo && pnpm -s restore" < backup-YYYY-MM-DD.zip
+sudo -u narravo -H bash -lc "cd /opt/narravo && pnpm restore ~/backup-YYYY-MM-DD.zip --dry-run"
 ```
 
 Security notes:

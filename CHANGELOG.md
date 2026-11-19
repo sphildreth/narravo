@@ -6,6 +6,10 @@ This file records notable project changes. It follows the
 
 ## [Unreleased]
 
+- Restore related content and media atomically in the database, verify archive checksums, and surface missing or conflicting data. Correct the production backup and restore commands.
+- Hold scheduled and restricted posts out of public queries. Validate WordPress replacements before swapping existing content, and keep media previews read-only.
+- Update runtime and development dependencies, harden HTML handling, and enforce performance and security checks.
+
 ## [1.0.5] - 2026-10-24
 
 ### Fixed

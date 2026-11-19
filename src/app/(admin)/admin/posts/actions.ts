@@ -385,36 +385,38 @@ export async function createPost(formData: FormData) {
 
     // Create post
     logger.info(`[createPost] Creating post with slug: ${finalSlug}, featuredImageUrl: ${finalFeaturedUrl || 'none'}`);
-    const [newPost] = await db
-      .insert(posts)
-      .values({
-        title,
-        slug: finalSlug,
-        excerpt,
-        bodyMd: fromMd ? bodyMd! : null,
-        bodyHtml: fromMd ? renderedHtml : null,
-        html: renderedHtml, // keep legacy column in sync
-        publishedAt: publishedAt ? new Date(publishedAt) : null,
-        featuredImageUrl: finalFeaturedUrl,
-        featuredImageAlt: featuredImageAlt || null,
-      })
-      .returning();
-    
-    if (!newPost) {
-      throw new Error("Failed to create post");
-    }
-    logger.info(`[createPost] Post created successfully with ID: ${newPost.id}`);
-    logger.info(`[createPost] Post created successfully with ID: ${newPost.id}`);
-    
-    // Add tags and category after post creation
-    if (tagNames.length > 0) {
-      await setPostTags(newPost.id, tagNames);
-    }
-    
-    if (categoryName) {
-      await setPostCategory(newPost.id, categoryName);
-    }
-    
+    const newPost = await db.transaction(async (tx: typeof db) => {
+      const [newPost] = await tx
+        .insert(posts)
+        .values({
+          title,
+          slug: finalSlug,
+          excerpt,
+          bodyMd: fromMd ? bodyMd! : null,
+          bodyHtml: fromMd ? renderedHtml : null,
+          html: renderedHtml, // keep legacy column in sync
+          publishedAt: publishedAt ? new Date(publishedAt) : null,
+          featuredImageUrl: finalFeaturedUrl,
+          featuredImageAlt: featuredImageAlt || null,
+        })
+        .returning();
+
+      if (!newPost) {
+        throw new Error("Failed to create post");
+      }
+      logger.info(`[createPost] Post created successfully with ID: ${newPost.id}`);
+      logger.info(`[createPost] Post created successfully with ID: ${newPost.id}`);
+
+      // Add tags and category after post creation
+      if (tagNames.length > 0) {
+        await setPostTags(newPost.id, tagNames, tx);
+      }
+
+      if (categoryName) {
+        await setPostCategory(newPost.id, categoryName, tx);
+      }
+      return newPost;
+    });
     // Commit any temporary uploads referenced in the markdown
     await commitUploadsForPost(newPost.id, bodyMd || html || "");
     
@@ -542,38 +544,41 @@ export async function updatePost(formData: FormData) {
 
     // Update post
     logger.info(`[updatePost] Updating post ${id} with slug: ${slug}, featuredImageUrl: ${finalFeaturedUrl || 'none'}`);
-    const [updatedPost] = await db
-      .update(posts)
-      .set({
-        title,
-        slug,
-        excerpt,
-        bodyMd: fromMd ? bodyMd! : null,
-        bodyHtml: fromMd ? renderedHtml : null,
-        html: renderedHtml,
-        publishedAt: publishedAt ? new Date(publishedAt) : null,
-        updatedAt: new Date(),
-        featuredImageUrl: finalFeaturedUrl,
-        featuredImageAlt: featuredImageAlt || null,
-      })
-      .where(eq(posts.id, id))
-      .returning();
-    
-    if (!updatedPost) {
-      throw new Error("Failed to update post");
-    }
-    logger.info(`[updatePost] Post ${id} updated successfully`);
-    
-    // Update tags and category
-    await setPostTags(id, tagNames);
-    
-    if (categoryName) {
-      await setPostCategory(id, categoryName);
-    } else {
-      // Clear category if none selected
-      await setPostCategory(id);
-    }
-    
+    const updatedPost = await db.transaction(async (tx: typeof db) => {
+      const [updatedPost] = await tx
+        .update(posts)
+        .set({
+          title,
+          slug,
+          excerpt,
+          bodyMd: fromMd ? bodyMd! : null,
+          bodyHtml: fromMd ? renderedHtml : null,
+          html: renderedHtml,
+          publishedAt: publishedAt ? new Date(publishedAt) : null,
+          updatedAt: new Date(),
+          featuredImageUrl: finalFeaturedUrl,
+          featuredImageAlt: featuredImageAlt || null,
+        })
+        .where(and(eq(posts.id, id), sql`date_trunc('milliseconds', ${posts.updatedAt}) = ${updatedAt}::timestamptz`))
+        .returning();
+
+      if (!updatedPost) {
+        return null;
+      }
+      logger.info(`[updatePost] Post ${id} updated successfully`);
+
+      // Update tags and category
+      await setPostTags(id, tagNames, tx);
+
+      if (categoryName) {
+        await setPostCategory(id, categoryName, tx);
+      } else {
+        // Clear category if none selected
+        await setPostCategory(id, undefined, tx);
+      }
+      return updatedPost;
+    });
+    if (!updatedPost) return { error: "Post has been modified by another user. Please reload and try again." };
     // Commit any new temporary uploads referenced in the markdown
     await commitUploadsForPost(id, bodyMd || html || "");
     
@@ -640,7 +645,7 @@ export async function performBulkAction(formData: FormData) {
         const publishResults = await db
           .update(posts)
           .set({ publishedAt: new Date(), updatedAt: new Date() })
-          .where(sql`id = ANY(${ids}) AND published_at IS NULL`)
+          .where(and(inArray(posts.id, ids), isNull(posts.publishedAt)))
           .returning({ id: posts.id });
         updated = publishResults.length;
         break;
@@ -649,7 +654,7 @@ export async function performBulkAction(formData: FormData) {
         const unpublishResults = await db
           .update(posts)
           .set({ publishedAt: null, updatedAt: new Date() })
-          .where(sql`id = ANY(${ids}) AND published_at IS NOT NULL`)
+          .where(and(inArray(posts.id, ids), isNotNull(posts.publishedAt)))
           .returning({ id: posts.id });
         updated = unpublishResults.length;
         break;
@@ -657,7 +662,7 @@ export async function performBulkAction(formData: FormData) {
       case "delete":
         const deleteResults = await db
           .delete(posts)
-          .where(sql`id = ANY(${ids})`)
+          .where(inArray(posts.id, ids))
           .returning({ id: posts.id });
         updated = deleteResults.length;
         break;

@@ -1,3 +1,4 @@
+import { decodeHtmlEntities } from "@/lib/html-entities";
 import * as cheerio from "cheerio";
 import DOMPurify from "dompurify";
 
@@ -71,11 +72,7 @@ export function normalizeHtml(html: string): string {
   // would auto-balance tags (e.g., turning <div> into <div></div>), which some tests
   // explicitly do not want.
   if (!/[<>]/.test(normalized)) {
-    const textOnly = normalized
-      .replace(/&nbsp;/g, ' ') // normalize NBSP to space first
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>');
+    const textOnly = decodeHtmlEntities(normalized);
     // Trim to remove leading/trailing spaces introduced by NBSP normalization
     return textOnly.trim();
   }
@@ -219,11 +216,7 @@ export function normalizeHtml(html: string): string {
   // Serialize from body to ensure we return the element HTML
   let output = (finalCleanup.root().find('body').html() || '').trim();
   // Decode common HTML entities once (post-processing) to satisfy helper expectations
-  output = output
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
+  output = decodeHtmlEntities(output);
   return output;
 }
 

@@ -9,12 +9,6 @@ allowBuilds:
 
 minimumReleaseAge: 0
 
-ignoredBuiltDependencies:
-  - esbuild
-  - puppeteer
-  - sharp
-  - unrs-resolver
-
 peerDependencyRules:
   allowedVersions:
     # @auth/core/next-auth still declare @simplewebauthn ^9 peers; the app uses
@@ -28,7 +22,7 @@ peerDependencyRules:
 
 overrides:
   esbuild: ">=0.25.0"
-  postcss: "8.5.28"
+  postcss: "8.5.33"
   # qs < 6.16.0 is reachable only through @lhci/cli > express (dev-only), but the
   # DoS/prototype advisories still fail `pnpm audit`; pin the patched line.
   qs: ">=6.16.0"
@@ -41,10 +35,8 @@ overrides:
   # basic-ftp <=6.2.0 is vulnerable to CPU DoS in Client.list() (GHSA-c475-qrg2-pj4r).
   # Dev-only: arrives through @lhci/cli > lighthouse > puppeteer-core > proxy-agent
   # > get-uri (which declares ^5.3.1), and the FTP code paths are never exercised.
-  basic-ftp: ">=6.2.1"
-  vite: "$vite"
-  lighthouse: "13.4.1"
+  basic-ftp: ">=6.2.4"
+  vite: "8.3.8"
+  "minimatch@>=7 <11.0.1": "11.0.1"
   "@puppeteer/browsers": ">=3.0.0"
   proxy-agent: ">=8.0.2"
-  uuid: "11.1.1"
-  yaml: "2.9.0"

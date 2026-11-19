@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { publicPostCondition } from "./post-visibility";
 
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
@@ -9,11 +10,11 @@ import slugify from "slugify";
 /**
  * Create or get existing tag by name
  */
-export async function upsertTag(name: string): Promise<TagDTO> {
+export async function upsertTag(name: string, connection: typeof db = db): Promise<TagDTO> {
   const slug = slugify(name.toLowerCase(), { strict: true });
   
   // Try to find existing tag first
-  const existing = await db
+  const existing = await connection
     .select()
     .from(tags)
     .where(sql`lower(name) = ${name.toLowerCase()}`)
@@ -30,7 +31,7 @@ export async function upsertTag(name: string): Promise<TagDTO> {
   }
   
   // Create new tag
-  const result = await db.insert(tags).values({
+  const result = await connection.insert(tags).values({
     name: name.trim(),
     slug,
   }).returning();
@@ -47,11 +48,11 @@ export async function upsertTag(name: string): Promise<TagDTO> {
 /**
  * Create or get existing category by name
  */
-export async function upsertCategory(name: string): Promise<CategoryDTO> {
+export async function upsertCategory(name: string, connection: typeof db = db): Promise<CategoryDTO> {
   const slug = slugify(name.toLowerCase(), { strict: true });
   
   // Try to find existing category first
-  const existing = await db
+  const existing = await connection
     .select()
     .from(categories)
     .where(sql`lower(name) = ${name.toLowerCase()}`)
@@ -68,7 +69,7 @@ export async function upsertCategory(name: string): Promise<CategoryDTO> {
   }
   
   // Create new category
-  const result = await db.insert(categories).values({
+  const result = await connection.insert(categories).values({
     name: name.trim(),
     slug,
   }).returning();
@@ -126,19 +127,19 @@ export async function getPostCategory(categoryId: string): Promise<CategoryDTO |
 /**
  * Add tags to a post
  */
-export async function addTagsToPost(postId: string, tagNames: string[]): Promise<void> {
+export async function addTagsToPost(postId: string, tagNames: string[], connection: typeof db = db): Promise<void> {
   for (const tagName of tagNames) {
-    const tag = await upsertTag(tagName);
+    const tag = await upsertTag(tagName, connection);
     
     // Check if relationship already exists
-    const existing = await db
+    const existing = await connection
       .select()
       .from(postTags)
       .where(sql`post_id = ${postId} and tag_id = ${tag.id}`)
       .limit(1);
       
     if (existing.length === 0) {
-      await db.insert(postTags).values({
+      await connection.insert(postTags).values({
         postId,
         tagId: tag.id,
       });
@@ -162,7 +163,7 @@ export async function getPostsByTag(
     inner join post_tags pt on pt.post_id = p.id
     inner join tags t on t.id = pt.tag_id
     where t.slug = ${tagSlug}
-      and p.published_at is not null
+      and ${publicPostCondition()}
       ${c ? sql`and (p.published_at, p.id) < (${c.publishedAt}::timestamptz, ${c.id}::uuid)` : sql``}
     order by p.published_at desc nulls last, p.id desc
     limit ${limit + 1}
@@ -200,7 +201,7 @@ export async function getPostsByCategory(
     from posts p
     inner join categories c on c.id = p.category_id
     where c.slug = ${categorySlug}
-      and p.published_at is not null
+      and ${publicPostCondition()}
       ${c ? sql`and (p.published_at, p.id) < (${c.publishedAt}::timestamptz, ${c.id}::uuid)` : sql``}
     order by p.published_at desc nulls last, p.id desc
     limit ${limit + 1}
@@ -304,33 +305,33 @@ export async function getAllCategories(): Promise<CategoryDTO[]> {
 /**
  * Remove all tags from a post and optionally add new ones
  */
-export async function setPostTags(postId: string, tagNames: string[]): Promise<void> {
+export async function setPostTags(postId: string, tagNames: string[], connection: typeof db = db): Promise<void> {
   // Remove existing tags for this post
-  await db
+  await connection
     .delete(postTags)
     .where(sql`post_id = ${postId}`);
     
   // Add new tags if provided
   if (tagNames.length > 0) {
-    await addTagsToPost(postId, tagNames);
+    await addTagsToPost(postId, tagNames, connection);
   }
 }
 
 /**
  * Set the category for a post
  */
-export async function setPostCategory(postId: string, categoryName?: string): Promise<void> {
+export async function setPostCategory(postId: string, categoryName?: string, connection: typeof db = db): Promise<void> {
   let categoryId: string | null = null;
   
   if (categoryName && categoryName.trim()) {
-    const category = await upsertCategory(categoryName.trim());
+    const category = await upsertCategory(categoryName.trim(), connection);
     categoryId = category.id;
   }
   
   // Update the post's category
-  await db.execute(sql`
+  await connection.execute(sql`
     UPDATE posts 
-    SET category_id = ${categoryId}, updated_at = now() 
+    SET category_id = ${categoryId}
     WHERE id = ${postId}
   `);
 }

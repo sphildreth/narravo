@@ -81,7 +81,7 @@ describe("WXR Import", () => {
         html: "<p>Test content</p>",
         excerpt: "Test excerpt",
         author: "admin",
-        publishedAt: new Date("2024-01-01 12:00:00"),
+        publishedAt: new Date("2024-01-01T12:00:00Z"),
         originalUrl: "https://example.com/test-post/",
         featuredImageId: undefined,
         categories: [{ name: "Technology", slug: "technology" }],

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { decodeHtmlEntities } from "@/lib/html-entities";
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 
@@ -344,15 +345,7 @@ This is a single mermaid diagram that has a subgraph, with that it should appear
       .replace(/"/g, '&quot;');
 
     // Verify the decoding function works correctly
-    const decodedDiagram = encodedDiagram
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&#x27;/g, "'")
-      .replace(/&#x2F;/g, "/")
-      .replace(/&nbsp;/g, " ");
+    const decodedDiagram = decodeHtmlEntities(encodedDiagram);
 
     expect(decodedDiagram).toBe(complexSubgraphDiagram);
     

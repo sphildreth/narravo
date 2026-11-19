@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import "dotenv/config";
+import { randomInt } from "node:crypto";
 import { randomUUID } from "crypto";
 import { Client } from "pg";
 import { sql } from "drizzle-orm";
@@ -38,7 +39,7 @@ function toSlug(value: string, options: SlugOptions = {}) {
 }
 
 function pick<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]!;
+  return arr[randomInt(arr.length)]!;
 }
 
 function buildPosts() {

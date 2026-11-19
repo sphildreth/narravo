@@ -31,15 +31,12 @@ const DEFAULT_CONFIG = {
     },
     {
       method: 'GET' as const,
-      path: '/admin/dashboard',
-      weight: 20,
-      headers: {
-        'Cookie': 'authjs.session-token=test-admin-token'
-      }
+      path: '/feed.xml',
+      weight: 20
     },
     {
       method: 'GET' as const,
-      path: '/api/metrics/view',
+      path: '/healthz',
       weight: 10
     }
   ]
@@ -68,7 +65,7 @@ async function runLoadTest(options: Record<string, any> = {}) {
     logger.info('====================');
     logger.info(`Requests/sec: ${result.requests.average}`);
     logger.info(`Latency p50: ${(result.latency as any).p50 || result.latency.mean}ms`);
-    logger.info(`Latency p95: ${(result.latency as any).p95 || result.latency.max}ms`);
+    logger.info(`Latency p95: ${result.latency.p97_5}ms`);
     logger.info(`Latency p99: ${(result.latency as any).p99 || result.latency.max}ms`);
     logger.info(`Throughput: ${(result.throughput.average / 1024 / 1024).toFixed(2)} MB/sec`);
     logger.info(`Errors: ${result.errors}`);
@@ -77,11 +74,11 @@ async function runLoadTest(options: Record<string, any> = {}) {
     // Check against SLO targets
     const p95Target = 400; // 400ms p95 target for TTFB
     const errorRateTarget = 0.01; // 1% error rate max
-    const errorRate = result.errors / result.requests.total;
+    const errorRate = result.requests.total ? (result.errors + result.non2xx) / result.requests.total : 1;
     
     logger.info('\n🎯 SLO Validation:');
     logger.info('==================');
-    const p95Latency = (result.latency as any).p95 || result.latency.max;
+    const p95Latency = result.latency.p97_5;
     logger.info(`P95 Latency: ${p95Latency}ms (target: <${p95Target}ms) ${p95Latency <= p95Target ? '✅' : '❌'}`);
     logger.info(`Error Rate: ${(errorRate * 100).toFixed(2)}% (target: <${(errorRateTarget * 100).toFixed(1)}%) ${errorRate <= errorRateTarget ? '✅' : '❌'}`);
     

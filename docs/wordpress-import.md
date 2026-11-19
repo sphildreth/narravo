@@ -20,7 +20,7 @@ Choose which WordPress post statuses to import:
 ### Import Options
 - **Dry run**: Preview the import without making any changes
 - **Skip media downloads**: Import content without downloading media files
-- **Purge all data before import**: ⚠️ **DESTRUCTIVE** - Removes all existing posts, comments, categories, tags, redirects, and uploaded files
+- **Replace existing content**: Validate the new export and replace posts, discussions, taxonomy and redirects together.
 
 ### Advanced Options
 - **Concurrency**: Number of simultaneous media downloads (1-10, default: 4)
@@ -153,7 +153,7 @@ pnpm wxr:import -- path=./export.xml allowedHosts=example.com,cdn.example.com --
 - `--dry-run`: Preview without making changes
 - `--skip-media`: Skip media downloads
 - `--rebuild-excerpts`: Regenerate all excerpts
-- `--purge`: ⚠️ **Delete all posts, comments, categories, tags, redirects, and uploaded files**
+- `--purge`: Replace content in a transaction and retain existing upload files.
 - `uploads=<path>`: Local uploads directory for offline import
 - `root=<pattern>`: Regex pattern for old site URL (required with uploads)
 - `allowedHosts=<hosts>`: Required, comma-separated HTTP(S) host allowlist for remote media. An empty allowlist disables remote downloads. Hosts resolving to private, loopback, link-local, metadata, multicast, reserved, or carrier-grade NAT addresses are rejected; only supported raster/video bytes are published.
@@ -189,3 +189,5 @@ pnpm wxr:import -- path=./export.xml allowedHosts=example.com,cdn.example.com --
 4. **Incremental**: For large sites, consider importing in smaller batches
 5. **Monitoring**: Watch import progress and error logs closely
 6. **Cleanup**: Remove temporary files after completed imports
+
+Replacement imports validate the export and commit all selected posts together. Old upload files stay available for recovery and shared links. Dated drafts, pending posts, private posts and password-protected posts are stored as drafts. Preview lists their titles and does not upload media.

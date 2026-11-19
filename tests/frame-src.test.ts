@@ -52,14 +52,14 @@ describe("frame-src", () => {
   describe("provider validation", () => {
     it("should include YouTube provider", () => {
       const hasYouTube = FRAME_SRC_HOSTS.some((host) =>
-        host.includes("youtube.com")
+        host === "https://*.youtube.com"
       );
       expect(hasYouTube).toBe(true);
     });
 
     it("should include YouTube privacy-enhanced mode (no-cookie)", () => {
       const hasYouTubeNoCookie = FRAME_SRC_HOSTS.some((host) =>
-        host.includes("youtube-nocookie.com")
+        host === "https://*.youtube-nocookie.com"
       );
       expect(hasYouTubeNoCookie).toBe(true);
     });

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { publicPostCondition } from "./post-visibility";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
@@ -45,7 +46,7 @@ export async function listArchiveMonths(): Promise<ArchiveMonth[]> {
            extract(month from p.published_at)::int as month,
            count(*)::int as count
       from posts p
-     where p.published_at is not null
+     where ${publicPostCondition()}
      group by 1,2
      order by 1 desc, 2 desc
   `);
@@ -59,7 +60,7 @@ export async function getPostsByYear(year: number, page: number = 1, pageSize: n
   const res: any = await db.execute(sql`
     select p.slug, p.title, p.published_at as "publishedAt"
       from posts p
-     where p.published_at is not null
+     where ${publicPostCondition()}
        and extract(year from p.published_at) = ${year}
      order by p.published_at desc nulls last, p.id desc
      limit ${limit} offset ${offset}
@@ -74,7 +75,7 @@ export async function getPostsByYearAndMonth(year: number, month: number, page: 
   const res: any = await db.execute(sql`
     select p.slug, p.title, p.published_at as "publishedAt"
       from posts p
-     where p.published_at is not null
+     where ${publicPostCondition()}
        and extract(year from p.published_at) = ${year}
        and extract(month from p.published_at) = ${month}
      order by p.published_at desc nulls last, p.id desc
@@ -88,7 +89,7 @@ export async function getPostCountByYearAndMonth(year: number, month: number): P
   const res: any = await db.execute(sql`
     select count(*)::int as c
       from posts p
-     where p.published_at is not null
+     where ${publicPostCondition()}
        and extract(year from p.published_at) = ${year}
        and extract(month from p.published_at) = ${month}
   `);
@@ -99,7 +100,7 @@ export async function getPostCountByYear(year: number): Promise<number> {
   const res: any = await db.execute(sql`
     select count(*)::int as c
       from posts p
-     where p.published_at is not null
+     where ${publicPostCondition()}
        and extract(year from p.published_at) = ${year}
   `);
   return Number(res.rows?.[0]?.c ?? 0);

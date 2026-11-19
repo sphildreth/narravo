@@ -70,7 +70,7 @@ Wish me luck getting Rusty!
           html: expect.stringContaining("With the continued impressive industry reception"),
           excerpt: undefined,
           author: "steven",
-          publishedAt: new Date("2022-10-26 18:39:40"),
+          publishedAt: new Date("2022-10-26T18:39:40Z"),
           originalUrl: "https://www.shildreth.com/2022/10/26/getting-rusty/",
           featuredImageId: undefined,
           categories: [{ name: "development", slug: "development" }],

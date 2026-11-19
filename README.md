@@ -9,17 +9,17 @@ Narravo is a self-hostable blog engine built with Next.js App Router, React, Typ
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 ![Version](https://img.shields.io/badge/version-1.0.5-blue)
 ![Node](https://img.shields.io/badge/Node.js-22.x-339933?logo=node.js&logoColor=white)
-![pnpm](https://img.shields.io/badge/pnpm-11.5.2-f69220?logo=pnpm&logoColor=white)
+![pnpm](https://img.shields.io/badge/pnpm-12.21.0-f69220?logo=pnpm&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.3-61dafb?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue?logo=typescript&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-7.0-blue?logo=typescript&logoColor=white)
 
 Demo site: [Knowledge Tome](https://www.shildreth.com)
 
 ## Features
 
 - Next.js 16 App Router with Server Components, Server Actions, ISR, and route handlers.
-- React 19 and TypeScript 6 with strict type checking.
+- React 19 and TypeScript 7 with strict type checking. ESLint uses the TypeScript 6 compatibility API.
 - PostgreSQL 16 with Drizzle ORM migrations and type-safe queries.
 - Auth.js OAuth login with GitHub and Google provider support.
 - Admin allowlist through `ADMIN_EMAILS`.
@@ -35,8 +35,8 @@ Demo site: [Knowledge Tome](https://www.shildreth.com)
 
 ## Requirements
 
-- Node.js 22.13 or newer.
-- Corepack with pnpm 11.5.2, as declared by `packageManager` in [package.json](./package.json).
+- Node.js 22.22.2 or newer.
+- Corepack with pnpm 12.21.0, as declared by `packageManager` in [package.json](./package.json).
 - PostgreSQL 16 or compatible PostgreSQL service.
 - Docker and Docker Compose if you want the provided local database.
 - At least one configured OAuth provider for admin sign-in: GitHub, Google, or both.
@@ -153,25 +153,25 @@ Narravo includes CLI and admin UI workflows for backup/export, restore previews,
 
 Backup/export:
 
-- `pnpm backup` creates a ZIP with JSON exports for posts, users, comments, comment attachments, reactions, redirects, configuration, and a `manifest.json`.
-- `--skip-media` omits the media manifest.
-- Current backups record media references in the manifest; they do not embed full remote media payloads.
+- `pnpm backup` creates a ZIP with JSON exports for posts, taxonomy, users, discussions, attachments, reactions, upload records, redirects, configuration, and a checksummed `manifest.json`.
+- `--skip-media` makes a database-only archive.
+- Backups embed supported files from local uploads and configured S3/R2 storage. Restore with the same public storage URLs. For larger sites, use a PostgreSQL dump plus a separate copy of the uploads and bucket.
 
 ```bash
-pnpm backup -- --output backups/blog-$(date +%F).zip --verbose
-pnpm backup -- --skip-media --verbose
+pnpm backup --output backups/blog-$(date +%F).zip --verbose
+pnpm backup --skip-media --verbose
 ```
 
 Restore:
 
-- `pnpm restore -- <backup.zip>` reads a backup archive and can run dry-run previews.
-- Current restore support focuses on posts, users, and configuration, with slug/date filters for posts.
+- `pnpm restore <backup.zip>` reads a backup archive and can run dry-run previews.
+- Restore validates file hashes and database constraints. Slug/date filters select posts and related discussions, taxonomy, reactions, redirects and media. Preview runs the same database writes in a rolled-back transaction. Version 1 archives cannot recover data they omitted. Use `--skip-media` if restoring their media separately.
 - Use `--skip-users` and `--skip-config` when restoring content into an existing site.
 
 ```bash
-pnpm restore -- backups/blog-2026-06-06.zip --dry-run
-pnpm restore -- backups/blog-2026-06-06.zip --dry-run --slugs hello-world,second-post
-pnpm restore -- backups/blog-2026-06-06.zip --start-date 2025-01-01 --skip-users --skip-config
+pnpm restore backups/blog-2026-06-06.zip --dry-run
+pnpm restore backups/blog-2026-06-06.zip --dry-run --slugs hello-world,second-post
+pnpm restore backups/blog-2026-06-06.zip --start-date 2025-01-01 --skip-users --skip-config
 ```
 
 Purge:
@@ -203,7 +203,7 @@ Supported options include:
 - `--skip-media`: import content without fetching media.
 - `--verbose`: enable detailed logs.
 - `--rebuild-excerpts`: regenerate excerpts even when present.
-- `--purge`: remove existing imported content/data before import. Use carefully.
+- `--purge`: atomically replace existing content after validation. Existing media files are retained.
 - `uploads=<path>` and `root=<pattern>`: map remote WordPress upload URLs to a local uploads folder.
 - `allowedHosts=<hosts>`: comma-separated host allowlist for media downloads.
 - `concurrency=<number>`: media download concurrency from 1 to 10.
@@ -237,7 +237,7 @@ Use a cron job or scheduled task for production sites with active editing.
 | `pnpm spdx:add` | Add missing `Apache-2.0` SPDX headers. |
 | `pnpm wxr:import -- path=...` | Run the WordPress WXR importer. |
 | `pnpm backup` | Create a backup ZIP. |
-| `pnpm restore -- <file>` | Restore or preview a backup archive. |
+| `pnpm restore <file>` | Restore or preview a backup archive. |
 | `pnpm cleanup:uploads` | Remove old temporary uploads. |
 | `pnpm perf:lighthouse` | Run Lighthouse CI. |
 | `pnpm perf:loadtest` | Run Autocannon smoke load testing. |

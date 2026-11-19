@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+import DOMPurify from "dompurify";
+import { decodeHtmlEntities } from "@/lib/html-entities";
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import logger from '@/lib/logger';
@@ -8,19 +10,6 @@ declare global {
     mermaid?: any;
   }
 }
-
-// Helper function to decode HTML entities in Mermaid content
-const decodeHtmlEntities = (content: string): string => {
-  return content
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, "/")
-    .replace(/&nbsp;/g, " ");
-};
 
 const escapeHtml = (value: string): string => value
   .replace(/&/g, '&amp;')
@@ -161,7 +150,7 @@ export const MermaidNode = Node.create({
               // Look for text nodes that contain mermaid content fragments
               if (node.type.name === 'paragraph' || node.type.name === 'text') {
                 const text = node.textContent || '';
-                if (/subgraph|classDef|flowchart|-->/.test(text) && 
+                if ((/subgraph|classDef|flowchart/.test(text) || text.includes("-->")) &&
                     !text.includes('This is a single mermaid diagram') && 
                     !text.includes('that has a subgraph') &&
                     !text.includes('should appear as')) {
@@ -327,7 +316,7 @@ export const MermaidNode = Node.create({
               throw new Error('Render produced NaN coordinates');
             }
             
-            contentDiv.innerHTML = svg;
+            contentDiv.replaceChildren(DOMPurify.sanitize(svg, { RETURN_DOM_FRAGMENT: true, USE_PROFILES: { svg: true, svgFilters: true, html: true }, FORBID_TAGS: ["script", "iframe", "object", "embed", "form"] }));
             return { ok: true };
           } catch (err) {
             return { ok: false, error: err };

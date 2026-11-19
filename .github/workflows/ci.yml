@@ -42,10 +42,10 @@ jobs:
       
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '22'
 
@@ -63,11 +63,5 @@ jobs:
       - name: Run database migrations
         run: pnpm drizzle:migrate
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
-
-      - name: Test
-        run: pnpm test
+      - name: Run quality checks
+        run: python3 scripts/do-prechecks.py --database

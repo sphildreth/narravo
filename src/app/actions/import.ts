@@ -34,6 +34,7 @@ function isImportTempPath(candidate: string): boolean {
 }
 
 interface ImportJobResult {
+  restrictedPosts?: string[];
   job?: typeof importJobs.$inferSelect | undefined;
   error?: string | undefined;
 }
@@ -101,6 +102,7 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
       return { error: "Failed to create job record" };
     }
 
+    let restrictedPosts: string[] = [];
     // Start import in background
     if (!options.dryRun) {
       // For production, this should use a proper queue system
@@ -138,9 +140,13 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
           jobId: job.id,
         });
         
+        restrictedPosts = result.restrictedPosts ?? [];
+        for (const problem of result.errors ?? []) {
+          await db.insert(importJobErrors).values({ jobId: job.id, itemIdentifier: problem.item, errorType: "preview", errorMessage: problem.error });
+        }
         await db.update(importJobs)
           .set({ 
-            status: "completed",
+            status: result.errors?.length ? "failed" : "completed",
             startedAt: new Date(),
             finishedAt: new Date(),
             updatedAt: new Date(),
@@ -176,7 +182,7 @@ export async function startImportJob(formData: FormData): Promise<ImportJobResul
     const updatedJobResult = await db.select().from(importJobs).where(eq(importJobs.id, job.id));
     const updatedJob = updatedJobResult[0];
     
-    return { job: updatedJob || job };
+    return { job: updatedJob || job, restrictedPosts };
   } catch (error) {
     if (tempPathToCleanup) {
       try { await fs.unlink(tempPathToCleanup); } catch { /* best effort cleanup */ }

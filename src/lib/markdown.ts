@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { load } from "cheerio";
 import { marked } from "marked";
 import { sanitizeHtml as sanitizeHtmlFunc } from "@/lib/sanitize";
 import logger from "@/lib/logger";
@@ -192,8 +193,7 @@ export function extractExcerpt(markdown: string, maxLength: number = 160): strin
     const html = marked.parse(markdown.trim()) as string;
     
     // Strip HTML tags to get plain text
-    const plainText = html
-      .replace(/<[^>]*>/g, '') // Remove HTML tags
+    const plainText = load(html, {}, false).root().text()
       .replace(/\s+/g, ' ') // Normalize whitespace
       .trim();
 

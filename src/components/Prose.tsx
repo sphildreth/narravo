@@ -4,9 +4,9 @@
  * components/Prose.tsx
  * Lightweight HTML renderer with a consistent typographic wrapper and syntax highlighting.
  */
+import { decodeHtmlEntities } from "@/lib/html-entities";
 import React, { ReactNode, useMemo } from "react";
-import CodeBlock from "./CodeBlock";
-import MermaidDiagram from "./MermaidDiagram";
+import { PostCodeBlock as CodeBlock, PostDiagram as MermaidDiagram } from "./PostRichContent";
 import { ImageWithLightbox } from "./ImageLightbox";
 
 const MERMAID_KEYWORDS = new Set(
@@ -29,22 +29,7 @@ const MERMAID_KEYWORDS = new Set(
   ].map(keyword => keyword.toLowerCase())
 );
 
-const decodeHtmlEntities = (input: unknown): string => {
-  if (input === null || input === undefined) {
-    return "";
-  }
-
-  const value = typeof input === "string" ? input : String(input);
-
-  return value
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, "/")
-    .replace(/&nbsp;/g, " ")
+const decodeMermaidSource = (value: string) => decodeHtmlEntities(value)
     // Handle URL-encoded entities that might appear in attributes
     .replace(/%3C/gi, "<")
     .replace(/%3E/gi, ">")
@@ -53,7 +38,6 @@ const decodeHtmlEntities = (input: unknown): string => {
     .replace(/%26/gi, "&")
     .replace(/%0A/gi, "\n")
     .replace(/%0D/gi, "\r");
-};
 
 const looksLikeMermaid = (input: unknown): boolean => {
   if (input === null || input === undefined) {
@@ -106,7 +90,7 @@ export default function Prose({ html, className = "" }: { html: string; classNam
       if (mermaidDiv) {
         let chart = mermaidDiv[1] || '';
         // Handle common HTML attribute encoding issues
-        chart = decodeHtmlEntities(chart)
+        chart = decodeMermaidSource(chart)
           .replace(/&#10;/g, '\n')      // Line feed
           .replace(/&#13;/g, '\r')      // Carriage return  
           .replace(/&#9;/g, '\t')       // Tab
@@ -119,7 +103,7 @@ export default function Prose({ html, className = "" }: { html: string; classNam
       const mermaidPre = segment.match(/^<pre[^>]*?>\s*<code[^>]*?(?:class=["'][^"']*?mermaid[^"']*?["']|data-lang=["']mermaid["'])[^>]*?>([\s\S]*?)<\/code>\s*<\/pre>$/i);
       if (mermaidPre) {
         const raw = mermaidPre[1] || '';
-        const decoded = decodeHtmlEntities(raw);
+        const decoded = decodeMermaidSource(raw);
         out.push(<MermaidDiagram key={`mermaid-pre-${segIndex}`} chart={decoded} className="my-6" />);
         return;
       }
@@ -139,7 +123,7 @@ export default function Prose({ html, className = "" }: { html: string; classNam
           const classList = cls.split(/\s+/).filter(Boolean).map(token => token.toLowerCase());
           const hasMermaidClass = classList.some(token => token === 'mermaid' || token.endsWith('-mermaid'));
           const hasMermaidLang = (language || '').toLowerCase() === 'mermaid';
-          const decoded = decodeHtmlEntities(content);
+          const decoded = decodeMermaidSource(content);
           if (hasMermaidClass || hasMermaidLang || looksLikeMermaid(decoded)) {
             out.push(
               <MermaidDiagram
