@@ -6,9 +6,18 @@ This file records notable project changes. It follows the
 
 ## [Unreleased]
 
-- Restore related content and media atomically in the database, verify archive checksums, and surface missing or conflicting data. Correct the production backup and restore commands.
-- Hold scheduled and restricted posts out of public queries. Validate WordPress replacements before swapping existing content, and keep media previews read-only.
-- Update runtime and development dependencies, harden HTML handling, and enforce performance and security checks.
+## [1.0.6] - 2026-11-19
+
+### Fixed
+
+- Backups now include related posts, taxonomy, discussions, and media files. Restore verifies checksums, reports missing or conflicting data, and applies database changes in a transaction. The deployment guide includes updated backup and restore commands.
+- Scheduled and deleted posts stay out of public views and feeds. WordPress imports keep private and password-protected posts as drafts, validate replacements before swapping content, and leave storage untouched during previews.
+- The editor preserves existing text when pasting Markdown or loading syntax highlighting. Its formatting toolbar stays accessible beneath the navigation.
+
+### Security and performance
+
+- Updated runtime and development dependencies, hardened HTML and diagram rendering, and enabled CodeQL scanning.
+- CI now runs browser tests and enforces Lighthouse, load-test, and post-specific JavaScript budgets.
 
 ## [1.0.5] - 2026-10-24
 
