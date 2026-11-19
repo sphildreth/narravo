@@ -78,6 +78,12 @@ describe("/api/admin/purge — hard delete removes imported-media files", () => 
     const deleteWhere = vi.fn().mockResolvedValue(undefined);
     (db as any).delete = vi.fn(() => ({ where: deleteWhere }));
 
+    // The database reports two media objects still referenced by surviving records.
+    (db as any).execute = vi.fn().mockResolvedValue({ rows: [
+      { key: "imported-media/foo.jpg" }, { key: "imported-media/bar.png" },
+      { key: "imported-media/qux.gif" }, { key: "imported-media/norf.webp" },
+    ] });
+
     // 4) Audit log update
     const updateWhere = vi.fn().mockResolvedValue(undefined);
     const updateSet = vi.fn(() => ({ where: updateWhere }));
@@ -97,11 +103,11 @@ describe("/api/admin/purge — hard delete removes imported-media files", () => 
     expect(calls).toEqual(expect.arrayContaining([
       "imported-media/foo.jpg",
       "imported-media/bar.png",
-      "imported-media/baz.webm",
       "imported-media/qux.gif",
       "imported-media/norf.webp",
-      "imported-media/poster.jpg",
     ]));
-    expect(delSpy).toHaveBeenCalled();
+    expect(calls).not.toContain("imported-media/baz.webm");
+    expect(calls).not.toContain("imported-media/poster.jpg");
+    expect(deleteWhere.mock.invocationCallOrder[0]).toBeLessThan(delSpy.mock.invocationCallOrder[0]!);
   });
 });

@@ -74,5 +74,16 @@ jobs:
       - name: Initialize build cache on a cold runner
         run: mkdir -p .next/cache
 
+      - name: Install browser for editor tests
+        run: pnpm exec playwright install --with-deps chromium --only-shell
+
       - name: Run quality checks
-        run: python3 scripts/do-prechecks.py --database
+        run: python3 scripts/do-prechecks.py --database --include-e2e
+
+      - name: Save data operations screenshot
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: data-operations-preview
+          path: test-results/**/data-operations.png
+          if-no-files-found: error
+          retention-days: 30

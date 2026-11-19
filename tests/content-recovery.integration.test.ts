@@ -20,6 +20,7 @@ import { createBackup } from "../scripts/backup";
 import { restoreBackup } from "../scripts/restore";
 import { importWxr } from "../scripts/import-wxr";
 import { getPostBySlug, listPosts } from "@/lib/posts";
+import { countApprovedComments, getCommentTreeForPost } from "@/lib/comments";
 import { searchPosts } from "@/lib/search";
 
 const url = process.env.DATABASE_URL;
@@ -106,6 +107,10 @@ it.skipIf(!url)("holds scheduled and deleted posts out of public reads", async (
   const source = pools[0]!;
   scope.db = drizzle(source);
   await source.query("insert into posts(slug,title,html,published_at) values ('embargo','Embargo','Body',now()+interval '1 day')");
+  const { rows: [embargo] } = await source.query("select id from posts where slug='embargo'");
+  await source.query("insert into comments(post_id,path,body_html,status) values ($1,'0001','Comment','approved')", [embargo.id]);
+  expect(await countApprovedComments(embargo.id)).toBe(0);
+  expect((await getCommentTreeForPost(embargo.id)).top).toEqual([]);
   expect(await getPostBySlug("embargo")).toBeNull();
   expect((await listPosts()).items.map(p => p.slug)).not.toContain("embargo");
   await source.query("update posts set published_at=now()-interval '1 second' where slug='embargo'");

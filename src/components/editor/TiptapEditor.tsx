@@ -3,7 +3,7 @@
 
 import React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { useEditor, useEditorState, EditorContent, type Editor } from "@tiptap/react";
 import { createPortal } from "react-dom";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -798,23 +798,11 @@ const EditorToolbar = React.memo(({
   showMarkdownView,
   setShowMarkdownView
 }: ToolbarProps) => {
+  useEditorState({ editor, selector: state => state.transactionNumber });
   if (!editor) return null;
 
-  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
-  const [currentLanguage, setCurrentLanguage] = useState('plaintext');
-
-    // Check if cursor is in code block and update language
-    useEffect(() => {
-      if (!editor) return;
-      
-      const isInCodeBlock = editor.isActive('codeBlock');
-      setShowLanguageDropdown(isInCodeBlock);
-      
-      if (isInCodeBlock) {
-        const attrs = editor.getAttributes('codeBlock');
-        setCurrentLanguage(attrs.language || 'plaintext');
-      }
-    }, [editor.state.selection]);
+  const showLanguageDropdown = editor.isActive("codeBlock");
+  const currentLanguage = editor.getAttributes("codeBlock").language || "plaintext";
 
     const btn = (opts: { 
       onClick: () => void; 
@@ -881,7 +869,6 @@ const EditorToolbar = React.memo(({
       }
       (editor as any).chain().focus().updateAttributes('codeBlock', { language: lang }).run();
       reparseLowlight(editor);
-      setCurrentLanguage(lang);
     };
 
     const insertTable = () => {

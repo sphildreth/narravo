@@ -12,11 +12,14 @@ export function PurgeSection() {
   const [targetId, setTargetId] = useState("");
   const [targetSlug, setTargetSlug] = useState("");
   const [confirmationPhrase, setConfirmationPhrase] = useState("");
+  const [allPosts, setAllPosts] = useState(false);
   const [dryRun, setDryRun] = useState(true);
 
   const isUuid = (v: string) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v.trim());
   const validId = targetId && isUuid(targetId);
-  const effectiveTarget = validId ? targetId : (targetSlug || "BULK");
+  const bulk = allPosts && purgeType === "post" && purgeMode === "hard" && !targetId.trim() && !targetSlug.trim();
+  const slug = purgeType === "post" && !targetId.trim() ? targetSlug.trim() : "";
+  const effectiveTarget = validId ? targetId.trim() : (slug || "BULK");
   const expectedPhrase = `DELETE ${purgeType} ${effectiveTarget}`;
 
   const handlePurge = async () => {
@@ -31,7 +34,8 @@ export function PurgeSection() {
       };
 
       if (validId) body.id = targetId.trim();
-      if (!validId && targetSlug) body.slug = targetSlug.trim();
+      if (slug) body.slug = slug;
+      if (bulk) body.allPosts = true;
       if (purgeMode === "hard" && !dryRun) {
         body.confirmationPhrase = confirmationPhrase;
       }
@@ -56,8 +60,7 @@ export function PurgeSection() {
     }
   };
 
-  // Allow purge when we have an explicit target OR when doing a confirmed hard delete (BULK)
-  const canPurge = Boolean(validId || targetSlug || (!dryRun && purgeMode === "hard"));
+  const canPurge = Boolean(validId || slug || bulk);
   const needsConfirmation = purgeMode === "hard" && !dryRun;
 
   return (
@@ -84,10 +87,11 @@ export function PurgeSection() {
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label htmlFor="purge-type" className="block text-sm font-medium mb-2">
               Type
             </label>
             <select
+              id="purge-type"
               value={purgeType}
               onChange={(e) => setPurgeType(e.target.value as "post" | "comment")}
               className="block w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
@@ -98,10 +102,11 @@ export function PurgeSection() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label htmlFor="purge-mode" className="block text-sm font-medium mb-2">
               Mode
             </label>
             <select
+              id="purge-mode"
               value={purgeMode}
               onChange={(e) => setPurgeMode(e.target.value as "soft" | "hard")}
               className="block w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
@@ -113,34 +118,43 @@ export function PurgeSection() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">
+          <label htmlFor="purge-id" className="block text-sm font-medium mb-2">
             Target ID (UUID)
           </label>
           <input
             type="text"
-            value={targetId}
+            id="purge-id"
+              value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
             placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000"
             className="block w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
           />
           {targetId && !validId && (
-            <p className="mt-1 text-xs text-red-600">Not a valid UUID — slug will be used instead.</p>
+            <p className="mt-1 text-xs text-red-600">Enter a valid UUID or clear the field.</p>
           )}
         </div>
 
         {purgeType === "post" && (
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label htmlFor="purge-slug" className="block text-sm font-medium mb-2">
               Or Target Slug
             </label>
             <input
               type="text"
+              id="purge-slug"
               value={targetSlug}
               onChange={(e) => setTargetSlug(e.target.value)}
               placeholder="e.g., my-blog-post"
               className="block w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
             />
           </div>
+        )}
+
+        {purgeType === "post" && purgeMode === "hard" && !targetId.trim() && !targetSlug.trim() && (
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={allPosts} onChange={event => setAllPosts(event.target.checked)} />
+            Select all posts
+          </label>
         )}
 
         <label className="flex items-center gap-2">
@@ -157,7 +171,7 @@ export function PurgeSection() {
 
         {needsConfirmation && (
           <div>
-            <label className="block text-sm font-medium text-red-700 mb-2">
+            <label htmlFor="purge-confirmation" className="block text-sm font-medium text-red-700 mb-2">
               Type confirmation phrase to proceed with hard delete:
             </label>
             <p className="text-sm text-muted mb-2">
@@ -165,6 +179,7 @@ export function PurgeSection() {
             </p>
             <input
               type="text"
+              id="purge-confirmation"
               value={confirmationPhrase}
               onChange={(e) => setConfirmationPhrase(e.target.value)}
               placeholder={expectedPhrase}

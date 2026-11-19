@@ -4,8 +4,8 @@ import { ConfigServiceImpl } from "@/lib/config";
 import { db } from "@/lib/db";
 import logger from '@/lib/logger';
 
-// Revalidate the feed every hour
-export const revalidate = 3600;
+// Reflect publication changes on each request.
+export const dynamic = "force-dynamic";
 
 const isBuildPhase = () => process.env.NEXT_PHASE === "phase-production-build";
 
@@ -49,7 +49,7 @@ export async function GET() {
   return new Response(xml, {
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
-      "Cache-Control": `public, s-maxage=${revalidate}, stale-while-revalidate=1800`,
+      "Cache-Control": "no-store",
     },
   });
 }

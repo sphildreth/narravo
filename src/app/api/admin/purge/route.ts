@@ -11,34 +11,35 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { safeApiError } from "@/lib/api-error";
 
-// Accept id when valid UUID; otherwise drop it so slug/BULK paths can proceed
-const idOptionalUuid = z.preprocess((v) => {
-  if (typeof v !== "string") return undefined;
-  // Basic UUID v4-ish check; final validation is done by z.string().uuid()
-  const looksUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v.trim());
-  return looksUuid ? v.trim() : undefined;
-}, z.string().uuid().optional());
-
 const purgeRequestSchema = z.object({
-  type: z.enum(["post", "comment", "comment_attachment"]),
+  type: z.enum(["post", "comment"]),
   mode: z.enum(["soft", "hard"]),
   dryRun: z.boolean().default(true),
   
   // Identifiers
-  id: idOptionalUuid,
-  slug: z.string().optional(),
-  ids: z.array(z.string().uuid()).optional(),
+  id: z.string().trim().uuid().optional(),
+  slug: z.string().trim().min(1).optional(),
+  ids: z.array(z.string().uuid()).min(1).optional(),
   
+  allPosts: z.literal(true).optional(),
+
   // Filters for bulk operations
   filter: z.object({
-    createdBefore: z.string().optional(),
+    createdBefore: z.string().refine(value => Number.isFinite(Date.parse(value)), "Invalid date").optional(),
     status: z.string().optional(),
     userId: z.string().uuid().optional(),
-  }).optional(),
+  }).strict().optional(),
   
   // Confirmation for hard delete
   confirmationPhrase: z.string().optional(),
-});
+}).strict().refine(({ type, mode, id, ids, slug, filter, allPosts }) => {
+  const supplied = [id, ids, slug, filter, allPosts].filter(Boolean).length;
+  if (supplied !== 1) return false;
+  if (allPosts) return type === "post" && mode === "hard";
+  if (slug) return type === "post";
+  if (filter) return Object.keys(filter).length > 0 && (type === "comment" || (!filter.userId && !filter.status));
+  return true;
+}, "Select one valid target");
 
 export async function POST(req: NextRequest) {
   try {
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { type, mode, dryRun, id, slug, ids, filter, confirmationPhrase } = parsed.data;
+    const { type, mode, dryRun, id, slug, ids, filter, allPosts, confirmationPhrase } = parsed.data;
 
     // Validate hard delete confirmation — compute effective target the same way UI should
     if (mode === "hard" && !dryRun) {
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
         ids,
         filter,
         operationId,
+        allPosts,
       },
       status: "started",
       ipAddress: req.headers.get("x-forwarded-for") || "unknown",
@@ -133,20 +135,7 @@ export async function POST(req: NextRequest) {
           whereConditions.push(isNull(posts.deletedAt));
         }
 
-        // Determine where clause; allow BULK hard delete of all posts when explicitly confirmed
-        let whereClause: any;
-        if (whereConditions.length === 0) {
-          if (mode === "hard" && !dryRun) {
-            // BULK hard delete — operate on all posts
-            whereClause = sql`1=1`;
-          } else {
-            throw new Error("No valid identifiers or filters provided");
-          }
-        } else {
-          whereClause = whereConditions.length === 1
-            ? whereConditions[0]
-            : and(...whereConditions);
-        }
+        const whereClause = allPosts ? sql`true` : and(...whereConditions);
 
         // Get posts that would be affected
         const postsToDelete = await db
@@ -193,18 +182,18 @@ export async function POST(req: NextRequest) {
                 .where(whereClause);
             } else {
               // Hard delete posts (comments cascade via foreign key)
-              // Before deleting from DB, attempt to delete any imported-media files referenced by
+              // Snapshot media references before cascade deletion.
               // - post featuredImageUrl
               // - post HTML/bodyHtml fields
               // - comment attachments (url/posterUrl) under these posts
+              const keys = new Set<string>();
               try {
-                const keys = new Set<string>();
 
                 const extractImportedKeys = (text?: string | null) => {
                   if (!text) return;
                   const regex = /imported-media\/[A-Za-z0-9._\/-]+/g;
                   const matches = text.match(regex);
-                  if (matches) matches.forEach((k) => keys.add(k));
+                  if (matches) matches.filter(k => /^imported-media\/[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(k)).forEach(k => keys.add(k));
                 };
 
                 // Collect from post records
@@ -230,22 +219,32 @@ export async function POST(req: NextRequest) {
                   }
                 }
 
-                if (keys.size > 0) {
-                  const s3cfg = getS3Config();
-                  const storage = s3cfg ? new S3Service(s3cfg) : localStorageService;
-                  // Best-effort delete each key
-                  await Promise.allSettled(Array.from(keys).map((k) => storage.deleteObject(k)));
-                }
-              } catch (e) {
-                // Best-effort: don't fail the purge due to storage errors
-                // Avoid noisy warning for mocked environments lacking leftJoin
-                const msg = e instanceof Error ? e.message : String(e);
-                if (!/leftJoin is not a function/i.test(msg)) {
-                  logger.warn("Warning: failed to delete some imported-media during purge:", e);
-                }
+              } catch (error) {
+                keys.clear();
+                logger.warn("Could not collect media for cleanup", error);
               }
 
-              await db.delete(posts).where(whereClause);
+              // A concurrent insert matching a bulk filter was not part of this snapshot.
+              await db.delete(posts).where(inArray(posts.id, postIds));
+              if (keys.size) {
+                try {
+                  const candidates = sql.join([...keys].map(key => sql`${key}::text`), sql`, `);
+                  const unused = await db.execute(sql`
+                    SELECT key FROM unnest(ARRAY[${candidates}]) AS media(key)
+                    WHERE NOT EXISTS (SELECT 1 FROM posts WHERE strpos(concat_ws(' ', html, body_html, body_md, excerpt, featured_image_url), media.key) > 0)
+                      AND NOT EXISTS (SELECT 1 FROM comments WHERE strpos(concat_ws(' ', body_html, body_md), media.key) > 0)
+                      AND NOT EXISTS (SELECT 1 FROM comment_attachments WHERE strpos(concat_ws(' ', url, poster_url), media.key) > 0)
+                      AND NOT EXISTS (SELECT 1 FROM configuration WHERE strpos(value::text, media.key) > 0)
+                      AND NOT EXISTS (SELECT 1 FROM users WHERE strpos(image, media.key) > 0)
+                      AND NOT EXISTS (SELECT 1 FROM uploads WHERE uploads.key = media.key OR strpos(url, media.key) > 0)
+                  `);
+                  const cfg = getS3Config();
+                  const storage = cfg ? new S3Service(cfg) : localStorageService;
+                  for (const row of unused.rows) await storage.deleteObject(String(row.key));
+                } catch (error) {
+                  logger.warn("Imported media cleanup could not finish", error);
+                }
+              }
             }
           }
         }

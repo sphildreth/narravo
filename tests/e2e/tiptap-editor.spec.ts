@@ -2,9 +2,8 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('TipTap Editor E2E Tests', () => {
-  test.skip('should display toolbar with all expected buttons', async ({ page }) => {
-    // Wait for the editor to load
-    await page.waitForSelector('[data-testid="tiptap-editor"]');
+  test('should display toolbar with all expected buttons', async ({ page }) => {
+    await page.goto("/tests/e2e/editor.html");
 
     // Check for presence of key toolbar buttons
     await expect(page.getByTitle('Bold (Ctrl+B)')).toBeVisible();
@@ -12,11 +11,11 @@ test.describe('TipTap Editor E2E Tests', () => {
     await expect(page.getByTitle('Heading 1')).toBeVisible();
     await expect(page.getByTitle('Align Left')).toBeVisible();
     await expect(page.getByTitle('Insert Image')).toBeVisible();
-    await expect(page.getByTitle('Code Block')).toBeVisible();
+    await expect(page.getByTitle('Code Block', { exact: true })).toBeVisible();
   });
 
-  test.skip('should allow text formatting', async ({ page }) => {
-    await page.waitForSelector('[data-testid="tiptap-editor"]');
+  test('should allow text formatting', async ({ page }) => {
+    await page.goto("/tests/e2e/editor.html");
     
     // Type some text
     const editor = page.locator('.ProseMirror');
@@ -33,34 +32,39 @@ test.describe('TipTap Editor E2E Tests', () => {
     await expect(editor.locator('strong')).toHaveText('Hello World');
   });
 
-  test.skip('should show language dropdown when in code block', async ({ page }) => {
-    await page.waitForSelector('[data-testid="tiptap-editor"]');
+  test('should show language dropdown when in code block', async ({ page }) => {
+    await page.goto("/tests/e2e/editor.html");
     
     // Click code block button
-    await page.getByTitle('Code Block').click();
+    await page.getByTitle('Code Block', { exact: true }).click();
 
     // Verify language dropdown appears
     await expect(page.getByTitle('Code Block Language')).toBeVisible();
   });
 
-  test.skip('should handle image upload with alt text prompt', async ({ page }) => {
-    await page.waitForSelector('[data-testid="tiptap-editor"]');
+  test('should handle image upload with alt text prompt', async ({ page }) => {
+    await page.goto("/tests/e2e/editor.html");
     
     // Set up dialog handler for alt text prompt
     page.on('dialog', dialog => dialog.accept('Test alt text'));
     
-    // Trigger image upload
-    await page.getByTitle('Insert Image').click();
-    
-    // This would need proper file upload simulation
-    // await fileInput.setInputFiles('test-image.jpg');
-    
-    // Verify alt text prompt was handled
-    // await expect(page.locator('img[alt="Test alt text"]')).toBeVisible();
+    await page.route("**/api/r2/sign", route => route.fulfill({
+      json: { method: "POST", url: "/fixture/image-upload" },
+    }));
+    await page.route("**/fixture/image-upload", route => route.fulfill({
+      json: { url: "/fixture/image.png" },
+    }));
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByTitle("Insert Image").click();
+    await (await chooser).setFiles({
+      name: "sample.png", mimeType: "image/png",
+      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64"),
+    });
+    await expect(page.locator(".ProseMirror img")).toHaveAttribute("alt", "Test alt text");
   });
 
-  test.skip('should sanitize pasted content', async ({ page }) => {
-    await page.waitForSelector('[data-testid="tiptap-editor"]');
+  test('should sanitize pasted content', async ({ page }) => {
+    await page.goto("/tests/e2e/editor.html");
     
     const editor = page.locator('.ProseMirror');
     await editor.click();

@@ -59,26 +59,39 @@ async function runLoadTest(options: Record<string, any> = {}) {
   };
   
   try {
-    const result = await autocannon(config);
+    const latencyCounts = new Map<number, number>();
+    const result = await new Promise<autocannon.Result>((resolve, reject) => {
+      const run = autocannon(config, (error, report) => error ? reject(error) : resolve(report));
+      run.on("response", (_client, _status, _bytes, time) => {
+        const ms = Math.ceil(time);
+        latencyCounts.set(ms, (latencyCounts.get(ms) ?? 0) + 1);
+      });
+    });
+    const count = [...latencyCounts.values()].reduce((total, value) => total + value, 0);
+    let remaining = Math.ceil(0.95 * count);
+    let p95Latency = Infinity;
+    for (const [ms, frequency] of [...latencyCounts].sort(([a], [b]) => a - b)) {
+      remaining -= frequency;
+      if (remaining <= 0) { p95Latency = ms; break; }
+    }
     
     logger.info('\n📊 Load Test Results:');
     logger.info('====================');
     logger.info(`Requests/sec: ${result.requests.average}`);
     logger.info(`Latency p50: ${(result.latency as any).p50 || result.latency.mean}ms`);
-    logger.info(`Latency p95: ${result.latency.p97_5}ms`);
+    logger.info(`Latency p95: ${p95Latency}ms`);
     logger.info(`Latency p99: ${(result.latency as any).p99 || result.latency.max}ms`);
     logger.info(`Throughput: ${(result.throughput.average / 1024 / 1024).toFixed(2)} MB/sec`);
     logger.info(`Errors: ${result.errors}`);
     logger.info(`Timeouts: ${result.timeouts}`);
     
     // Check against SLO targets
-    const p95Target = 400; // 400ms p95 target for TTFB
+    const p95Target = 400; // Full response latency in milliseconds
     const errorRateTarget = 0.01; // 1% error rate max
     const errorRate = result.requests.total ? (result.errors + result.non2xx) / result.requests.total : 1;
     
     logger.info('\n🎯 SLO Validation:');
     logger.info('==================');
-    const p95Latency = result.latency.p97_5;
     logger.info(`P95 Latency: ${p95Latency}ms (target: <${p95Target}ms) ${p95Latency <= p95Target ? '✅' : '❌'}`);
     logger.info(`Error Rate: ${(errorRate * 100).toFixed(2)}% (target: <${(errorRateTarget * 100).toFixed(1)}%) ${errorRate <= errorRateTarget ? '✅' : '❌'}`);
     

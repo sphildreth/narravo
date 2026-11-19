@@ -2,8 +2,8 @@
 import { generateSitemap } from "@/lib/seo";
 import { getSiteMetadata } from "@/lib/rss";
 
-// Revalidate the sitemap every hour
-export const revalidate = 3600;
+// Reflect publication changes on each request.
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { url: siteUrl } = getSiteMetadata();
@@ -19,7 +19,7 @@ export async function GET() {
   return new Response(sitemap, {
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
-      "Cache-Control": `public, s-maxage=${revalidate}, stale-while-revalidate=1800`,
+      "Cache-Control": "no-store",
     },
   });
 }

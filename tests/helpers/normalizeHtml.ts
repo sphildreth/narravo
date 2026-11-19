@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { decodeHtmlEntities } from "@/lib/html-entities";
 import * as cheerio from "cheerio";
 import DOMPurify from "dompurify";

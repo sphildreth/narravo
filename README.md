@@ -270,7 +270,7 @@ pnpm prechecks                 # everything (~35 seconds)
 pnpm prechecks:quick           # static gates + typecheck (~7 seconds)
 python3 scripts/do-prechecks.py --skip Lockfile   # drop one gate
 python3 scripts/do-prechecks.py --database        # also run pnpm drizzle:check
-python3 scripts/do-prechecks.py --include-e2e     # add Playwright when it lands
+python3 scripts/do-prechecks.py --include-e2e     # run Chromium editor tests (pnpm exec playwright install chromium --only-shell)
 python3 scripts/do-prechecks.py --install-hook    # run it from git pre-commit
 ```
 

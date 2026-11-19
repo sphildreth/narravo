@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info');
+const LOG_LEVEL = globalThis.process?.env?.LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info');
 
 const log = (level: string, message: string, ...args: any[]) => {
   const timestamp = new Date().toISOString();

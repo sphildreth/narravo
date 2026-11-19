@@ -3,14 +3,15 @@
 import { headers } from "next/headers";
 import { CommentError, getCommentTreeForPost, createCommentCore, sanitizeMarkdown } from "@/lib/comments";
 import { ConfigServiceImpl } from "@/lib/config";
-import { requireSession } from "@/lib/auth";
+import { canPreviewUnpublished, getSession, requireSession } from "@/lib/auth";
 import { validateAntiAbuse } from "@/lib/rateLimit";
 import { db } from "@/lib/db";
 import { posts, comments, commentAttachments, uploads } from "@/drizzle/schema";
-import { eq, sql, count, and } from "drizzle-orm";
+import { eq, sql, count, and, isNull } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 import { enqueueVideoPosterGeneration } from "@/lib/jobs";
 import logger from "@/lib/logger";
+import { publicPostCondition } from "@/lib/post-visibility";
 import { getSafeUploadTypeByMime } from "@/lib/upload-validation";
 
 export async function loadReplies(params: { postId: string; parentPath: string | null; already?: number; cursor?: string | null; topLevel?: boolean; }) {
@@ -18,7 +19,8 @@ export async function loadReplies(params: { postId: string; parentPath: string |
     const config = new ConfigServiceImpl({ db });
     const topPage = await config.getNumber("COMMENTS.TOP-PAGE-SIZE") ?? 10;
     const repliesPage = await config.getNumber("COMMENTS.REPLIES-PAGE-SIZE") ?? 3;
-    const r = await getCommentTreeForPost(params.postId, { cursor: params.cursor ?? null, limitTop: topPage, limitReplies: repliesPage });
+    const includeUnpublished = await canPreviewUnpublished(await getSession());
+    const r = await getCommentTreeForPost(params.postId, { includeUnpublished, cursor: params.cursor ?? null, limitTop: topPage, limitReplies: repliesPage });
     return { nodes: r.top, nextCursor: r.nextCursor };
   }
   return { nodes: [], nextCursor: null };
@@ -110,7 +112,8 @@ export async function createComment(params: {
     // Create comment using existing core logic
     const deps = {
       ensurePostExists: async (postId: string) => {
-        const post = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
+        const preview = isAdmin && await canPreviewUnpublished(session);
+        const post = await db.select().from(posts).where(and(eq(posts.id, postId), preview ? undefined : publicPostCondition(sql`posts`))).limit(1);
         if (post.length === 0) throw new Error("Post not found");
       },
       getParentComment: async (parentId: string) => {
@@ -119,7 +122,7 @@ export async function createComment(params: {
           postId: comments.postId,
           depth: comments.depth,
           path: comments.path,
-        }).from(comments).where(eq(comments.id, parentId)).limit(1);
+        }).from(comments).where(and(eq(comments.id, parentId), isNull(comments.deletedAt), eq(comments.status, "approved"))).limit(1);
         const result = parent[0] || null;
         if (result && !result.postId) {
           throw new Error("Invalid parent comment: missing postId");

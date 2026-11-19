@@ -276,3 +276,15 @@ export async function requireAdmin2FA() {
   if (!session.user?.isAdmin) throw new Error("Forbidden");
   return session;
 }
+
+
+/** Private previews use the same session-bound second factor as the editor. */
+export async function canPreviewUnpublished(session: Awaited<ReturnType<typeof getSession>>): Promise<boolean> {
+  if (!session?.user?.isAdmin) return false;
+  try {
+    await requireAdmin2FA();
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -686,7 +686,7 @@ def build_checks(
         checks.append(
             Check(
                 name="End-to-end tests",
-                detail="Run Playwright against the built application.",
+                detail="Run browser interaction tests against the Narravo editor.",
                 tier=TIER_E2E,
                 command=("pnpm", "exec", "playwright", "test"),
                 skip_reason=e2e_skip_reason(),

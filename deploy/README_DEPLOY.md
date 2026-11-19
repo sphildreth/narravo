@@ -99,7 +99,7 @@ unzip -t "backup-$(date +%F).zip"
 ```bash
 docker compose --env-file deploy/.env -f docker-compose.prod.yml exec -T web sh -ec '
   file=$(mktemp)
-  trap '"'"'rm -f "$file"'"'"' EXIT
+  trap "rm -f -- \"$file\"" EXIT
   cat > "$file"
   pnpm restore "$file" --dry-run
 ' < backup-YYYY-MM-DD.zip

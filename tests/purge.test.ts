@@ -32,6 +32,16 @@ beforeEach(() => {
 });
 
 describe("/api/admin/purge — hard delete", () => {
+  it("rejects missing, invalid and inapplicable selectors before any mutation", async () => {
+    for (const target of [{}, { id: "mistyped" }, { ids: [] }, { filter: {} }, { filter: { status: "approved" } }]) {
+      const res = await purgePostHandler(makeRequest({ type: "post", mode: "soft", dryRun: false, ...target }) as any);
+      expect(res.status).toBe(400);
+    }
+    const res = await purgePostHandler(makeRequest({ type: "post", mode: "hard", dryRun: false, confirmationPhrase: "DELETE post BULK" }) as any);
+    expect(res.status).toBe(400);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
   it("rejects hard delete without correct confirmation phrase", async () => {
     // Arrange: mock audit log insert
     (db as any).insert = vi.fn(() => ({
